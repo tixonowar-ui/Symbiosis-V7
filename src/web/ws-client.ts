@@ -12987,10 +12987,17 @@ export function connectProjection(
       if (commandId === null) return { ok: false, detail: 'Идентификатор команды недоступен.' };
       try {
         const p = enemyAuthoringProjectionValue(lastSnapshot.projection),
-          request = enemyBrowserWorkflow(p, ENEMY_STAGE_FORMS[stage][2], commandId, data);
+          request = enemyBrowserWorkflow(
+            p,
+            p.formId === 'ENM-017' ? 'ENM-017::CTA::004' : ENEMY_STAGE_FORMS[stage][2],
+            commandId,
+            data,
+            p.formId === 'ENM-017' ? stage : undefined,
+          );
         if (
           request === null ||
           (!lastSnapshot.availableActionKeys.includes(ENEMY_STAGE_FORMS[stage][2]) &&
+            !(p.formId === 'ENM-017' && p.versionEditor !== undefined) &&
             !(
               stage === 'SENTIENT_SYMBIONTS' &&
               p.formId === 'ENM-008' &&
@@ -13017,7 +13024,7 @@ export function connectProjection(
       if (
         disposed ||
         terminal ||
-        lastSnapshot?.formId !== 'ENM-001' ||
+        (lastSnapshot?.formId !== 'ENM-001' && lastSnapshot?.formId !== 'ENM-020') ||
         socket?.readyState !== WebSocket.OPEN ||
         stagedCapabilities !== null ||
         commandPending() ||
@@ -13034,7 +13041,7 @@ export function connectProjection(
         operationId,
         contextId: gmLocalContextId,
         campaignId: lastSnapshot.projection['campaignId'] as string,
-        sourceFormId: 'ENM-001',
+        sourceFormId: lastSnapshot.formId,
         expectedRevisions: lastSnapshot.revisions,
         activeTab,
         selectionOrNull,
@@ -14738,7 +14745,15 @@ export function connectProjection(
             commandId = createNetworkCommandId();
           if (commandId === null || gmQueueScope(lastSnapshot)?.contextId !== gmLocalContextId)
             return { ok: false, detail: 'Текущий GM-контекст недоступен.' };
-          const request = enemyBrowserWorkflow(p, actionKey, commandId, null);
+          const version = p.formId === 'ENM-017' ? p.context.versionAttempt : undefined;
+          if (p.formId === 'ENM-017' && version === undefined)
+            return { ok: false, detail: 'Подтверждённая основа новой версии недоступна.' };
+          const request = enemyBrowserWorkflow(
+            p,
+            actionKey,
+            commandId,
+            version === undefined ? null : { reason: version.reason },
+          );
           if (request !== null) {
             if (!lastSnapshot.executableWorkflowCommandIds.includes(request.workflowCommandId))
               return { ok: false, detail: 'Команда недоступна.' };
@@ -16301,7 +16316,8 @@ export function connectProjection(
       // CREATE binds its operation to the composition journal, whose domain reader requires UUID.
       const navigationRequestId =
         Object.hasOwn(NPC_NAV_TARGETS, actionKey) ||
-        Object.hasOwn(ENEMY_AUTHORING_NAV_TARGETS, actionKey)
+        Object.hasOwn(ENEMY_AUTHORING_NAV_TARGETS, actionKey) ||
+        actionKey === 'ENM-001::CTA::008'
           ? createNetworkCommandId()
           : createRequestId('navigation');
       if (navigationRequestId === null)

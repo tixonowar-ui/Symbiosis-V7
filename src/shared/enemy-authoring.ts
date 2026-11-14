@@ -47,6 +47,21 @@ import {
   customMonsterProjectionValue,
   type CustomMonsterProjection,
 } from './custom-monster-presentation.js';
+import {
+  enemyVersionAttemptContextValue,
+  enemyVersionConfigurationPatchValue,
+  preparedEnemyVersionConfigurationValue,
+  type EnemyVersionAttemptContext,
+  type PreparedEnemyVersionConfiguration,
+} from './enemy-version-configuration.js';
+import { enemyVersionFreeFactRequiresRepresentation } from './enemy-version-facts.js';
+import {
+  enemyVersionHistoryValue,
+  enemyVersionConfigurationSummaryValue,
+  type EnemyVersionHistory,
+  type EnemyVersionConfigurationSummary,
+} from './enemy-version-history.js';
+import { enemyVersionEditorValue, type EnemyVersionEditor } from './enemy-version-editor.js';
 
 export const SENTIENT_ENEMY_AUTHORING_FORMS = [
   'ENM-005',
@@ -55,6 +70,7 @@ export const SENTIENT_ENEMY_AUTHORING_FORMS = [
   'ENM-008',
   'ENM-009',
   'ENM-010',
+  'ENM-017',
   'ENM-020',
 ] as const;
 export const ENEMY_AUTHORING_FORMS = [
@@ -70,6 +86,7 @@ export const ENEMY_AUTHORING_FORMS = [
   'ENM-014',
   'ENM-015',
   'ENM-016',
+  'ENM-017',
   'ENM-020',
 ] as const;
 export type EnemyAuthoringForm = (typeof ENEMY_AUTHORING_FORMS)[number];
@@ -82,6 +99,7 @@ export const isEnemyAuthoringForm = (value: string): value is EnemyAuthoringForm
 export const ENEMY_AUTHORING_WORKFLOWS = [
   'UI-CMD-ENEMY-DRAFT-PATCH',
   'UI-CMD-ENEMY-COMMIT-V1',
+  'UI-CMD-ENEMY-NEW-VERSION',
 ] as const;
 export const ENEMY_STATS = ['S', 'D', 'M', 'Z', 'I', 'W', 'C'] as const;
 export type EnemyStats = Readonly<Record<(typeof ENEMY_STATS)[number], number>>;
@@ -137,7 +155,7 @@ export interface SentientEnemyVersionIdentity {
   readonly campaignId: string;
   readonly templateId: string;
   readonly versionId: string;
-  readonly version: 1;
+  readonly version: number;
   readonly kind: 'SENTIENT';
   readonly artAssetKey: typeof ENEMY_PLACEHOLDER;
   readonly artSha256: string;
@@ -147,9 +165,11 @@ export type EnemyAuthoringAttempt = EnemyAttempt | CustomMonsterAttempt;
 export interface EnemyAuthoringContext {
   readonly attemptOrNull: EnemyAuthoringAttempt | null;
   readonly selectedVersionOrNull: EnemyVersionIdentity | null;
+  readonly versionAttempt?: EnemyVersionAttemptContext;
 }
 export type EnemyUserEntry = EnemyVersionIdentity & { readonly displayName: string };
 export type EnemyPatchStage =
+  | 'VERSION_CONFIGURATION'
   | 'SENTIENT_IDENTITY'
   | 'SENTIENT_STATS'
   | 'SENTIENT_BUILD'
@@ -162,12 +182,14 @@ export type EnemyWorkflowPayload = {
   readonly expectedAttemptRevision: number;
   readonly stage?: EnemyPatchStage;
   readonly data?: JsonObject;
+  readonly reason?: string;
 };
 export type EnemyWorkflowRequest = WorkflowCommandRequestMessage<
   (typeof ENEMY_AUTHORING_WORKFLOWS)[number],
   EnemyWorkflowPayload
 > & { readonly role: 'gm' };
 export interface EnemyAuthoringMutation {
+  readonly versionPatchSourceFormId?: 'ENM-017';
   readonly authorMasterProfileId: string;
   readonly sourceBaselineVersion: string;
   readonly request: EnemyWorkflowRequest;
@@ -179,6 +201,7 @@ export interface EnemyAuthoringMutation {
   readonly preparedSkillState?: EnemySkillPlanState;
   readonly preparedMonsterComposition?: PreparedCustomMonsterComposition;
   readonly preparedMonsterKnowledge?: PreparedMonsterKnowledge;
+  readonly preparedVersionConfiguration?: PreparedEnemyVersionConfiguration;
 }
 export interface EnemySheet {
   readonly skillPlanState?: EnemySkillPlanState;
@@ -228,10 +251,13 @@ export interface SentientEnemyAuthoringProjection extends RevisionVector {
   readonly context: {
     readonly attemptOrNull: EnemyAttempt | null;
     readonly selectedVersionOrNull: SentientEnemyVersionIdentity | null;
+    readonly versionAttempt?: EnemyVersionAttemptContext;
   };
   readonly sheetOrNull: EnemySheet | null;
   /** Projection-only absence of a separate N+1 configuration confirmation in existing V1. */
-  readonly versionConfigurationSummaryOrNull?: null;
+  readonly versionConfigurationSummaryOrNull?: EnemyVersionConfigurationSummary | null;
+  readonly versionHistory?: EnemyVersionHistory;
+  readonly versionEditor?: EnemyVersionEditor;
   readonly validationErrors: readonly string[];
   readonly catalog: JsonObject;
   readonly compositionPreparation?: Readonly<{
@@ -280,8 +306,10 @@ export const ENEMY_AUTHORING_NAV_TARGETS = {
   'ENM-015::CTA::004': 'ENM-014',
   'ENM-016::CTA::001': 'ENM-015',
   'ENM-016::CTA::003': 'ENM-015',
+  'ENM-017::CTA::005': 'ENM-020',
 } as const;
 export const ENEMY_STAGE_FORMS = {
+  VERSION_CONFIGURATION: ['ENM-017', 'ENM-017', 'ENM-017::CTA::004'],
   ...CUSTOM_MONSTER_STAGE_FORMS,
   SENTIENT_IDENTITY: ['ENM-005', 'ENM-006', 'ENM-005::CTA::003'],
   SENTIENT_STATS: ['ENM-006', 'ENM-007', 'ENM-006::CTA::002'],
@@ -303,9 +331,12 @@ export function enemyWorkflowRequestValue(value: unknown): EnemyWorkflowRequest 
   r.uuid(row['commandId'], '$.commandId');
   revisionValue(row['expectedRevisions']);
   const patch = row['workflowCommandId'] === 'UI-CMD-ENEMY-DRAFT-PATCH';
+  const append = row['workflowCommandId'] === 'UI-CMD-ENEMY-NEW-VERSION';
   const payload = r.exact(
     row['payload'],
-    'campaignId creationAttemptId expectedAttemptRevision' + (patch ? ' stage data' : ''),
+    'campaignId creationAttemptId expectedAttemptRevision' +
+      (patch ? ' stage data' : '') +
+      (append ? ' reason' : ''),
     '$.payload',
   );
   r.uuid(payload['campaignId'], '$.campaignId');
@@ -314,7 +345,11 @@ export function enemyWorkflowRequestValue(value: unknown): EnemyWorkflowRequest 
   if (patch) {
     r.oneOf(payload['stage'], Object.keys(ENEMY_STAGE_FORMS), '$.stage');
     w.jsonObject(payload['data'], '$.data');
+    if (payload['stage'] === 'VERSION_CONFIGURATION')
+      enemyVersionConfigurationPatchValue(payload['data']);
   }
+  if (append && r.raw(payload['reason'], '$.reason').trim().length === 0)
+    r.invalid('$.reason', 'required meaningful change reason', null);
   return w.validated(structuredClone(row));
 }
 function revisionValue(value: unknown): void {
@@ -586,7 +621,7 @@ export function enemyVersionIdentityValue(value: unknown): EnemyVersionIdentity 
     '$.version',
   );
   for (const key of ['campaignId', 'templateId', 'versionId']) r.uuid(row[key], '$.' + key);
-  w.literal(row['version'], 1, '$.version');
+  r.integer(row['version'], '$.version', 1);
   r.oneOf(row['kind'], ['SENTIENT', 'CUSTOM_MONSTER'], '$.kind');
   const monster = row['kind'] === 'CUSTOM_MONSTER';
   w.literal(
@@ -608,15 +643,33 @@ export function enemyAuthoringMutationValue(value: unknown): EnemyAuthoringMutat
   const row = r.exact(
     value,
     'request itemTemplateKeys committedVersionOrNull receiptId timestamp sourceBaselineVersion authorMasterProfileId' +
+      (Object.hasOwn(raw, 'versionPatchSourceFormId') ? ' versionPatchSourceFormId' : '') +
       (Object.hasOwn(raw, 'preparedComposition') ? ' preparedComposition' : '') +
       (Object.hasOwn(raw, 'preparedSkillState') ? ' preparedSkillState' : '') +
       (Object.hasOwn(raw, 'preparedMonsterComposition') ? ' preparedMonsterComposition' : '') +
-      (Object.hasOwn(raw, 'preparedMonsterKnowledge') ? ' preparedMonsterKnowledge' : ''),
+      (Object.hasOwn(raw, 'preparedMonsterKnowledge') ? ' preparedMonsterKnowledge' : '') +
+      (Object.hasOwn(raw, 'preparedVersionConfiguration') ? ' preparedVersionConfiguration' : ''),
     '$.enemyMutation',
   );
   r.text(row['sourceBaselineVersion'], '$.sourceBaselineVersion');
   r.uuid(row['authorMasterProfileId'], '$.authorMasterProfileId');
   const request = enemyWorkflowRequestValue(row['request']);
+  if (Object.hasOwn(row, 'versionPatchSourceFormId')) {
+    w.literal(row['versionPatchSourceFormId'], 'ENM-017', '$.versionPatchSourceFormId');
+    w.literal(request.workflowCommandId, 'UI-CMD-ENEMY-DRAFT-PATCH', '$.versionPatchWorkflow');
+  }
+  if (Object.hasOwn(row, 'preparedVersionConfiguration')) {
+    if (request.payload.stage !== 'VERSION_CONFIGURATION')
+      r.invalid('$.preparedVersionConfiguration', 'own version configuration stage', null);
+    const prepared = preparedEnemyVersionConfigurationValue(row['preparedVersionConfiguration']);
+    if (
+      prepared.attempt.attemptId !== request.payload.creationAttemptId ||
+      prepared.attempt.campaignId !== request.payload.campaignId ||
+      prepared.attempt.revision !== request.payload.expectedAttemptRevision + 1
+    )
+      r.invalid('$.preparedVersionConfiguration', 'own next attempt revision', null);
+  } else if (request.payload.stage === 'VERSION_CONFIGURATION')
+    r.invalid('$.preparedVersionConfiguration', 'host prepared version configuration', null);
   if (Object.hasOwn(row, 'preparedMonsterKnowledge')) {
     if (request.payload.stage !== 'MONSTER_STATS')
       r.invalid('$.preparedMonsterKnowledge', 'own accepted body stage only', null);
@@ -662,10 +715,16 @@ export function enemyAuthoringMutationValue(value: unknown): EnemyAuthoringMutat
     if (keys.length !== r.list(request.payload.data?.['inventoryItems'], '$.inventoryItems').length)
       r.invalid('$.itemTemplateKeys', 'one issued key per input', null);
   } else if (keys.length !== 0) r.invalid('$.itemTemplateKeys', 'inventory allocations only', null);
-  if (row['committedVersionOrNull'] !== null)
-    enemyVersionIdentityValue(row['committedVersionOrNull']);
+  if (row['committedVersionOrNull'] !== null) {
+    const identity = enemyVersionIdentityValue(row['committedVersionOrNull']);
+    if (request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1')
+      w.literal(identity.version, 1, '$.committedVersionOrNull.version');
+    else if (identity.version < 2)
+      r.invalid('$.committedVersionOrNull.version', 'positive N+1 after V1', null);
+  }
   if (
-    (request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1') !==
+    (request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1' ||
+      request.workflowCommandId === 'UI-CMD-ENEMY-NEW-VERSION') !==
     (row['committedVersionOrNull'] !== null)
   )
     r.invalid('$.committedVersionOrNull', 'COMMIT identity only', null);
@@ -685,11 +744,14 @@ export function enemyAuthoringReceipt(
       timestamp: mutation.timestamp,
       workflowCommandId: mutation.request.workflowCommandId,
       sourceFormId:
-        mutation.request.payload.stage === undefined
-          ? mutation.committedVersionOrNull?.kind === 'CUSTOM_MONSTER'
-            ? 'ENM-016'
-            : 'ENM-010'
-          : ENEMY_STAGE_FORMS[mutation.request.payload.stage][0],
+        mutation.versionPatchSourceFormId === 'ENM-017' ||
+        mutation.request.workflowCommandId === 'UI-CMD-ENEMY-NEW-VERSION'
+          ? 'ENM-017'
+          : mutation.request.payload.stage === undefined
+            ? mutation.committedVersionOrNull?.kind === 'CUSTOM_MONSTER'
+              ? 'ENM-016'
+              : 'ENM-010'
+            : ENEMY_STAGE_FORMS[mutation.request.payload.stage][0],
       stageOrNull: mutation.request.payload.stage ?? null,
       attemptRevision:
         mutation.request.payload.expectedAttemptRevision +
@@ -736,17 +798,16 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
       (Object.hasOwn(rawProjection, 'compositionPreparation') ? ' compositionPreparation' : '') +
       (Object.hasOwn(rawProjection, 'versionConfigurationSummaryOrNull')
         ? ' versionConfigurationSummaryOrNull'
-        : ''),
+        : '') +
+      (Object.hasOwn(rawProjection, 'versionHistory') ? ' versionHistory' : '') +
+      (Object.hasOwn(rawProjection, 'versionEditor') ? ' versionEditor' : ''),
     '$.enemyAuthoringProjection',
   );
   w.literal(row['kind'], 'SENTIENT_ENEMY_AUTHORING', '$.kind');
   r.oneOf(row['formId'], SENTIENT_ENEMY_AUTHORING_FORMS, '$.formId');
   if (Object.hasOwn(rawProjection, 'versionConfigurationSummaryOrNull')) {
-    w.literal(
-      row['versionConfigurationSummaryOrNull'],
-      null,
-      '$.versionConfigurationSummaryOrNull',
-    );
+    if (row['versionConfigurationSummaryOrNull'] !== null)
+      enemyVersionConfigurationSummaryValue(row['versionConfigurationSummaryOrNull']);
     if (row['formId'] !== 'ENM-020')
       r.invalid('$.versionConfigurationSummaryOrNull', 'saved ENM-020 projection only', null);
   }
@@ -761,6 +822,34 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
     ),
   );
   const context = enemyAuthoringContextValue(row['context']);
+  if (row['formId'] === 'ENM-017') enemyVersionEditorValue(row['versionEditor'], context);
+  else if (Object.hasOwn(rawProjection, 'versionEditor') || context.versionAttempt !== undefined)
+    r.invalid('$.versionEditor', 'own ENM-017 only', null);
+  if (
+    row['versionConfigurationSummaryOrNull'] != null &&
+    (context.selectedVersionOrNull?.kind !== 'SENTIENT' ||
+      context.selectedVersionOrNull.version <= 1 ||
+      enemyVersionConfigurationSummaryValue(row['versionConfigurationSummaryOrNull']).input.kind !==
+        'SENTIENT')
+  )
+    r.invalid(
+      '$.versionConfigurationSummaryOrNull',
+      'explicit SENTIENT N+1 confirmation only',
+      null,
+    );
+  if (Object.hasOwn(rawProjection, 'versionHistory')) {
+    const history = enemyVersionHistoryValue(row['versionHistory']);
+    if (
+      row['formId'] !== 'ENM-020' ||
+      !admissionJsonEqual(history.selected, context.selectedVersionOrNull) ||
+      !admissionJsonEqual(
+        history.entries.find((entry) => admissionJsonEqual(entry.identity, history.selected))
+          ?.configurationSummaryOrNull,
+        row['versionConfigurationSummaryOrNull'],
+      )
+    )
+      r.invalid('$.versionHistory', 'own saved selected version and configuration summary', null);
+  }
   if (
     context.attemptOrNull?.kind === 'CUSTOM_MONSTER' ||
     context.selectedVersionOrNull?.kind === 'CUSTOM_MONSTER'
@@ -768,7 +857,7 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
     return r.invalid('$.context', 'SENTIENT projection owns only SENTIENT data', null);
   if (row['formId'] !== 'ENM-020' && context.attemptOrNull === null)
     r.invalid('$.context.attemptOrNull', 'own open attempt', null);
-  if (context.attemptOrNull !== null) {
+  if (context.attemptOrNull !== null && row['formId'] !== 'ENM-017') {
     const formIndex = SENTIENT_ENEMY_AUTHORING_FORMS.indexOf(
       row['formId'] as SentientEnemyAuthoringProjection['formId'],
     );
@@ -817,7 +906,7 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
   );
   if (Object.hasOwn(catalog, 'compositionCatalog'))
     enemyCompositionCatalogShape(catalog['compositionCatalog']);
-  else if (row['formId'] === 'ENM-008')
+  else if (row['formId'] === 'ENM-008' || row['formId'] === 'ENM-017')
     r.invalid('$.compositionCatalog', 'source catalogue required by the ENM-008 controls', null);
   if (context.attemptOrNull?.skillPlanState !== undefined)
     enemySkillPlanCatalogBindings(context.attemptOrNull.skillPlanState, catalog['skills']);
@@ -848,7 +937,9 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
         r.invalid('$.composition.skills', 'actual catalogue choice', null);
   }
   const expectedPreparation =
-    row['formId'] === 'ENM-008' && composing != null && 'schemaVersion' in composing;
+    (row['formId'] === 'ENM-008' || row['formId'] === 'ENM-017') &&
+    composing != null &&
+    'schemaVersion' in composing;
   if (expectedPreparation !== Object.hasOwn(row, 'compositionPreparation'))
     r.invalid('$.compositionPreparation', 'current discriminated ENM-008 preparation only', null);
   if (expectedPreparation && composing != null && 'schemaVersion' in composing) {
@@ -1297,7 +1388,8 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
   }
   if (
     (row['formId'] === 'ENM-020' ||
-      (row['formId'] === 'ENM-010' && r.list(row['validationErrors'], '$.errors').length === 0)) &&
+      ((row['formId'] === 'ENM-010' || row['formId'] === 'ENM-017') &&
+        r.list(row['validationErrors'], '$.errors').length === 0)) &&
     row['sheetOrNull'] === null
   )
     r.invalid('$.sheetOrNull', 'complete confirmed sheet', null);
@@ -1305,7 +1397,42 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
 }
 /** Closed structural state. Source mechanics are re-evaluated by the owning host observer. */
 export function enemyAuthoringContextValue(value: unknown): EnemyAuthoringContext {
-  const row = r.exact(value, 'attemptOrNull selectedVersionOrNull', '$.enemyAuthoring');
+  const rawContext = w.record(value, '$.enemyAuthoring');
+  const row = r.exact(
+    value,
+    'attemptOrNull selectedVersionOrNull' +
+      (Object.hasOwn(rawContext, 'versionAttempt') ? ' versionAttempt' : ''),
+    '$.enemyAuthoring',
+  );
+  if (Object.hasOwn(row, 'versionAttempt')) {
+    const version = enemyVersionAttemptContextValue(row['versionAttempt']);
+    const attempt = w.record(row['attemptOrNull'], '$.attempt');
+    if (
+      attempt['campaignId'] !== version.origin.base.campaignId ||
+      attempt['kind'] !== version.origin.base.kind ||
+      attempt['attemptId'] !== version.origin.navigationRequestId ||
+      row['selectedVersionOrNull'] !== null
+    )
+      r.invalid('$.versionAttempt', 'same campaign/kind open technical attempt', null);
+    if (version.unconfiguredAdvisorCardIdOrNull != null) {
+      const cardId = version.unconfiguredAdvisorCardIdOrNull;
+      if (
+        version.origin.base.kind !== 'CUSTOM_MONSTER' ||
+        !customMonsterAttemptValue(attempt).advisorCards.some((card) => card.cardId === cardId)
+      )
+        r.invalid(
+          '$.versionAttempt.unconfiguredAdvisorCardIdOrNull',
+          'actual same owned card',
+          null,
+        );
+    }
+    if (
+      version.replacementPreviewOrNull !== null &&
+      (version.replacementPreviewOrNull.attemptId !== attempt['attemptId'] ||
+        version.replacementPreviewOrNull.sourceAttemptRevision + 1 !== attempt['revision'])
+    )
+      r.invalid('$.replacementPreview', 'own exact current preview revision', null);
+  }
   if (row['selectedVersionOrNull'] !== null)
     enemyVersionIdentityValue(row['selectedVersionOrNull']);
   if (row['attemptOrNull'] !== null) {
@@ -1495,11 +1622,132 @@ export function reduceEnemyAuthoring(
     )
   )
     r.invalid('$.expectedRevisions', 'current revisions', null);
+  const versionState = context.versionAttempt;
+  if (versionState !== undefined) {
+    if (formId !== 'ENM-017') r.invalid('$.versionAttempt', 'own ENM-017 version attempt', null);
+    if (request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1')
+      r.invalid('$.workflowCommandId', 'version attempt cannot create another V1', null);
+    if (
+      request.workflowCommandId === 'UI-CMD-ENEMY-DRAFT-PATCH' &&
+      mutation.versionPatchSourceFormId !== 'ENM-017'
+    )
+      r.invalid('$.versionPatchSourceFormId', 'own ENM-017 PATCH source', null);
+    if (request.workflowCommandId === 'UI-CMD-ENEMY-NEW-VERSION') {
+      const base = versionState.origin.base,
+        identity = mutation.committedVersionOrNull;
+      if (
+        identity === null ||
+        identity.templateId !== base.templateId ||
+        identity.campaignId !== base.campaignId ||
+        identity.kind !== base.kind ||
+        identity.version !== base.version + 1 ||
+        identity.artAssetKey !== base.artAssetKey ||
+        identity.artSha256 !== base.artSha256 ||
+        identity.versionId === base.versionId ||
+        request.payload.reason !== versionState.reason ||
+        versionState.reason.trim().length === 0 ||
+        versionState.replacementPreviewOrNull !== null
+      )
+        r.invalid(
+          '$.newVersion',
+          'own current base, inherited art and confirmed reason/candidate',
+          null,
+        );
+      if (
+        attempt.kind === 'CUSTOM_MONSTER' &&
+        attempt.activeAdvisorCardIdOrNull !== null &&
+        versionState.unconfiguredAdvisorCardIdOrNull === attempt.activeAdvisorCardIdOrNull
+      )
+        r.invalid(
+          '$.newVersion',
+          'current own Advisor choices require explicit configuration confirmation',
+          null,
+        );
+      if (
+        attempt.kind === 'SENTIENT' &&
+        attempt.schemaVersion !== 2 &&
+        versionState.retainedMandatoryFacts.kind === 'SENTIENT' &&
+        enemyVersionFreeFactRequiresRepresentation(
+          versionState.retainedMandatoryFacts.freeSlotOrNull,
+          attempt.compositionAcquisitions?.freeSlotOrNull,
+          attempt.buildOrNull?.raceCode,
+        )
+      )
+        r.invalid(
+          '$.newVersion',
+          'explicit configuration upgrade required to represent the retained body effect',
+          null,
+        );
+      return {
+        context: { attemptOrNull: null, selectedVersionOrNull: identity },
+        formId: 'ENM-020',
+      };
+    }
+    if (payload.stage === 'VERSION_CONFIGURATION') {
+      const prepared =
+        mutation.preparedVersionConfiguration ??
+        r.invalid('$.preparedVersionConfiguration', 'host-bound preparation', null);
+      if (!admissionJsonEqual(prepared.state.origin, versionState.origin))
+        r.invalid('$.preparedVersionConfiguration.origin', 'immutable owning NAV/base', null);
+      return {
+        context: enemyAuthoringContextValue({
+          attemptOrNull: prepared.attempt,
+          selectedVersionOrNull: null,
+          versionAttempt: prepared.state,
+        }),
+        formId: 'ENM-017',
+      };
+    }
+    if (
+      payload.stage === 'SENTIENT_BUILD' ||
+      (payload.stage === 'SENTIENT_STATS' &&
+        !admissionJsonEqual(
+          payload.data,
+          attempt.kind === 'SENTIENT' ? attempt.baseStatsOrNull : null,
+        ))
+    )
+      r.invalid('$.stage', 'explicit full version configuration replacement', null);
+    const stage = payload.stage ?? r.invalid('$.stage', 'own kind edit stage', null);
+    const { versionPatchSourceFormId: _source, ...stageMutation } = mutation;
+    const reduced = reduceEnemyAuthoring(
+      { attemptOrNull: attempt, selectedVersionOrNull: null },
+      stageMutation,
+      ENEMY_STAGE_FORMS[stage][0],
+      revisions,
+    );
+    const nextVersion = { ...versionState, replacementPreviewOrNull: null };
+    if (
+      (stage === 'SENTIENT_INVENTORY' || stage === 'MONSTER_SYMBIONT') &&
+      (stage !== 'MONSTER_SYMBIONT' ||
+        (reduced.context.attemptOrNull?.kind === 'CUSTOM_MONSTER' &&
+          reduced.context.attemptOrNull.compositionOrNull?.phase === 'CONFIRMED'))
+    ) {
+      if (
+        reduced.context.attemptOrNull?.kind === 'CUSTOM_MONSTER' &&
+        reduced.context.attemptOrNull.activeAdvisorCardIdOrNull !== null &&
+        versionState.ownChoicesPending === true
+      )
+        nextVersion.unconfiguredAdvisorCardIdOrNull = null;
+      delete nextVersion.ownChoicesPending;
+    }
+    return {
+      context: enemyAuthoringContextValue({ ...reduced.context, versionAttempt: nextVersion }),
+      formId: 'ENM-017',
+    };
+  }
+  if (
+    request.workflowCommandId === 'UI-CMD-ENEMY-NEW-VERSION' ||
+    payload.stage === 'VERSION_CONFIGURATION' ||
+    mutation.preparedVersionConfiguration !== undefined ||
+    mutation.versionPatchSourceFormId !== undefined
+  )
+    r.invalid('$.versionAttempt', 'own version NAV required', null);
   if (request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1') {
     if (
       formId !== (attempt.kind === 'CUSTOM_MONSTER' ? 'ENM-016' : 'ENM-010') ||
       mutation.committedVersionOrNull?.campaignId !== attempt.campaignId ||
-      mutation.committedVersionOrNull.kind !== attempt.kind
+      mutation.committedVersionOrNull.kind !== attempt.kind ||
+      mutation.committedVersionOrNull.version !== 1
     )
       r.invalid('$.commit', 'own ENM-010 attempt', null);
     return {
@@ -1677,6 +1925,8 @@ export function enemyAuthoringActions(p: EnemyAuthoringProjection): readonly Act
     .filter(([key]) => key.startsWith(p.formId + '::'))
     .map(([key]) => key as ActionKey);
   if (p.formId === 'ENM-020') return back;
+  if (p.formId === 'ENM-017')
+    return p.validationErrors.length === 0 ? [...back, 'ENM-017::CTA::004'] : back;
   if (p.kind === 'CUSTOM_MONSTER_AUTHORING') {
     if (p.formId === 'ENM-016')
       return p.validationErrors.length === 0 ? [...back, 'ENM-016::CTA::002'] : back;

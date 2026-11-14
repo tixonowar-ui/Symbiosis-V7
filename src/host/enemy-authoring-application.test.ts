@@ -3,6 +3,7 @@ import { gunzipSync } from 'node:zlib';
 import Database from 'better-sqlite3';
 import { openPersistenceDatabase } from '../persistence/database.js';
 import { migration0022 } from '../persistence/migrations/0022-custom-monster-v1.js';
+import { migration0023 } from '../persistence/migrations/0023-enemy-template-versions.js';
 import type * as NodeCrypto from 'node:crypto';
 import { createCampaignCreationRuntime } from './campaign-creation.js';
 import { createCampaignBindManager } from './campaign-bind.js';
@@ -1377,6 +1378,11 @@ it('CORE216 runtime reads genuine pre257 bytes and keeps a pending legacy upgrad
           name: migration0022.name,
           checksum_sha256: createHash('sha256').update(migration0022.sql).digest('hex'),
         },
+        {
+          version: migration0023.version,
+          name: migration0023.name,
+          checksum_sha256: createHash('sha256').update(migration0023.sql).digest('hex'),
+        },
       ],
     };
     db = openPersistenceDatabase(filename);
@@ -1410,7 +1416,7 @@ it('CORE216 runtime reads genuine pre257 bytes and keeps a pending legacy upgrad
     expect(compositionStorageRows({ db: database() })).toEqual(migratedRows);
     expect(
       database().prepare('SELECT MAX(version) version,COUNT(*) count FROM schema_migration').get(),
-    ).toEqual({ version: 22, count: 22 });
+    ).toEqual({ version: 23, count: 23 });
     expect(database().pragma('user_version', { simple: true })).toBe(0);
     const current = enemyAuthoringProjectionValue(app().project().base.roleFilteredPayload);
     expect(current.formId).toBe('ENM-009');

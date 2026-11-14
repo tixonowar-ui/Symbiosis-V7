@@ -567,7 +567,7 @@ describe('durable local network tab entry', () => {
     ).run();
     const registry = db.prepare('SELECT * FROM schema_migration ORDER BY version').all(),
       campaign = db.prepare('SELECT * FROM campaign').all();
-    expect(applyMigrations(db)).toBe(22);
+    expect(applyMigrations(db)).toBe(23);
     expect(
       db.prepare('SELECT * FROM schema_migration WHERE version<=8 ORDER BY version').all(),
     ).toEqual(registry);
@@ -586,7 +586,7 @@ describe('durable local network tab entry', () => {
       .prepare('SELECT * FROM local_network_tab_entry ORDER BY entry_command_id')
       .all();
     const closes = db.prepare('SELECT * FROM local_network_tab_close').all();
-    expect(applyMigrations(db)).toBe(22);
+    expect(applyMigrations(db)).toBe(23);
     expect(
       db.prepare('SELECT * FROM local_network_tab_entry ORDER BY entry_command_id').all(),
     ).toEqual(entries);
@@ -615,7 +615,21 @@ describe('durable local network tab entry', () => {
     else if (fault === 'missing-review-table') db.exec('DROP TABLE gm_request_queue_event');
     else if (fault === 'old-version')
       db.prepare('DELETE FROM schema_migration WHERE version>=9').run();
-    else db.prepare('UPDATE schema_migration SET version=23 WHERE version=22').run();
+    else {
+      const registry = db
+        .prepare<[], { version: number }>('SELECT * FROM schema_migration ORDER BY version')
+        .all();
+      expect(registry.map((row) => row.version)).toEqual(
+        Array.from({ length: 23 }, (_, index) => index + 1),
+      );
+      db.prepare('INSERT INTO schema_migration VALUES(?,?,?)').run(24, 'future', 'f'.repeat(64));
+      expect(
+        db.prepare('SELECT * FROM schema_migration WHERE version<=23 ORDER BY version').all(),
+      ).toEqual(registry);
+      expect(db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
+        version: 24,
+      });
+    }
     const before = db.serialize();
     expectCode(() => readActiveLocalNetworkTab(db, device), 'CORRUPT_STORAGE');
     expectCode(() => commitLocalNetworkTabEntry(db, input, allow), 'CORRUPT_STORAGE');
@@ -1009,7 +1023,7 @@ describe('forward request-review migration', () => {
       entry: db.prepare('SELECT * FROM local_network_tab_entry').all(),
       registry: db.prepare('SELECT * FROM schema_migration ORDER BY version').all(),
     };
-    expect(applyMigrations(db)).toBe(22);
+    expect(applyMigrations(db)).toBe(23);
     expect(db.prepare('SELECT * FROM campaign_creation_cursor').all()).toEqual(before.cursor);
     expect(db.prepare('SELECT * FROM local_network_tab_entry').all()).toEqual(before.entry);
     expect(
@@ -1020,7 +1034,7 @@ describe('forward request-review migration', () => {
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
       expect(db.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
     const stable = db.serialize();
-    expect(applyMigrations(db)).toBe(22);
+    expect(applyMigrations(db)).toBe(23);
     expect(db.serialize().equals(stable)).toBe(true);
   });
 });

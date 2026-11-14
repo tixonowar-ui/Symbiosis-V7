@@ -1,20 +1,48 @@
-import { useEffect, useState, useMemo } from 'react';
+import type { ReactNode } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { admissionJsonEqual } from '@shared/campaign-admission-codec.js';
 import type { JsonObject, JsonValue } from '@shared/wire-protocol.js';
 import {
   ENEMY_STATS,
   sentientEnemyAuthoringProjectionValue as enemyAuthoringProjectionValue,
+  enemyAuthoringProjectionValue as anyEnemyAuthoringProjectionValue,
   type EnemyItemInput,
   type EnemySheet,
+  type EnemyVersionIdentity,
+  type EnemyAuthoringProjection,
+  type EnemyPatchStage,
 } from '@shared/enemy-authoring.js';
 import {
   EnemyCompositionFields,
   EnemyCompositionFactsContent,
 } from './enemy-composition-fields.js';
-import { CustomMonsterContent } from './custom-monster-content.js';
+import {
+  CustomMonsterContent,
+  IdentityFields as MonsterIdentityFields,
+  StatsFields as MonsterStatsFields,
+  PhysicsFields as MonsterPhysicsFields,
+  AttackFields as MonsterAttackFields,
+  SymbiontFields as MonsterSymbiontFields,
+  Sheet as MonsterSheetContent,
+} from './custom-monster-content.js';
 import { customMonsterProjectionValue } from '@shared/custom-monster-presentation.js';
+import {
+  enemyVersionConfigurationInputValue,
+  type EnemyVersionConfigurationInput,
+  type EnemyVersionDiffEntry,
+} from '@shared/enemy-version-configuration.js';
+import { wireCodecPrimitives as w } from '@shared/wire-codec.js';
+import { calculateSkillSlotCost } from '../../../domain/rules/skill-stage/skills.js';
 
 const labels: Readonly<Record<string, string>> = {
+  NONE: 'Нет',
+  LEFT: 'Слева',
+  RIGHT: 'Справа',
+  SELECTED: 'Выбранный навык',
+  RACE_GRANTED: 'Расовый навык',
+  CLASS_MANDATORY: 'Обязательный навык класса',
+  SYMBIONT_SELECTED: 'Выбранный навык симбионта',
+  SYMBIONT_GRANTED: 'Дар симбионта',
   PURE: 'Чистый',
   FREE: 'Вольный',
   UNITED: 'Единый',
@@ -858,15 +886,1173 @@ function InventoryFields({
     </section>
   );
 }
+interface SentientIdentityDraft {
+  name: string;
+  description: string;
+  origin: string;
+  affiliation: string;
+  massKg: string;
+}
+function SentientIdentityFields({
+  value,
+  onChange,
+}: {
+  value: SentientIdentityDraft;
+  onChange: (value: SentientIdentityDraft) => void;
+}) {
+  // HTML maxlength counts UTF-16 units; the owning identity limit counts Unicode code points.
+  return (
+    <fieldset>
+      <legend>Идентичность</legend>
+      {(['name', 'description', 'origin', 'affiliation', 'massKg'] as const).map((key, index) => (
+        <label key={key}>
+          {['Имя врага', 'Описание врага', 'Происхождение', 'Принадлежность', 'Масса, кг'][index]}
+          <input
+            type={key === 'massKg' ? 'number' : 'text'}
+            min={key === 'massKg' ? 30 : undefined}
+            max={key === 'massKg' ? 500 : undefined}
+            step={key === 'massKg' ? 0.1 : undefined}
+            maxLength={key === 'description' ? 2 * 2000 : undefined}
+            value={value[key]}
+            onChange={(event) => onChange({ ...value, [key]: event.target.value })}
+          />
+        </label>
+      ))}
+      <p>Обычная анатомия мыслящего. Масса 30–500 кг, шаг 0,1 кг. Описание — до 2000 символов.</p>
+    </fieldset>
+  );
+}
+function sentientIdentityDraft(
+  value: {
+    name: string;
+    description: string | null;
+    origin: string;
+    affiliation: string;
+    massKg: number | null;
+  } | null,
+): SentientIdentityDraft {
+  return {
+    name: value?.name ?? '',
+    description: value?.description ?? '',
+    origin: value?.origin ?? '',
+    affiliation: value?.affiliation ?? '',
+    massKg: value?.massKg == null ? '' : String(value.massKg),
+  };
+}
+function sentientIdentityData(value: SentientIdentityDraft): JsonObject | null {
+  return value.name.trim() === '' || [...value.description].length > 2000
+    ? null
+    : {
+        ...value,
+        description: value.description === '' ? null : value.description,
+        massKg: value.massKg === '' ? null : Number(value.massKg),
+        anatomyProfileId: 'ORDINARY_SENTIENT',
+      };
+}
+
+const versionFieldLabels: Readonly<Record<string, string>> = {
+  composition: 'Состав симбионтов',
+  ordinarySymbiontInstances: 'Обыкновенные симбионты',
+  symbioticMonsterInstances: 'Симбиотические монстры',
+  skills: 'Навыки',
+  items: 'Предметы',
+  instances: 'Экземпляры симбионтов',
+  speciesKey: 'Вид',
+  targetLevel: 'Уровень',
+  learnedNodeRefs: 'Изученные узлы дерева',
+  side: 'Сторона',
+  slotOrder: 'Порядок слота',
+  quantity: 'Количество',
+  itemTypeId: 'Предмет',
+  equipped: 'Надет или взят в руки',
+  equippedSlots: 'Занятые места',
+  ordinary: 'Обыкновенный симбионт',
+  selection: 'Выбранный состав',
+  advisorSkills: 'Собственные навыки Советника',
+  dolphinSkills: 'Навыки «Мирного воина»',
+  status: 'Состояние',
+  total: 'Всего',
+  capacity: 'Ёмкость',
+  used: 'Занято',
+  remaining: 'Осталось',
+  source: 'Источник навыка',
+  profile: 'Профиль предмета',
+  kind: 'Тип',
+  identityOrNull: 'Идентичность',
+  name: 'Имя',
+  description: 'Описание',
+  origin: 'Происхождение',
+  affiliation: 'Принадлежность',
+  massKg: 'Масса',
+  baseStatsOrNull: 'Базовые характеристики',
+  buildOrNull: 'Раса, класс и начальные навыки',
+  raceCode: 'Раса',
+  pureClassOrNull: 'Класс',
+  skillSelections: 'Начальный выбор навыков',
+  skillPlanState: 'Навыки и фактическая оплата',
+  planOrNull: 'Начальный выбор и учёт навыков',
+  accountingOrNull: 'Текущие навыки, оплата и потери',
+  initialSkills: 'Начальные навыки',
+  knownSkills: 'Сохранённые навыки',
+  permanentLosses: 'Постоянные потери',
+  startSlots: 'Оплата START',
+  dolphinSlots: 'Оплата «Мирный воин»',
+  bonus: 'Бонус',
+  targetBonus: 'Выбранный бонус',
+  skillKey: 'Навык',
+  compositionOrNull: 'Состав симбионтов',
+  compositionAcquisitions: 'Сохранённые приобретения',
+  inventoryOrNull: 'Имущество',
+  inventoryItems: 'Предметы',
+  statsOrNull: 'Характеристики монстра',
+  physicsOrNull: 'Тело монстра',
+  attackOrNull: 'Атака монстра',
+  advisorCards: 'Карты Советника',
+  advisorKnowledge: 'Текущие навыки Советника',
+  baseStats: 'Прямые характеристики',
+  baseMaxHP: 'Базовое максимальное HP',
+  ageYears: 'Возраст',
+};
+function versionDiffLabel(path: string): string {
+  return path === ''
+    ? 'Полная конфигурация'
+    : path
+        .split('/')
+        .slice(1)
+        .map((key) => {
+          const decoded = key.replace(/~1/gu, '/').replace(/~0/gu, '~');
+          return (
+            versionFieldLabels[decoded] ??
+            (/^\d+$/u.test(decoded) ? `Элемент ${String(Number(decoded) + 1)}` : decoded)
+          );
+        })
+        .join(' / ');
+}
+const versionDiffArray = (value: JsonValue): value is readonly JsonValue[] => Array.isArray(value);
+function VersionDiffValue({
+  side,
+  names,
+}: {
+  side: EnemyVersionDiffEntry['before'];
+  names: ReadonlyMap<string, string>;
+}) {
+  const show = (value: JsonValue, path = ''): ReactNode => {
+    if (value === null) return 'Не задано';
+    if (typeof value !== 'object')
+      return typeof value === 'boolean'
+        ? value
+          ? 'Да'
+          : 'Нет'
+        : (names.get(String(value)) ?? labels[String(value)] ?? String(value));
+    if (versionDiffArray(value))
+      return value.length === 0 ? (
+        'Нет'
+      ) : (
+        <ul>
+          {value.map((entry, index) => (
+            <li key={index}>{show(entry, path + '/' + index)}</li>
+          ))}
+        </ul>
+      );
+    const visible = Object.entries(value).filter(
+      ([key]) =>
+        key === 'itemTypeId' ||
+        key === 'anatomyProfileId' ||
+        !/(?:Id|Ids|Revision|revision|schemaVersion|CommandId|ReceiptId)$/u.test(key),
+    );
+    return (
+      <>
+        {visible.length === 0 ? (
+          'Только технические привязки; полные данные ниже.'
+        ) : (
+          <dl>
+            {visible.map(([key, entry]) => (
+              <div key={key}>
+                <dt>{versionDiffLabel('/' + key)}</dt>
+                <dd>{show(entry, path + '/' + key)}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </>
+    );
+  };
+  if (!side.present) return <>Отсутствует</>;
+  return (
+    <>
+      {show(side.value)}
+      {typeof side.value !== 'object' || side.value === null ? null : (
+        <details>
+          <summary>Полные данные и технические привязки</summary>
+          <pre>{JSON.stringify(side.value, null, 2)}</pre>
+        </details>
+      )}
+    </>
+  );
+}
+export function VersionChanges({
+  changes,
+  catalog,
+}: {
+  changes: readonly EnemyVersionDiffEntry[];
+  catalog: JsonObject;
+}) {
+  const names = new Map<string, string>();
+  const collectNames = (value: JsonValue): void => {
+    if (value === null || typeof value !== 'object') return;
+    if (Array.isArray(value)) {
+      value.forEach(collectNames);
+      return;
+    }
+    const entries = Object.entries(value);
+    const nodeRef = entries.find(([key]) => key === 'nodeRef')?.[1];
+    const nodeLabel = entries.find(([key]) => key === 'label')?.[1];
+    if (typeof nodeRef === 'string' && typeof nodeLabel === 'string') names.set(nodeRef, nodeLabel);
+    const name = entries.find(([key]) => key === 'name')?.[1];
+    if (typeof name === 'string')
+      for (const key of [
+        'skillKey',
+        'speciesKey',
+        'itemTypeId',
+        'nodeRef',
+        'raceCode',
+        'classCode',
+      ]) {
+        const identity = entries.find(([field]) => field === key)?.[1];
+        if (typeof identity === 'string') names.set(identity, name);
+      }
+    Object.values(value).forEach(collectNames);
+  };
+  collectNames(catalog);
+  const ordinary = changes.filter(
+    (change) =>
+      !change.path
+        .split('/')
+        .some(
+          (key) =>
+            key !== 'itemTypeId' &&
+            key !== 'anatomyProfileId' &&
+            /(?:Id|Ids|Revision|revision|schemaVersion)$/u.test(key),
+        ),
+  );
+  const technical = changes.filter((change) => !ordinary.includes(change));
+  return (
+    <section aria-label="Различия полной версии">
+      {changes.length === 0 ? (
+        <p>
+          Полевых изменений нет. Сохраняется полная копия без замены конфигурации и сброса навыков.
+        </p>
+      ) : (
+        <>
+          <table>
+            <thead>
+              <tr>
+                <th>Что изменено</th>
+                <th>Было</th>
+                <th>Станет</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ordinary.map((change) => (
+                <tr key={change.path}>
+                  <th>{versionDiffLabel(change.path)}</th>
+                  <td>
+                    <VersionDiffValue side={change.before} names={names} />
+                  </td>
+                  <td>
+                    <VersionDiffValue side={change.after} names={names} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {technical.length === 0 ? null : (
+            <details>
+              <summary>Дополнительные технические привязки</summary>
+              <pre>{JSON.stringify(technical, null, 2)}</pre>
+            </details>
+          )}
+        </>
+      )}
+    </section>
+  );
+}
+interface VersionSkillDraft {
+  skillKey: string;
+  bonus: string;
+}
+interface VersionConfigurationDraft {
+  stats: Readonly<Record<string, string>>;
+  race: string;
+  pureClass: string;
+  skills: readonly VersionSkillDraft[];
+  advisor: readonly VersionSkillDraft[];
+}
+function currentVersionInput(p: EnemyAuthoringProjection): EnemyVersionConfigurationInput {
+  const attempt = p.context.attemptOrNull;
+  if (attempt === null) throw new Error('Нет редактируемой полной версии.');
+  const state = p.context.versionAttempt;
+  if (state?.ownChoicesPending === true && state.configurationConfirmation !== undefined)
+    return state.configurationConfirmation.input;
+  if (attempt.kind === 'CUSTOM_MONSTER')
+    return { kind: attempt.kind, advisorSkills: attempt.advisorCards[0]?.knownSkills ?? [] };
+  if (attempt.baseStatsOrNull === null || attempt.buildOrNull === null)
+    throw new Error('Нет полного начального выбора.');
+  return {
+    kind: attempt.kind,
+    initialInput: { baseStats: attempt.baseStatsOrNull, build: attempt.buildOrNull },
+    advisorSkills:
+      attempt.skillPlanState?.advisorKnowledge[0]?.knownSkills.map((skill) => ({
+        skillKey: skill.skillKey,
+        targetBonus: skill.bonus,
+      })) ?? [],
+  };
+}
+function configurationDraft(input: EnemyVersionConfigurationInput): VersionConfigurationDraft {
+  return {
+    stats:
+      input.kind === 'SENTIENT'
+        ? Object.fromEntries(
+            ENEMY_STATS.map((key) => [key, String(input.initialInput.baseStats[key])]),
+          )
+        : {},
+    race: input.kind === 'SENTIENT' ? input.initialInput.build.raceCode : '',
+    pureClass: input.kind === 'SENTIENT' ? (input.initialInput.build.pureClassOrNull ?? '') : '',
+    skills:
+      input.kind === 'SENTIENT'
+        ? input.initialInput.build.skillSelections.map((skill) => ({
+            skillKey: skill.skillKey,
+            bonus: String(skill.targetBonus),
+          }))
+        : [],
+    advisor: input.advisorSkills.map((skill) => ({
+      skillKey: skill.skillKey,
+      bonus: String(skill.targetBonus),
+    })),
+  };
+}
+function VersionSkillFields({
+  requirementKind,
+  title,
+  choices,
+  value,
+  onChange,
+}: {
+  requirementKind: 'SENTIENT' | 'CUSTOM_MONSTER';
+  title: string;
+  choices: readonly JsonObject[];
+  value: readonly VersionSkillDraft[];
+  onChange: (value: readonly VersionSkillDraft[]) => void;
+}) {
+  return (
+    <fieldset>
+      <legend>{title}</legend>
+      {choices.map((choice) => {
+        const key = text(choice['skillKey']),
+          selected = value.find((row) => row.skillKey === key);
+        let cost: number | null = null;
+        if (selected !== undefined) {
+          try {
+            cost = calculateSkillSlotCost(Number(selected.bonus));
+          } catch {
+            /* Invalid local bonus remains unavailable to submit. */
+          }
+        }
+        return (
+          <fieldset key={key}>
+            <legend>{text(choice['name'])}</legend>
+            <p>
+              Требования:{' '}
+              {requirementKind === 'SENTIENT'
+                ? skillRequirementText(list(choice['requirements']))
+                : list(choice['requirements'])
+                    .map((row) => text(row['statCode']) + ' ≥ ' + text(row['minValue']))
+                    .join(' и ') || 'Нет'}
+              . Предел бонуса:{' '}
+              {typeof choice['maxBonus'] === 'number' ? choice['maxBonus'] : 'не задан правилом'}.
+            </p>
+            <label>
+              Бонус{' '}
+              <input
+                aria-label={`${title}: ${text(choice['name'])}`}
+                type="number"
+                min="1"
+                step="1"
+                max={typeof choice['maxBonus'] === 'number' ? choice['maxBonus'] : undefined}
+                value={selected?.bonus ?? ''}
+                onChange={(event) => {
+                  const next = event.target.value;
+                  onChange(
+                    next === ''
+                      ? value.filter((row) => row.skillKey !== key)
+                      : selected === undefined
+                        ? [...value, { skillKey: key, bonus: next }]
+                        : value.map((row) =>
+                            row.skillKey === key ? { skillKey: key, bonus: next } : row,
+                          ),
+                  );
+                }}
+              />
+            </label>
+            {selected === undefined ? null : (
+              <p>
+                Стоимость выбранного бонуса:{' '}
+                {cost === null ? 'проверьте целый положительный бонус' : cost}.
+              </p>
+            )}
+          </fieldset>
+        );
+      })}
+    </fieldset>
+  );
+}
+
+function VersionSentientFields({
+  p,
+  stage,
+  onValue,
+  onPrepare,
+}: {
+  p: Extract<EnemyAuthoringProjection, { kind: 'SENTIENT_ENEMY_AUTHORING' }>;
+  stage: EnemyPatchStage;
+  onValue: (value: JsonObject | null) => void;
+  onPrepare: (value: JsonObject) => { ok: boolean; detail?: string };
+}) {
+  const attempt = p.context.attemptOrNull;
+  const [identity, setIdentity] = useState(() =>
+    sentientIdentityDraft(attempt?.identityOrNull ?? null),
+  );
+  const [items, setItems] = useState(attempt?.inventoryOrNull?.inventoryItems ?? []);
+  const [compatibility, setCompatibility] = useState(
+    attempt?.inventoryOrNull?.armorCompatibilityReasonOrNull ?? '',
+  );
+  useEffect(() => {
+    if (stage === 'SENTIENT_IDENTITY') onValue(sentientIdentityData(identity));
+    else if (stage === 'SENTIENT_INVENTORY')
+      onValue(
+        structuredClone(
+          w.jsonObject(
+            {
+              inventoryItems: items,
+              armorCompatibilityReasonOrNull: compatibility === '' ? null : compatibility,
+            },
+            '$.versionInventory',
+          ),
+        ),
+      );
+  }, [stage, identity, items, compatibility, onValue]);
+  return stage === 'SENTIENT_IDENTITY' ? (
+    <SentientIdentityFields value={identity} onChange={setIdentity} />
+  ) : stage === 'SENTIENT_SYMBIONTS' ? (
+    <EnemyCompositionFields
+      projection={p}
+      onValue={onValue}
+      onPrepare={onPrepare}
+      requirementText={skillRequirementText}
+    />
+  ) : stage === 'SENTIENT_INVENTORY' ? (
+    <>
+      <InventoryFields catalog={p.catalog} value={items} onChange={setItems} />
+      <label>
+        Основание совместимости доспехов{' '}
+        <input value={compatibility} onChange={(event) => setCompatibility(event.target.value)} />
+      </label>
+      <p>
+        Окончательные постоянные требования проверяются по этому полному телу и фактически выбранной
+        экипировке.
+      </p>
+    </>
+  ) : null;
+}
+
+function EnemyVersionContent({
+  projection: p,
+  onValue,
+  onStage,
+}: {
+  projection: EnemyAuthoringProjection;
+  onValue: (value: JsonObject | null) => void;
+  onStage:
+    ((stage: EnemyPatchStage, value: JsonObject) => { ok: boolean; detail?: string }) | undefined;
+}) {
+  const attempt = p.context.attemptOrNull,
+    state = p.context.versionAttempt,
+    editor = p.versionEditor;
+  if (attempt === null || state === undefined || editor === undefined)
+    throw new Error('Нет подтверждённой основы новой версии.');
+  const currentInput = useMemo(() => currentVersionInput(p), [p]);
+  // A host PREVIEW remount must restore exactly the displayed replacement, never the unchanged base.
+  const [draft, setDraft] = useState(() =>
+    configurationDraft(state.replacementPreviewOrNull?.input ?? currentInput),
+  );
+  const [reason, setReason] = useState(state.reason);
+  const [discardForReason, setDiscardForReason] = useState(false);
+  const [consented, setConsented] = useState(false);
+  const [section, setSection] = useState<EnemyPatchStage | 'SUMMARY'>('SUMMARY');
+  const [sectionData, setSectionData] = useState<JsonObject | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const input = useMemo(() => {
+    try {
+      const advisorSkills = draft.advisor.map((skill) => ({
+        skillKey: skill.skillKey,
+        targetBonus: Number(skill.bonus),
+      }));
+      return enemyVersionConfigurationInputValue(
+        attempt.kind === 'CUSTOM_MONSTER'
+          ? { kind: attempt.kind, advisorSkills }
+          : {
+              kind: attempt.kind,
+              advisorSkills,
+              initialInput: {
+                baseStats: Object.fromEntries(
+                  ENEMY_STATS.map((key) => [
+                    key,
+                    draft.stats[key]?.trim() === '' ? null : Number(draft.stats[key]),
+                  ]),
+                ),
+                build: {
+                  raceCode: draft.race,
+                  pureClassOrNull: draft.race === 'PURE' ? draft.pureClass : null,
+                  skillSelections: draft.skills.map((skill) => ({
+                    skillKey: skill.skillKey,
+                    targetBonus: Number(skill.bonus),
+                  })),
+                },
+              },
+            },
+      );
+    } catch {
+      return null;
+    } // Incomplete local text is not a submitted configuration.
+  }, [attempt.kind, draft]);
+  const reasonDirty = reason !== state.reason;
+  const configDirty = input === null || !admissionJsonEqual(input, currentInput);
+  const reasonWouldDiscard = configDirty || state.replacementPreviewOrNull !== null;
+  const shownPreview =
+    state.replacementPreviewOrNull !== null &&
+    input !== null &&
+    !reasonDirty &&
+    admissionJsonEqual(input, state.replacementPreviewOrNull.input)
+      ? state.replacementPreviewOrNull
+      : null;
+  const data = (value: unknown): JsonObject =>
+    structuredClone(w.jsonObject(value, '$.versionInput'));
+  const send = useCallback(
+    (stage: EnemyPatchStage, value: JsonObject) => {
+      const result = onStage?.(stage, value) ?? {
+        ok: false,
+        detail: 'Редактирование сейчас недоступно.',
+      };
+      setNotice(
+        result.ok
+          ? 'Команда отправлена; дождитесь подтверждения хоста.'
+          : (result.detail ?? 'Изменение не отправлено.'),
+      );
+      return result;
+    },
+    [onStage],
+  );
+  const acceptSection = useCallback(
+    (value: JsonObject | null) =>
+      setSectionData((old) => (admissionJsonEqual(old, value) ? old : value)),
+    [],
+  );
+  useEffect(() => {
+    onValue(
+      section === 'SUMMARY' &&
+        !reasonDirty &&
+        !configDirty &&
+        state.replacementPreviewOrNull === null &&
+        p.validationErrors.length === 0
+        ? { reason: state.reason }
+        : null,
+    );
+  }, [
+    section,
+    reasonDirty,
+    configDirty,
+    state.replacementPreviewOrNull,
+    state.reason,
+    p.validationErrors.length,
+    onValue,
+  ]);
+  const changeDraft = (patch: Partial<VersionConfigurationDraft>) => {
+    onValue(null);
+    setConsented(false);
+    setDiscardForReason(false);
+    setDraft((old) => ({ ...old, ...patch }));
+  };
+  const allSkills =
+    p.kind === 'SENTIENT_ENEMY_AUTHORING'
+      ? list(p.catalog['skills'])
+      : list(p.catalog['advisorSkills']);
+  const choices =
+    p.kind === 'SENTIENT_ENEMY_AUTHORING'
+      ? allSkills.filter((row) => row['category'] === 'SELECTABLE_GENERAL')
+      : allSkills;
+  const skillName = (key: string) =>
+    text(allSkills.find((row) => row['skillKey'] === key)?.['name']);
+  const stages: readonly (readonly [EnemyPatchStage, string])[] =
+    attempt.kind === 'SENTIENT'
+      ? [
+          ['SENTIENT_IDENTITY', 'Идентичность'],
+          ['SENTIENT_SYMBIONTS', 'Состав симбионтов'],
+          ['SENTIENT_INVENTORY', 'Имущество и экипировка'],
+        ]
+      : [
+          ['MONSTER_IDENTITY', 'Идентичность'],
+          ['MONSTER_STATS', 'Ручные характеристики'],
+          ['MONSTER_PHYSICS', 'Тело и естественная броня'],
+          ['MONSTER_ATTACK', 'Атака'],
+          ['MONSTER_SYMBIONT', 'Обыкновенный симбионт'],
+        ];
+  const before = shownPreview?.before ?? attempt;
+  const beforeAccounting =
+    before.kind === 'SENTIENT' ? before.skillPlanState?.planOrNull?.accountingOrNull : null;
+  const beforeSkills =
+    before.kind === 'SENTIENT'
+      ? (beforeAccounting?.knownSkills ?? before.skillPlanState?.planOrNull?.initialSkills ?? [])
+      : [];
+  const summary = shownPreview?.inputSummary ?? null;
+  return (
+    <section aria-label="Новая полная версия шаблона" data-enemy-authoring="ENM-017">
+      <h2>Новая полная версия {state.origin.base.version + 1}</h2>
+      <p>
+        Тип: {attempt.kind === 'SENTIENT' ? 'мыслящий враг' : 'произвольный монстр'}. Основа —
+        версия {state.origin.base.version}; текущая версия — {editor.currentVersion.version}.
+        Прежние версии и их ссылки неизменяемы.
+      </p>
+      <img
+        alt="Закреплённый портрет шаблона"
+        src={`data:image/png;base64,${p.art.bytesBase64}`}
+        width={180}
+      />
+      <p>
+        Портрет наследуется. Его загрузка и очистка пока недоступны. Боевые экземпляры здесь не
+        создаются.
+      </p>
+      {p.validationErrors.map((error) => (
+        <p role="alert" key={error}>
+          {error}
+        </p>
+      ))}
+      <label>
+        Причина новой версии{' '}
+        <textarea
+          aria-label="Причина новой версии"
+          value={reason}
+          onChange={(event) => {
+            onValue(null);
+            setConsented(false);
+            setDiscardForReason(false);
+            setReason(event.target.value);
+          }}
+        />
+      </label>
+      <button
+        type="button"
+        disabled={
+          onStage === undefined ||
+          section !== 'SUMMARY' ||
+          !reasonDirty ||
+          (reasonWouldDiscard && !discardForReason)
+        }
+        onClick={() => send('VERSION_CONFIGURATION', { operation: 'SET_REASON', reason })}
+      >
+        {reasonWouldDiscard ? 'Сохранить причину и отбросить новый выбор' : 'Сохранить причину'}
+      </button>
+      {reasonDirty ? (
+        <>
+          <button
+            type="button"
+            onClick={() => {
+              setReason(state.reason);
+              setConsented(false);
+              setDiscardForReason(false);
+            }}
+          >
+            Вернуть сохранённую причину и сохранить новый выбор
+          </button>
+          {!reasonWouldDiscard ? null : (
+            <label>
+              <input
+                type="checkbox"
+                aria-label="Подтверждаю отбрасывание нового выбора при сохранении причины"
+                checked={discardForReason}
+                onChange={(event) => {
+                  setDiscardForReason(event.target.checked);
+                  setConsented(false);
+                }}
+              />
+              Сохранение причины отбросит неподтверждённый новый выбор и его предварительный расчёт.
+              Чтобы сохранить выбор, верните прежнюю причину, подтвердите выбор, затем измените
+              причину.
+            </label>
+          )}
+        </>
+      ) : null}
+      <VersionChanges changes={editor.changeSet} catalog={p.catalog} />
+      <section aria-label="Явная замена конфигурации новой версии">
+        <h3>Явная замена конфигурации</h3>
+        <p>
+          Простое копирование, просмотр и обычное сохранение не сбрасывают навыки, оплату или
+          потери. Даже при том же начальном вводе замена ниже выполняется только после отдельного
+          точного подтверждения.
+        </p>
+        <fieldset disabled={onStage === undefined || section !== 'SUMMARY'}>
+          <legend>Полный новый выбор</legend>
+          {attempt.kind === 'SENTIENT' ? (
+            <>
+              <fieldset>
+                <legend>Семь прямых базовых характеристик новой конфигурации</legend>
+                {ENEMY_STATS.map((key) => (
+                  <label key={key}>
+                    {key}
+                    <input
+                      aria-label={`Новая базовая ${key}`}
+                      type="number"
+                      min="1"
+                      max="35"
+                      step="1"
+                      value={draft.stats[key] ?? ''}
+                      onChange={(event) =>
+                        changeDraft({ stats: { ...draft.stats, [key]: event.target.value } })
+                      }
+                    />
+                  </label>
+                ))}
+              </fieldset>
+              <label>
+                Раса новой конфигурации{' '}
+                <select
+                  aria-label="Раса новой конфигурации"
+                  value={draft.race}
+                  onChange={(event) =>
+                    changeDraft({ race: event.target.value, pureClass: '', skills: [] })
+                  }
+                >
+                  {list(p.catalog['races']).map((race) => (
+                    <option key={text(race['raceCode'])} value={text(race['raceCode'])}>
+                      {text(race['name'])}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {draft.race !== 'PURE' ? null : (
+                <label>
+                  Класс новой конфигурации{' '}
+                  <select
+                    aria-label="Класс новой конфигурации"
+                    value={draft.pureClass}
+                    onChange={(event) => changeDraft({ pureClass: event.target.value })}
+                  >
+                    <option value="">Выберите класс</option>
+                    {list(p.catalog['classes']).map((row) => (
+                      <option key={text(row['classCode'])} value={text(row['classCode'])}>
+                        {text(row['name'])}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              <VersionSkillFields
+                requirementKind={attempt.kind}
+                title="Новый начальный навык"
+                choices={choices}
+                value={draft.skills}
+                onChange={(skills) => changeDraft({ skills })}
+              />
+              <p>
+                Новый начальный выбор оплачивается полностью. Хост проверит точное заполнение до
+                состава; финальные характеристики и постоянные потери разрешаются после полного тела
+                и экипировки. Итоговые значения выше 35 допустимы, ниже 1 — нет.
+              </p>
+            </>
+          ) : (
+            <p>
+              У монстра нет расы, класса, START, навыков владельца или имущества. Ручное тело
+              редактируется отдельными полями ниже.
+            </p>
+          )}
+          <VersionSkillFields
+            requirementKind={attempt.kind}
+            title="Новый собственный навык Советника"
+            choices={choices}
+            value={draft.advisor}
+            onChange={(advisor) => changeDraft({ advisor })}
+          />
+          <p>
+            Это новый текущий набор той же карты. Окончательная вместимость и требования проверяются
+            по собственной I/W и подтверждённому телу. Неактивную карту не требуется заполнять ради
+            выбора состава без Советника.
+          </p>
+          <button
+            type="button"
+            disabled={input === null || reasonDirty}
+            onClick={() => {
+              setConsented(false);
+              if (input !== null)
+                send('VERSION_CONFIGURATION', data({ operation: 'PREVIEW_REPLACEMENT', input }));
+            }}
+          >
+            Рассчитать последствия замены конфигурации
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onValue(null);
+              setConsented(false);
+              setDraft(configurationDraft(currentInput));
+            }}
+          >
+            Вернуть ввод к текущей копии
+          </button>
+        </fieldset>
+        {state.replacementPreviewOrNull === null ? null : (
+          <button
+            type="button"
+            disabled={onStage === undefined}
+            onClick={() => {
+              setConsented(false);
+              send('VERSION_CONFIGURATION', {
+                operation: 'DISCARD_REPLACEMENT',
+                previewCommandId: state.replacementPreviewOrNull!.previewCommandId,
+              });
+            }}
+          >
+            Отменить показанную замену конфигурации
+          </button>
+        )}
+        {shownPreview === null ? null : (
+          <section aria-label="Подтверждённые последствия замены конфигурации">
+            <h4>Подтверждённые хостом последствия</h4>
+            <p>
+              Состав станет неподтверждённым
+              {shownPreview.invalidateInventory
+                ? ', имущество и экипировка потребуют нового подтверждения'
+                : ''}
+              . Текущие собственные навыки Советника станут неактивными; исходные броски и первое
+              реальное заполнение сохраняются.
+            </p>
+            {before.kind !== 'SENTIENT' ? null : (
+              <>
+                <h5>Прежние навыки и фактическая оплата, которые не переносятся в новый выбор</h5>
+                <ul>
+                  {beforeSkills.map((skill) => (
+                    <li key={skill.skillKey}>
+                      {skillName(skill.skillKey)}: бонус {skill.bonus}; START {skill.startSlots};
+                      «Мирный воин» {skill.dolphinSlots}.
+                    </li>
+                  ))}
+                </ul>
+                {before.skillPlanState?.planOrNull != null ? null : (
+                  <>
+                    <ul>
+                      {before.buildOrNull?.skillSelections.map((skill) => (
+                        <li key={skill.skillKey}>
+                          {skillName(skill.skillKey)}: бонус {skill.targetBonus}.
+                        </li>
+                      ))}
+                    </ul>
+                    <p>
+                      Историческое распределение оплаты этих навыков отсутствует; фактические доли
+                      START и «Мирный воин» не назначаются задним числом.
+                    </p>
+                  </>
+                )}
+                <h5>Прежние постоянные потери</h5>
+                <ul>
+                  {beforeAccounting?.permanentLosses.map((loss) => (
+                    <li key={loss.skillKey}>
+                      {skillName(loss.skillKey)}: прежний бонус {loss.bonusBefore}; освобождено
+                      START {loss.releasedStartSlots}, «Мирный воин» {loss.releasedDolphinSlots}.
+                    </li>
+                  ))}
+                </ul>
+                {before.skillPlanState?.advisorKnowledge.map((card) => (
+                  <section key={card.cardId}>
+                    <h5>Прежние текущие навыки собственной карты</h5>
+                    <ul>
+                      {card.knownSkills.map((skill) => (
+                        <li key={skill.skillKey}>
+                          {skillName(skill.skillKey)}: бонус {skill.bonus}; оплачено собственных
+                          слотов {skill.startSlots}.
+                        </li>
+                      ))}
+                    </ul>
+                    <p>
+                      Постоянные потери:{' '}
+                      {card.permanentLosses.map((loss) => skillName(loss.skillKey)).join(', ') ||
+                        'нет'}
+                      .
+                    </p>
+                  </section>
+                ))}
+              </>
+            )}
+            {before.kind !== 'CUSTOM_MONSTER'
+              ? null
+              : before.advisorCards.map((card) => (
+                  <section key={card.cardId}>
+                    <h5>Прежние текущие навыки собственной карты</h5>
+                    <ul>
+                      {card.knownSkills.map((skill) => (
+                        <li key={skill.skillKey}>
+                          {skillName(skill.skillKey)}: бонус {skill.targetBonus}; стоимость{' '}
+                          {calculateSkillSlotCost(skill.targetBonus)}.
+                        </li>
+                      ))}
+                    </ul>
+                    <p>
+                      Постоянные потери:{' '}
+                      {card.permanentLosses.map((loss) => skillName(loss.skillKey)).join(', ') ||
+                        'нет'}
+                      .
+                    </p>
+                  </section>
+                ))}
+            {summary === null ? null : (
+              <>
+                {summary.kind !== 'SENTIENT' ? null : (
+                  <section aria-label="Новый проверенный начальный выбор">
+                    <p>Характеристики до состава: {statText(summary.statsBeforeComposition)}.</p>
+                    <p>Начальная ёмкость START: {summary.startCapacity}.</p>
+                    <ul>
+                      {summary.initialSkills.map((skill) => (
+                        <li key={skill.skillKey}>
+                          {skill.name}: бонус {skill.bonus}, оплачено START {skill.slotCost}
+                          {skill.source === 'SELECTED' ? '' : ', обязательный источник'}.
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
+                <h5>Запрошенные новые собственные навыки Советника</h5>
+                <ul>
+                  {summary.advisorOwnChoices.map((skill) => (
+                    <li key={skill.skillKey}>
+                      {skill.name}: бонус {skill.targetBonus}, стоимость собственных слотов{' '}
+                      {skill.slotCost}.
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            <label>
+              <input
+                aria-label="Подтверждаю точную замену конфигурации"
+                type="checkbox"
+                checked={consented}
+                onChange={(event) => setConsented(event.target.checked)}
+              />
+              Подтверждаю именно показанный полный ввод, оплату и последствия
+            </label>
+            <button
+              type="button"
+              disabled={!consented || onStage === undefined || section !== 'SUMMARY'}
+              onClick={() => {
+                if (input !== null)
+                  send(
+                    'VERSION_CONFIGURATION',
+                    data({
+                      operation: 'CONFIRM_REPLACEMENT',
+                      previewCommandId: shownPreview.previewCommandId,
+                      input,
+                      displayedPreview: shownPreview,
+                      consent: true,
+                    }),
+                  );
+              }}
+            >
+              Подтвердить замену конфигурации
+            </button>
+          </section>
+        )}
+      </section>
+      <section aria-label="Сохранённые обязательные факты">
+        <h3>Приобретения, которые сохраняются без повторного броска</h3>
+        {state.retainedMandatoryFacts.kind !== 'SENTIENT' ||
+        state.retainedMandatoryFacts.freeSlotOrNull === null ? null : (
+          <p>
+            Фиксированное последствие R6:{' '}
+            {statText(state.retainedMandatoryFacts.freeSlotOrNull.permanentStatConsequence)}. Оно не
+            пересчитывается на новой базе.
+          </p>
+        )}
+        {state.retainedMandatoryFacts.advisorCards.map((card) => (
+          <section key={card.cardId}>
+            <p>
+              Сохранена та же карта Советника. Исходные R20 собственной I/W:{' '}
+              {card.iwRolls.map((roll) => roll.mechanical.rawFace).join(' / ')}. Первое реальное
+              заполнение: {card.initialFillOrNull === null ? 'ещё не было' : 'сохранено'}.
+            </p>
+            {'suppressionRollOrNull' in card && card.suppressionRollOrNull !== null ? (
+              <p>
+                Исторический R20 подавления: {card.suppressionRollOrNull.mechanical.rawFace};
+                применяется только при соответствующем текущем составе.
+              </p>
+            ) : null}
+          </section>
+        ))}
+        <button type="button" disabled>
+          Заменить карту Советника
+        </button>
+        <p>
+          Замена самой карты недоступна. Можно повторно выбрать того же Советника и явно заменить
+          текущие собственные навыки.
+        </p>
+      </section>
+      <fieldset
+        disabled={
+          onStage === undefined ||
+          state.replacementPreviewOrNull !== null ||
+          configDirty ||
+          reasonDirty
+        }
+      >
+        <legend>Обычные правки текущей копии</legend>
+        {stages.map(([stage, label]) => (
+          <button
+            key={stage}
+            type="button"
+            onClick={() => {
+              onValue(null);
+              setConsented(false);
+              setSectionData(null);
+              setSection(stage);
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </fieldset>
+      {section === 'SUMMARY' ? null : (
+        <section aria-label="Редактирование поля новой версии">
+          <h3>{stages.find(([stage]) => stage === section)?.[1]}</h3>
+          {p.kind === 'SENTIENT_ENEMY_AUTHORING' ? (
+            <VersionSentientFields
+              key={section}
+              p={p}
+              stage={section}
+              onValue={acceptSection}
+              onPrepare={(value) => send(section, value)}
+            />
+          ) : attempt.kind !== 'CUSTOM_MONSTER' ? null : section === 'MONSTER_IDENTITY' ? (
+            <MonsterIdentityFields key={section} attempt={attempt} onValue={acceptSection} />
+          ) : section === 'MONSTER_STATS' ? (
+            <MonsterStatsFields key={section} attempt={attempt} onValue={acceptSection} />
+          ) : section === 'MONSTER_PHYSICS' ? (
+            <MonsterPhysicsFields key={section} attempt={attempt} onValue={acceptSection} />
+          ) : section === 'MONSTER_ATTACK' ? (
+            <MonsterAttackFields key={section} attempt={attempt} onValue={acceptSection} />
+          ) : section === 'MONSTER_SYMBIONT' ? (
+            <MonsterSymbiontFields
+              key={section}
+              p={p}
+              attempt={attempt}
+              onValue={acceptSection}
+              onPrepare={(value) => send(section, value)}
+            />
+          ) : null}
+          <button
+            type="button"
+            disabled={sectionData === null || onStage === undefined}
+            onClick={() => {
+              if (sectionData !== null) send(section, sectionData);
+            }}
+          >
+            Применить поле к текущей копии
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSectionData(null);
+              setSection('SUMMARY');
+            }}
+          >
+            Отменить несохранённый ввод поля и показать итог
+          </button>
+        </section>
+      )}
+      {attempt.kind !== 'CUSTOM_MONSTER' ? null : (
+        <>
+          <button type="button" disabled>
+            Однократная генерация характеристик
+          </button>
+          <p>Однократная генерация пока недоступна; в ручном режиме бросков характеристик нет.</p>
+        </>
+      )}
+      {notice === null ? null : <p role="status">{notice}</p>}
+      {p.kind === 'SENTIENT_ENEMY_AUTHORING' ? (
+        p.sheetOrNull === null ? null : (
+          <EnemySheetContent sheet={p.sheetOrNull} catalog={p.catalog} />
+        )
+      ) : p.sheetOrNull === null ? null : (
+        <MonsterSheetContent sheet={p.sheetOrNull} />
+      )}
+    </section>
+  );
+}
+
 export function EnemyAuthoringContent(props: {
   readonly projection: JsonObject;
   readonly onValue: (data: JsonObject | null) => void;
   readonly onPrepare: (data: JsonObject) => { readonly ok: boolean; readonly detail?: string };
+  readonly onSelectVersion?: (identity: EnemyVersionIdentity) => void;
+  readonly onStage?: (
+    stage: EnemyPatchStage,
+    data: JsonObject,
+  ) => { readonly ok: boolean; readonly detail?: string };
 }) {
-  return props.projection['kind'] === 'CUSTOM_MONSTER_AUTHORING' ? (
-    <CustomMonsterContent {...props} projection={customMonsterProjectionValue(props.projection)} />
-  ) : (
-    <SentientEnemyAuthoringContent {...props} />
+  const p = anyEnemyAuthoringProjectionValue(props.projection);
+  if (p.formId === 'ENM-017')
+    return <EnemyVersionContent projection={p} onValue={props.onValue} onStage={props.onStage} />;
+  return (
+    <>
+      {p.versionHistory === undefined ? null : (
+        <section aria-label="История версий шаблона">
+          <p>
+            Текущая версия: {p.versionHistory.current.version}. Просматривается:{' '}
+            {p.versionHistory.selected.version}. Выбор истории не меняет текущую версию.
+          </p>
+          <ul>
+            {p.versionHistory.entries.map((entry) => (
+              <li key={entry.identity.versionId}>
+                <button
+                  type="button"
+                  disabled={
+                    props.onSelectVersion === undefined ||
+                    entry.identity.versionId === p.versionHistory?.selected.versionId
+                  }
+                  onClick={() => props.onSelectVersion?.(entry.identity)}
+                >
+                  Просмотреть версию {entry.identity.version}
+                </button>
+                <span>
+                  {' '}
+                  {entry.timestamp} · {entry.reason ?? 'Создание полного шаблона'}
+                </span>
+                {entry.changeSet.length === 0 ? null : (
+                  <details>
+                    <summary>Изменения версии {entry.identity.version}</summary>
+                    <VersionChanges changes={entry.changeSet} catalog={p.catalog} />
+                  </details>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p>Активные боевые привязки отсутствуют: создание боевых экземпляров пока недоступно.</p>
+        </section>
+      )}
+      {props.projection['kind'] === 'CUSTOM_MONSTER_AUTHORING' ? (
+        <CustomMonsterContent
+          {...props}
+          projection={customMonsterProjectionValue(props.projection)}
+        />
+      ) : (
+        <SentientEnemyAuthoringContent {...props} />
+      )}
+    </>
   );
 }
 function SentientEnemyAuthoringContent({
@@ -885,16 +2071,9 @@ function SentientEnemyAuthoringContent({
       ? (attempt?.skillPlanState?.rebuildPreviewOrNull ?? attempt?.legacySkillPlanPreview)
       : null;
   const buildForFields = pendingBuild?.initialInput.build ?? attempt?.buildOrNull;
-  const [identity, setIdentity] = useState({
-    name: attempt?.identityOrNull?.name ?? '',
-    description: attempt?.identityOrNull?.description ?? '',
-    origin: attempt?.identityOrNull?.origin ?? '',
-    affiliation: attempt?.identityOrNull?.affiliation ?? '',
-    massKg:
-      attempt?.identityOrNull === null || attempt === null
-        ? ''
-        : String(attempt.identityOrNull.massKg),
-  });
+  const [identity, setIdentity] = useState(() =>
+    sentientIdentityDraft(attempt?.identityOrNull ?? null),
+  );
   const [stats, setStats] = useState(
     Object.fromEntries(
       ENEMY_STATS.map((key) => [
@@ -958,12 +2137,7 @@ function SentientEnemyAuthoringContent({
   useEffect(() => {
     const data =
       p.formId === 'ENM-005'
-        ? {
-            ...identity,
-            description: identity.description === '' ? null : identity.description,
-            massKg: identity.massKg === '' ? null : Number(identity.massKg),
-            anatomyProfileId: 'ORDINARY_SENTIENT',
-          }
+        ? sentientIdentityData(identity)
         : p.formId === 'ENM-006'
           ? Object.fromEntries(
               ENEMY_STATS.map((key) => [key, stats[key] === '' ? null : Number(stats[key])]),
@@ -992,7 +2166,7 @@ function SentientEnemyAuthoringContent({
     <section aria-label="Создание мыслящего врага" data-enemy-authoring={p.formId}>
       <p>
         {p.formId === 'ENM-020'
-          ? 'Сохранённая версия 1. Лист и арт неизменяемы.'
+          ? `Сохранённая версия ${p.context.selectedVersionOrNull?.version}. Лист и арт неизменяемы.`
           : 'Техническая попытка. Шаблон появится в каталоге только после полного сохранения.'}
       </p>
       {p.formId === 'ENM-020' && p.versionConfigurationSummaryOrNull === null ? (
@@ -1005,30 +2179,7 @@ function SentientEnemyAuthoringContent({
       />
       <p>При сохранении V1 закрепляется эта заглушка. Загрузка другого арта пока недоступна.</p>
       {p.formId === 'ENM-005' ? (
-        <fieldset>
-          <legend>Идентичность</legend>
-          {(['name', 'description', 'origin', 'affiliation', 'massKg'] as const).map(
-            (key, index) => (
-              <label key={key}>
-                {
-                  ['Имя врага', 'Описание врага', 'Происхождение', 'Принадлежность', 'Масса, кг'][
-                    index
-                  ]
-                }
-                <input
-                  type={key === 'massKg' ? 'number' : 'text'}
-                  min={key === 'massKg' ? 30 : undefined}
-                  max={key === 'massKg' ? 500 : undefined}
-                  step={key === 'massKg' ? 0.1 : undefined}
-                  maxLength={key === 'description' ? 2000 : undefined}
-                  value={identity[key]}
-                  onChange={(e) => setIdentity({ ...identity, [key]: e.target.value })}
-                />
-              </label>
-            ),
-          )}
-          <p>Обычная анатомия мыслящего. Масса 30–500 кг, шаг 0,1 кг.</p>
-        </fieldset>
+        <SentientIdentityFields value={identity} onChange={setIdentity} />
       ) : null}
       {p.formId === 'ENM-006' ? (
         <fieldset>

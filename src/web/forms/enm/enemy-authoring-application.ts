@@ -21,11 +21,26 @@ export function enemyBrowserWorkflow(
   actionKey: string,
   commandId: string,
   data: JsonObject | null,
+  versionStage?: EnemyPatchStage,
 ): EnemyWorkflowRequest | null {
-  const stage = (Object.entries(ENEMY_STAGE_FORMS) as [EnemyPatchStage, readonly string[]][]).find(
-    ([, forms]) => forms[0] === p.formId && forms[2] === actionKey,
-  )?.[0];
+  if (
+    versionStage !== undefined &&
+    (p.formId !== 'ENM-017' ||
+      p.versionEditor === undefined ||
+      (versionStage !== 'VERSION_CONFIGURATION' &&
+        versionStage.startsWith('MONSTER_') !==
+          (p.context.attemptOrNull?.kind === 'CUSTOM_MONSTER')))
+  )
+    throw new Error('Этап не принадлежит этой новой версии.');
+  const stage =
+    versionStage ??
+    (Object.entries(ENEMY_STAGE_FORMS) as [EnemyPatchStage, readonly string[]][]).find(
+      ([, forms]) => forms[0] === p.formId && forms[2] === actionKey,
+    )?.[0];
+  const append =
+    p.formId === 'ENM-017' && actionKey === 'ENM-017::CTA::004' && versionStage === undefined;
   const commit =
+    append ||
     (p.formId === 'ENM-010' && actionKey === 'ENM-010::CTA::004') ||
     (p.formId === 'ENM-016' && actionKey === 'ENM-016::CTA::002');
   if (stage === undefined && !commit) return null;
@@ -37,7 +52,11 @@ export function enemyBrowserWorkflow(
     commandKind: 'workflow-command',
     role: 'gm',
     commandId,
-    workflowCommandId: commit ? 'UI-CMD-ENEMY-COMMIT-V1' : 'UI-CMD-ENEMY-DRAFT-PATCH',
+    workflowCommandId: append
+      ? 'UI-CMD-ENEMY-NEW-VERSION'
+      : commit
+        ? 'UI-CMD-ENEMY-COMMIT-V1'
+        : 'UI-CMD-ENEMY-DRAFT-PATCH',
     expectedRevisions: {
       stateRevision: p.stateRevision,
       projectionRevision: p.projectionRevision,
@@ -47,7 +66,7 @@ export function enemyBrowserWorkflow(
       campaignId: p.campaignId,
       creationAttemptId: attempt.attemptId,
       expectedAttemptRevision: attempt.revision,
-      ...(commit ? {} : { stage, data: data ?? {} }),
+      ...(append ? { reason: data?.['reason'] } : commit ? {} : { stage, data: data ?? {} }),
     },
   });
 }
@@ -75,7 +94,9 @@ export function enemyBrowserReceipt(
         : ''),
     '$.result',
   );
-  const commit = request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1';
+  const commit =
+    request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1' ||
+    request.workflowCommandId === 'UI-CMD-ENEMY-NEW-VERSION';
   if (Object.hasOwn(result, 'compositionPhase')) {
     const patch =
       request.payload.stage === 'MONSTER_SYMBIONT'
@@ -137,6 +158,13 @@ export function enemyBrowserReceipt(
       version.kind !== source.context.attemptOrNull?.kind
     )
       throw new Error('Чужая версия или арт.');
+    if (
+      request.workflowCommandId === 'UI-CMD-ENEMY-NEW-VERSION' &&
+      (source.context.versionAttempt === undefined ||
+        version.templateId !== source.context.versionAttempt.origin.base.templateId ||
+        version.version !== source.context.versionAttempt.origin.base.version + 1)
+    )
+      throw new Error('Новая версия не продолжает подтверждённую основу.');
   } else if (result['committedVersionOrNull'] !== null) throw new Error('PATCH не создаёт шаблон.');
   return value;
 }
@@ -172,16 +200,19 @@ export function enemyBrowserDestination(
     const stage = result['stageOrNull'] as EnemyPatchStage;
     return (
       p.formId ===
-        (stage === 'SENTIENT_BUILD' &&
-        (result['buildPhase'] === 'PREVIEW_REBUILD' || result['buildPhase'] === 'REBUILD_DISCARDED')
-          ? 'ENM-007'
-          : stage === 'MONSTER_SYMBIONT' && result['compositionPhase'] !== 'CONFIRMED'
-            ? 'ENM-015'
-            : stage === 'SENTIENT_SYMBIONTS' &&
-                Object.hasOwn(result, 'compositionPhase') &&
-                result['compositionPhase'] !== 'CONFIRMED'
-              ? 'ENM-008'
-              : ENEMY_STAGE_FORMS[stage][1]) &&
+        (source.formId === 'ENM-017'
+          ? 'ENM-017'
+          : stage === 'SENTIENT_BUILD' &&
+              (result['buildPhase'] === 'PREVIEW_REBUILD' ||
+                result['buildPhase'] === 'REBUILD_DISCARDED')
+            ? 'ENM-007'
+            : stage === 'MONSTER_SYMBIONT' && result['compositionPhase'] !== 'CONFIRMED'
+              ? 'ENM-015'
+              : stage === 'SENTIENT_SYMBIONTS' &&
+                  Object.hasOwn(result, 'compositionPhase') &&
+                  result['compositionPhase'] !== 'CONFIRMED'
+                ? 'ENM-008'
+                : ENEMY_STAGE_FORMS[stage][1]) &&
       p.context.attemptOrNull?.attemptId === result['creationAttemptId'] &&
       p.context.attemptOrNull?.revision === result['attemptRevision']
     );

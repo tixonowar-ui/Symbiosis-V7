@@ -1,3 +1,15 @@
+import { migration0011 } from './migrations/0011-device-request-review.js';
+import { migration0012 } from './migrations/0012-campaign-admission.js';
+import { migration0013 } from './migrations/0013-campaign-lobby.js';
+import { migration0014 } from './migrations/0014-campaign-lifecycle.js';
+import { migration0015 } from './migrations/0015-persistent-npc.js';
+import { migration0016 } from './migrations/0016-npc-wound-identities.js';
+import { migration0017 } from './migrations/0017-npc-linked-sets.js';
+import { migration0018 } from './migrations/0018-npc-custom-profile-identities.js';
+import { migration0019 } from './migrations/0019-npc-poison-coating-identities.js';
+import { migration0020 } from './migrations/0020-enemy-library.js';
+import { migration0021 } from './migrations/0021-sentient-enemy-v1.js';
+import { migration0022 } from './migrations/0022-custom-monster-v1.js';
 import { createHash, generateKeyPairSync, randomUUID } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -103,7 +115,7 @@ function withBatchHash(value: Omit<NetworkPreparedBatch, 'batchSha256'>): Networ
   };
   return { ...body, batchSha256: sha(canonical(body)) };
 }
-const open = (filename = ':memory:', legacy = false) => {
+const open = (filename = ':memory:', legacy: boolean | 'SCHEMA22' = false) => {
   const db = legacy ? new Database(filename) : openPersistenceDatabase(filename);
   if (legacy) {
     configurePersistenceDatabase(db);
@@ -118,6 +130,22 @@ const open = (filename = ':memory:', legacy = false) => {
       migration0008,
       migration0009,
       migration0010,
+      ...(legacy === 'SCHEMA22'
+        ? [
+            migration0011,
+            migration0012,
+            migration0013,
+            migration0014,
+            migration0015,
+            migration0016,
+            migration0017,
+            migration0018,
+            migration0019,
+            migration0020,
+            migration0021,
+            migration0022,
+          ]
+        : []),
     ]);
   }
   databases.push(db);
@@ -125,7 +153,7 @@ const open = (filename = ':memory:', legacy = false) => {
 };
 function setup(
   filename = ':memory:',
-  legacy = false,
+  legacy: boolean | 'SCHEMA22' = false,
   existing?: { db: Database.Database; draftId: string },
 ) {
   const db = existing?.db ?? open(filename, legacy),
@@ -343,7 +371,8 @@ function submission(
     schemaVersion === 19 ||
     schemaVersion === 20 ||
     schemaVersion === 21 ||
-    schemaVersion === 22
+    schemaVersion === 22 ||
+    schemaVersion === 23
       ? { schemaVersion: 2 as const, localControllerSeatId: randomUUID() }
       : {}),
     requestId,
@@ -2244,12 +2273,12 @@ describe('hosted network session and addressed request journal', () => {
       ),
     ).toThrow('STALE_REVISION');
   });
-  it('rejects a v1 batch on schema 22 without writes', () => {
-    const p = setup(),
+  it.each([22, 23] as const)('rejects a v1 batch on schema %s without writes', (version) => {
+    const p = setup(':memory:', version === 22 ? 'SCHEMA22' : false),
       opening = connect(p),
       request = submission(p, opening);
     expect(p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
-      version: 22,
+      version,
     });
     const { schemaVersion: _version, localControllerSeatId: _seat, ...legacy } = request.batch;
     const before = p.db.serialize();

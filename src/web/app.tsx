@@ -2874,6 +2874,22 @@ export function App(): ReactElement {
               <EnemyAuthoringContent
                 key={snapshot.formId + String(snapshot.revisions.projectionRevision)}
                 projection={snapshot.projection}
+                onStage={(stage, data) => {
+                  const result = connectionRef.current?.submitEnemyStage(stage, data) ?? {
+                    ok: false,
+                    detail: 'Редактирование недоступно.',
+                  };
+                  setActionNotice(result.ok ? null : result.detail);
+                  return result;
+                }}
+                onSelectVersion={(identity) => {
+                  const result = connectionRef.current?.selectEnemyLibrary(
+                    identity.kind === 'SENTIENT' ? 'SENTIENT_ENEMIES' : 'MONSTERS',
+                    null,
+                    identity,
+                  );
+                  setActionNotice(result?.ok ? null : (result?.detail ?? 'История недоступна.'));
+                }}
                 onValue={(data) => {
                   enemyInputRef.current = data;
                 }}
@@ -3485,9 +3501,20 @@ export function App(): ReactElement {
               }
               formId={snapshot.formId}
               onAction={(selection) => {
-                const enemyStage = Object.entries(ENEMY_STAGE_FORMS).find(
-                  ([, forms]) => forms[0] === snapshot.formId && forms[2] === selection.actionKey,
-                )?.[0];
+                const enemyVersionCommit =
+                  snapshot.formId === 'ENM-017' && selection.actionKey === 'ENM-017::CTA::004';
+                if (enemyVersionCommit && enemyInputRef.current === null) {
+                  setActionNotice(
+                    'Сохраните изменения или вернитесь к подтверждённому вводу новой версии.',
+                  );
+                  return;
+                }
+                const enemyStage = enemyVersionCommit
+                  ? undefined
+                  : Object.entries(ENEMY_STAGE_FORMS).find(
+                      ([, forms]) =>
+                        forms[0] === snapshot.formId && forms[2] === selection.actionKey,
+                    )?.[0];
                 if (enemyStage !== undefined) {
                   if (enemyInputRef.current === null) {
                     setActionNotice(

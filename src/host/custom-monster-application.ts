@@ -34,6 +34,12 @@ import { readEnemyCompositionDiceSource } from '../persistence/enemy-authoring-s
 import type { GmRequestReviewSource } from '../persistence/network-device-request.js';
 import type { StoredGmRequestQueueEvent } from '../persistence/campaign-creation.js';
 import { networkApplicationStorage as s } from '../persistence/network-local-application.js';
+import { prepareCustomMonsterVersionOwnChoices } from './enemy-version-preparation.js';
+import type { EnemyVersionHistory } from '@shared/enemy-version-history.js';
+import {
+  enemyVersionEditorReadinessErrors,
+  type EnemyVersionEditor,
+} from '@shared/enemy-version-editor.js';
 
 export function prepareCustomMonsterCommand(
   db: Database.Database,
@@ -44,11 +50,14 @@ export function prepareCustomMonsterCommand(
   sourceBaselineVersion: string,
   events: readonly StoredGmRequestQueueEvent[],
 ): { mutation: EnemyAuthoringMutation; versionOrNull: EnemyStoredVersion | null } {
-  const commit = request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1';
+  const append = request.workflowCommandId === 'UI-CMD-ENEMY-NEW-VERSION';
+  const commit = request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1' || append;
   const form = source.viewOrNull?.formId;
+  const versionState = source.viewOrNull?.enemyAuthoring?.versionAttempt;
+  const base = append ? (versionState?.origin.base ?? s.fail('UNAVAILABLE')) : null;
   if (
     commit
-      ? form !== 'ENM-016'
+      ? form !== (append ? 'ENM-017' : 'ENM-016')
       : !Object.hasOwn(CUSTOM_MONSTER_STAGE_FORMS, request.payload.stage ?? '')
   )
     return s.fail('INVALID_INPUT');
@@ -56,7 +65,8 @@ export function prepareCustomMonsterCommand(
     !commit &&
     Object.entries(CUSTOM_MONSTER_STAGE_FORMS).find(
       ([stage]) => stage === request.payload.stage,
-    )?.[1][0] !== form
+    )?.[1][0] !== form &&
+    !(form === 'ENM-017' && versionState !== undefined)
   )
     return s.fail('INVALID_INPUT');
   if (request.payload.stage === 'MONSTER_IDENTITY')
@@ -90,7 +100,7 @@ export function prepareCustomMonsterCommand(
         : [];
     preparedMonsterComposition = prepareCustomMonsterComposition(
       catalog.monster,
-      attempt,
+      prepareCustomMonsterVersionOwnChoices(catalog.monster, attempt, request, versionState),
       request,
       mode,
       { symbiontInstanceIdOrNull, advisorCardIdOrNull, rolls },
@@ -99,15 +109,18 @@ export function prepareCustomMonsterCommand(
   const identity = commit
     ? {
         campaignId: source.scope.campaignId,
-        templateId: randomUUID(),
+        templateId: base?.templateId ?? randomUUID(),
         versionId: randomUUID(),
-        version: 1 as const,
+        version: base === null ? 1 : base.version + 1,
         kind: 'CUSTOM_MONSTER' as const,
         artAssetKey: CUSTOM_MONSTER_PLACEHOLDER,
         artSha256: catalog.monsterArt.sha256,
       }
     : null;
   const mutation: EnemyAuthoringMutation = {
+    ...(versionState !== undefined && !commit
+      ? { versionPatchSourceFormId: 'ENM-017' as const }
+      : {}),
     authorMasterProfileId: source.context.masterProfileId,
     sourceBaselineVersion,
     request,
@@ -134,7 +147,9 @@ export function prepareCustomMonsterCommand(
         ? null
         : {
             actorId: source.context.masterProfileId,
-            operation: 'CREATE_CUSTOM_MONSTER_TEMPLATE',
+            operation: append
+              ? 'APPEND_CUSTOM_MONSTER_TEMPLATE_VERSION'
+              : 'CREATE_CUSTOM_MONSTER_TEMPLATE',
             identity,
             attempt,
             sheet: deriveCustomMonsterSheet(catalog.monster, attempt),
@@ -142,6 +157,22 @@ export function prepareCustomMonsterCommand(
             operationId: request.commandId,
             timestamp,
             historyId: randomUUID(),
+            ...(append && versionState !== undefined
+              ? {
+                  versionSource: {
+                    origin: versionState.origin,
+                    reason: versionState.reason,
+                    retainedMandatoryFacts: versionState.retainedMandatoryFacts,
+                    unconfiguredAdvisorCardIdOrNull:
+                      versionState.unconfiguredAdvisorCardIdOrNull === undefined
+                        ? s.fail('SOURCE_CHANGED')
+                        : versionState.unconfiguredAdvisorCardIdOrNull,
+                    ...(versionState.configurationConfirmation === undefined
+                      ? {}
+                      : { configurationConfirmation: versionState.configurationConfirmation }),
+                  },
+                }
+              : {}),
           },
   };
 }
@@ -151,11 +182,15 @@ export function projectCustomMonster(
   context: EnemyAuthoringContext,
   version: EnemyStoredVersion | null,
   diceMode: 'AUTO' | 'MANUAL',
+  versionHistory?: EnemyVersionHistory,
+  versionEditor?: EnemyVersionEditor,
 ): { base: PresentedBaseForm; revisions: RevisionVector } {
   const view = source.viewOrNull ?? s.fail('UNAVAILABLE');
   if (!(
     view.formId === 'ENM-020' ||
-    ['ENM-011', 'ENM-012', 'ENM-013', 'ENM-014', 'ENM-015', 'ENM-016'].includes(view.formId)
+    ['ENM-011', 'ENM-012', 'ENM-013', 'ENM-014', 'ENM-015', 'ENM-016', 'ENM-017'].includes(
+      view.formId,
+    )
   ))
     return s.fail('UNAVAILABLE');
   const attempt = context.attemptOrNull;
@@ -168,7 +203,7 @@ export function projectCustomMonster(
     version?.identity.kind === 'CUSTOM_MONSTER' && version.attempt.kind === 'CUSTOM_MONSTER'
       ? deriveCustomMonsterSheet(catalog.monster, version.attempt)
       : null;
-  if (view.formId === 'ENM-016') {
+  if (view.formId === 'ENM-016' || view.formId === 'ENM-017') {
     try {
       sheetOrNull = deriveCustomMonsterSheet(catalog.monster, attempt);
     } catch (error) {
@@ -177,6 +212,8 @@ export function projectCustomMonster(
       );
     }
   }
+  if (versionEditor !== undefined)
+    validationErrors.push(...enemyVersionEditorReadinessErrors(versionEditor, context));
   const revisions = {
     stateRevision: view.stateRevision,
     projectionRevision: view.projectionRevision,
@@ -189,14 +226,25 @@ export function projectCustomMonster(
     contextId: source.scope.gmLocalContextId,
     campaignId: source.scope.campaignId,
     campaignStatus: source.currentCampaign.status,
-    context: { attemptOrNull: attempt, selectedVersionOrNull },
+    context: {
+      attemptOrNull: attempt,
+      selectedVersionOrNull,
+      ...(context.versionAttempt === undefined ? {} : { versionAttempt: context.versionAttempt }),
+    },
     sheetOrNull,
-    ...(view.formId === 'ENM-020' ? { versionConfigurationSummaryOrNull: null } : {}),
+    ...(view.formId === 'ENM-020'
+      ? {
+          versionConfigurationSummaryOrNull:
+            version?.versionSource?.configurationConfirmation ?? null,
+          ...(versionHistory === undefined ? {} : { versionHistory }),
+        }
+      : {}),
     validationErrors,
+    ...(versionEditor === undefined ? {} : { versionEditor }),
     catalog: catalog.monsterChoices,
     diceMode,
     advisorPreparationOrNull:
-      view.formId === 'ENM-015' &&
+      (view.formId === 'ENM-015' || view.formId === 'ENM-017') &&
       attempt?.kind === 'CUSTOM_MONSTER' &&
       attempt.compositionOrNull?.advisorCardIdOrNull != null
         ? (() => {
@@ -219,7 +267,7 @@ export function projectCustomMonster(
           })()
         : null,
     requiredRolls:
-      view.formId === 'ENM-015' && attempt?.kind === 'CUSTOM_MONSTER'
+      (view.formId === 'ENM-015' || view.formId === 'ENM-017') && attempt?.kind === 'CUSTOM_MONSTER'
         ? customMonsterRequiredRolls(attempt)
         : [],
     art: catalog.monsterArt,

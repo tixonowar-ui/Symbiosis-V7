@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { migration0015, NPC_TABLES } from './migrations/0015-persistent-npc.js';
 import { migration0021 } from './migrations/0021-sentient-enemy-v1.js';
 import { migration0022 } from './migrations/0022-custom-monster-v1.js';
+import { migration0023 } from './migrations/0023-enemy-template-versions.js';
 
 /** The original allocators also see enemy template and cancelled-attempt reservations. */
 export function campaignEnemyIdentityInUse(db: Database.Database, id: string): boolean {
@@ -38,6 +39,16 @@ export function campaignEnemyIdentityInUse(db: Database.Database, id: string): b
         createHash('sha256').update(migration0022.sql).digest('hex'))
   )
     throw Error('Monster identity migration differs');
+  const versionMigration = db
+    .prepare('SELECT name,checksum_sha256 FROM schema_migration WHERE version=23')
+    .get() as { name: string; checksum_sha256: string } | undefined;
+  if (
+    versionMigration !== undefined &&
+    (versionMigration.name !== migration0023.name ||
+      versionMigration.checksum_sha256 !==
+        createHash('sha256').update(migration0023.sql).digest('hex'))
+  )
+    throw Error('Enemy version identity migration differs');
   for (const [table, column] of [
     ['campaign_enemy_template', 'template_id'],
     ['campaign_enemy_version', 'version_id'],

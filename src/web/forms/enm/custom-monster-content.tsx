@@ -43,7 +43,13 @@ function numeric(value: string): number | null {
   const number = Number(value);
   return value.trim() !== '' && Number.isFinite(number) ? number : null;
 }
-function IdentityFields({ attempt, onValue }: { attempt: CustomMonsterAttempt; onValue: Publish }) {
+export function IdentityFields({
+  attempt,
+  onValue,
+}: {
+  attempt: CustomMonsterAttempt;
+  onValue: Publish;
+}) {
   const [name, setName] = useState(attempt.identityOrNull?.name ?? '');
   const [description, setDescription] = useState(attempt.identityOrNull?.description ?? '');
   useEffect(() => {
@@ -85,7 +91,13 @@ function IdentityFields({ attempt, onValue }: { attempt: CustomMonsterAttempt; o
     </fieldset>
   );
 }
-function StatsFields({ attempt, onValue }: { attempt: CustomMonsterAttempt; onValue: Publish }) {
+export function StatsFields({
+  attempt,
+  onValue,
+}: {
+  attempt: CustomMonsterAttempt;
+  onValue: Publish;
+}) {
   const [stats, setStats] = useState(
     Object.fromEntries(
       CUSTOM_MONSTER_STATS.map((key) => [
@@ -258,7 +270,13 @@ function DefinitionFields({
     </fieldset>
   );
 }
-function PhysicsFields({ attempt, onValue }: { attempt: CustomMonsterAttempt; onValue: Publish }) {
+export function PhysicsFields({
+  attempt,
+  onValue,
+}: {
+  attempt: CustomMonsterAttempt;
+  onValue: Publish;
+}) {
   const [armor, setArmor] = useState<MonsterRuntimeDefinition | null>(
     attempt.physicsOrNull?.naturalArmorDefinition ?? { mode: 'ZERO' },
   );
@@ -323,7 +341,13 @@ function PhysicsFields({ attempt, onValue }: { attempt: CustomMonsterAttempt; on
     </fieldset>
   );
 }
-function AttackFields({ attempt, onValue }: { attempt: CustomMonsterAttempt; onValue: Publish }) {
+export function AttackFields({
+  attempt,
+  onValue,
+}: {
+  attempt: CustomMonsterAttempt;
+  onValue: Publish;
+}) {
   const [damage, setDamage] = useState<MonsterRuntimeDefinition | null>(
     attempt.attackOrNull?.additionalDamageDefinition ?? { mode: 'ZERO' },
   );
@@ -361,7 +385,7 @@ function AttackFields({ attempt, onValue }: { attempt: CustomMonsterAttempt; onV
     </fieldset>
   );
 }
-function SymbiontFields({
+export function SymbiontFields({
   p,
   attempt,
   onValue,
@@ -385,7 +409,12 @@ function SymbiontFields({
     (card) => card.cardId === attempt.compositionOrNull?.advisorCardIdOrNull,
   );
   const [ownSkills, setOwnSkills] = useState<readonly MonsterAdvisorSkill[]>(
-    card?.knownSkills ?? [],
+    p.formId === 'ENM-017' &&
+      p.context.versionAttempt?.ownChoicesPending === true &&
+      p.context.versionAttempt.configurationConfirmation?.input.kind === 'CUSTOM_MONSTER' &&
+      attempt.compositionOrNull?.advisorCardIdOrNull != null
+      ? p.context.versionAttempt.configurationConfirmation.input.advisorSkills
+      : (card?.knownSkills ?? []),
   );
   const current = attempt.compositionOrNull;
   const preparation = p.advisorPreparationOrNull;
@@ -812,7 +841,7 @@ function SymbiontFields({
     </fieldset>
   );
 }
-function Sheet({ sheet }: { sheet: CustomMonsterSheet }) {
+export function Sheet({ sheet }: { sheet: CustomMonsterSheet }) {
   return (
     <section aria-label="Полный лист произвольного монстра">
       <h2>{sheet.identity.name}</h2>

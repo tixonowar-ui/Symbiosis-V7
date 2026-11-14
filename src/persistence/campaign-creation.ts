@@ -10,6 +10,13 @@ import {
 } from '@shared/enemy-authoring.js';
 import { newCustomMonsterAttempt } from '@shared/custom-monster-state.js';
 import {
+  copyEnemyVersionAttempt,
+  mergeEnemyVersionMandatoryFacts,
+  enemyVersionUnconfiguredAdvisorCard,
+} from '../domain/entities/enemy-template/version-configuration.js';
+import { enemyVersionOriginValue } from '@shared/enemy-version-configuration.js';
+import { readEnemyVersionSourceAtPrefix } from './enemy-version-source.js';
+import {
   ENEMY_LIBRARY_FORMS,
   ENEMY_LIBRARY_NAV_TARGETS,
   enemyLibraryContextValue,
@@ -663,7 +670,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 19 ||
     version === 20 ||
     version === 21 ||
-    version === 22
+    version === 22 ||
+    version === 23
       ? ([
           ['local_network_application_event', ['event_id', 'receipt_id']],
           ['hosted_network_command', ['command_id', 'receipt_id']],
@@ -686,7 +694,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 19 ||
     version === 20 ||
     version === 21 ||
-    version === 22
+    version === 22 ||
+    version === 23
       ? ([
           ['hosted_device_request_decision', ['command_id', 'receipt_id']],
           ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
@@ -705,7 +714,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 19 ||
     version === 20 ||
     version === 21 ||
-    version === 22
+    version === 22 ||
+    version === 23
       ? CAMPAIGN_ADMISSION_IDENTITIES
       : [];
   if (
@@ -718,7 +728,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 19 ||
     version === 20 ||
     version === 21 ||
-    version === 22
+    version === 22 ||
+    version === 23
   )
     for (const [table, columns] of [
       ...CAMPAIGN_LOBBY_IDENTITIES,
@@ -2766,26 +2777,48 @@ function reduceQueue(
   } else if (mutation.kind === 'ENEMY_SELECTION') {
     const request = mutation.request;
     if (
-      old.formId !== 'ENM-001' ||
+      old.formId !== request.sourceFormId ||
       request.contextId !== scope.gmLocalContextId ||
       request.campaignId !== scope.campaignId
     )
       return fail('FOREIGN_OWNER');
     if (!same(request.expectedRevisions, presentationRevisions(old))) return fail('STALE_REVISION');
-    const enemyLibrary = enemyLibraryContextValue({
-      activeTab: request.activeTab,
-      selectedOrNull: request.selectionOrNull,
-      ...(Object.hasOwn(request, 'userSelectionOrNull')
-        ? { userSelectionOrNull: request.userSelectionOrNull }
-        : {}),
-    });
-    changed = !same(enemyLibrary, old.enemyLibrary);
-    document = {
-      ...document,
-      enemyLibrary,
-      stateRevision: changed ? next(old.stateRevision) : old.stateRevision,
-      projectionRevision: changed ? next(old.projectionRevision) : old.projectionRevision,
-    };
+    if (request.sourceFormId === 'ENM-020') {
+      const selected = request.userSelectionOrNull ?? fail('INVALID_INPUT');
+      const current = old.enemyLibrary?.userSelectionOrNull ?? fail('DRAFT_UNAVAILABLE');
+      const previous = old.enemyAuthoring?.selectedVersionOrNull ?? fail('DRAFT_UNAVAILABLE');
+      if (
+        selected.templateId !== current.templateId ||
+        selected.kind !== current.kind ||
+        selected.campaignId !== scope.campaignId ||
+        previous.templateId !== current.templateId ||
+        request.activeTab !== old.enemyLibrary?.activeTab ||
+        request.selectionOrNull !== null
+      )
+        return fail('FOREIGN_OWNER');
+      changed = !same(selected, previous);
+      document = {
+        ...document,
+        enemyAuthoring: { attemptOrNull: null, selectedVersionOrNull: selected },
+        stateRevision: changed ? next(old.stateRevision) : old.stateRevision,
+        projectionRevision: changed ? next(old.projectionRevision) : old.projectionRevision,
+      };
+    } else {
+      const enemyLibrary = enemyLibraryContextValue({
+        activeTab: request.activeTab,
+        selectedOrNull: request.selectionOrNull,
+        ...(Object.hasOwn(request, 'userSelectionOrNull')
+          ? { userSelectionOrNull: request.userSelectionOrNull }
+          : {}),
+      });
+      changed = !same(enemyLibrary, old.enemyLibrary);
+      document = {
+        ...document,
+        enemyLibrary,
+        stateRevision: changed ? next(old.stateRevision) : old.stateRevision,
+        projectionRevision: changed ? next(old.projectionRevision) : old.projectionRevision,
+      };
+    }
   } else if (mutation.kind === 'NPC_SOURCE') {
     const result = reduceNpcSource(db, scope, old, state.events, mutation.cause, proofs.npcSession);
     document = {
@@ -2929,6 +2962,55 @@ function reduceQueue(
             },
           }
         : {}),
+      ...(target === 'ENM-020' && old.formId === 'ENM-017'
+        ? {
+            enemyAuthoring: {
+              attemptOrNull: null,
+              selectedVersionOrNull:
+                old.enemyAuthoring?.versionAttempt?.origin.base ?? fail('DRAFT_UNAVAILABLE'),
+            },
+          }
+        : {}),
+      ...(target === 'ENM-017' && old.formId === 'ENM-001'
+        ? (() => {
+            const identity = old.enemyLibrary?.userSelectionOrNull ?? fail('DRAFT_UNAVAILABLE');
+            const base = readEnemyVersionSourceAtPrefix(db, scope, state.events, identity);
+            const origin = enemyVersionOriginValue({
+              schemaVersion: 1,
+              navigationRequestId: mutation.request.navigationRequestId,
+              base: base.identity,
+              expectedRevisions: presentationRevisions(old),
+            });
+            return {
+              enemyAuthoring: {
+                attemptOrNull: mergeEnemyVersionMandatoryFacts(
+                  copyEnemyVersionAttempt(origin, base),
+                  base.mandatoryFacts,
+                ),
+                selectedVersionOrNull: null,
+                versionAttempt: {
+                  schemaVersion: 1 as const,
+                  origin,
+                  reason: '',
+                  retainedMandatoryFacts: base.mandatoryFacts,
+                  ...(base.identity.kind === 'CUSTOM_MONSTER'
+                    ? {
+                        unconfiguredAdvisorCardIdOrNull: enemyVersionUnconfiguredAdvisorCard(
+                          base.attempt,
+                          base.mandatoryFacts,
+                          base.unconfiguredAdvisorCardIdOrNull,
+                        ),
+                      }
+                    : {}),
+                  replacementPreviewOrNull: null,
+                  ...(base.configurationConfirmation === undefined
+                    ? {}
+                    : { configurationConfirmation: base.configurationConfirmation }),
+                },
+              },
+            };
+          })()
+        : {}),
       ...((old.formId === 'ENM-005' || old.formId === 'ENM-011') && target === 'ENM-001'
         ? { enemyAuthoring: { attemptOrNull: null, selectedVersionOrNull: null } }
         : {}),
@@ -3004,7 +3086,8 @@ function queueSchema(db: Database.Database): void {
     row['version'] !== 19 &&
     row['version'] !== 20 &&
     row['version'] !== 21 &&
-    row['version'] !== 22
+    row['version'] !== 22 &&
+    row['version'] !== 23
   )
     return fail();
   for (const table of DEVICE_REQUEST_REVIEW_TABLES)
@@ -3020,7 +3103,8 @@ function queueSchema(db: Database.Database): void {
     row['version'] === 19 ||
     row['version'] === 20 ||
     row['version'] === 21 ||
-    row['version'] === 22
+    row['version'] === 22 ||
+    row['version'] === 23
   )
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();

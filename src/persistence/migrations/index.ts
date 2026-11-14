@@ -22,6 +22,7 @@ import { migration0017 } from './0017-npc-linked-sets.js';
 import { migration0018 } from './0018-npc-custom-profile-identities.js';
 import { migration0021 } from './0021-sentient-enemy-v1.js';
 import { migration0022 } from './0022-custom-monster-v1.js';
+import { migration0023 } from './0023-enemy-template-versions.js';
 import { migration0020 } from './0020-enemy-library.js';
 import { migration0019 } from './0019-npc-poison-coating-identities.js';
 
@@ -61,6 +62,7 @@ const MIGRATIONS: readonly Migration[] = [
   migration0020,
   migration0021,
   migration0022,
+  migration0023,
 ];
 
 const CREATE_MIGRATION_REGISTRY_SQL = `CREATE TABLE schema_migration (

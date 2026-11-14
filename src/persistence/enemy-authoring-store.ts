@@ -30,6 +30,12 @@ import { readGmRequestReviewSource, type GmRequestReviewSource } from './network
 import { readAppliedMigrationVersion } from './migrations/index.js';
 import { npcIdentityInUse, legacyLocalIdentityInUse } from './npc-identities.js';
 import { readCampaignLifecycleLedger } from './campaign-lifecycle-ledger.js';
+import {
+  enemyVersionOriginValue,
+  enemyVersionAttemptContextValue,
+  type EnemyVersionOrigin,
+  type EnemyVersionAttemptContext,
+} from '@shared/enemy-version-configuration.js';
 
 /** The already-checked QUEUE prefix binds a roll to the settings which actually preceded it. */
 export function readEnemyCompositionDiceSource(
@@ -64,22 +70,44 @@ interface EnemyStoredVersionBase {
   readonly operationId: string;
   readonly timestamp: string;
   readonly historyId: string;
+  readonly versionSource?: Readonly<{
+    origin: EnemyVersionOrigin;
+    reason: string;
+    retainedMandatoryFacts: EnemyVersionAttemptContext['retainedMandatoryFacts'];
+    unconfiguredAdvisorCardIdOrNull?: string | null;
+    configurationConfirmation?: NonNullable<
+      EnemyVersionAttemptContext['configurationConfirmation']
+    >;
+  }>;
 }
 export type EnemyStoredVersion = EnemyStoredVersionBase &
   (
     | {
-        readonly operation: 'CREATE_SENTIENT_ENEMY_TEMPLATE';
+        readonly operation:
+          'CREATE_SENTIENT_ENEMY_TEMPLATE' | 'APPEND_SENTIENT_ENEMY_TEMPLATE_VERSION';
         readonly identity: SentientEnemyVersionIdentity;
         readonly attempt: EnemyAttempt;
         readonly sheet: EnemySheet;
       }
     | {
-        readonly operation: 'CREATE_CUSTOM_MONSTER_TEMPLATE';
+        readonly operation:
+          'CREATE_CUSTOM_MONSTER_TEMPLATE' | 'APPEND_CUSTOM_MONSTER_TEMPLATE_VERSION';
         readonly identity: CustomMonsterVersionIdentity;
         readonly attempt: CustomMonsterAttempt;
         readonly sheet: CustomMonsterSheet;
       }
   );
+export function enemyStoredVersionOperation(
+  identity: EnemyStoredVersion['identity'],
+): EnemyStoredVersion['operation'] {
+  return identity.kind === 'SENTIENT'
+    ? identity.version === 1
+      ? 'CREATE_SENTIENT_ENEMY_TEMPLATE'
+      : 'APPEND_SENTIENT_ENEMY_TEMPLATE_VERSION'
+    : identity.version === 1
+      ? 'CREATE_CUSTOM_MONSTER_TEMPLATE'
+      : 'APPEND_CUSTOM_MONSTER_TEMPLATE_VERSION';
+}
 const tables = [
   'campaign_enemy_template',
   'campaign_enemy_version',
@@ -182,12 +210,13 @@ function versionAudit(
     actorId: version.actorId,
     campaignId: version.identity.campaignId,
     timestamp: version.timestamp,
-    before: null,
+    before: version.versionSource?.origin.base ?? null,
     after: { identity: version.identity, sheet: version.sheet },
     revisions,
     provenance: {
       creationAttemptId: version.attempt.attemptId,
       sourceBaselineVersion: version.sourceBaselineVersion,
+      ...(version.versionSource === undefined ? {} : { versionSource: version.versionSource }),
     },
     art: { assetKey: version.identity.artAssetKey, sha256: version.identity.artSha256 },
     rngReceiptOrNull:
@@ -213,7 +242,7 @@ function schema(db: Database.Database): boolean {
       return s.fail('SOURCE_CHANGED');
     return false;
   }
-  if (version !== 21 && version !== 22) return s.fail('SOURCE_CHANGED');
+  if (version !== 21 && version !== 22 && version !== 23) return s.fail('SOURCE_CHANGED');
   for (const table of tables) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   return true;
 }
@@ -247,7 +276,9 @@ export function readEnemyVersions(
     .prepare('SELECT * FROM campaign_enemy_template WHERE campaign_id=? ORDER BY template_id')
     .all(scope.campaignId) as Record<string, unknown>[];
   const versions = db
-    .prepare('SELECT * FROM campaign_enemy_version WHERE campaign_id=? ORDER BY template_id')
+    .prepare(
+      'SELECT * FROM campaign_enemy_version WHERE campaign_id=? ORDER BY template_id,version',
+    )
     .all(scope.campaignId) as Record<string, unknown>[];
   const history = db
     .prepare('SELECT * FROM campaign_enemy_history WHERE campaign_id=? ORDER BY template_id')
@@ -257,9 +288,14 @@ export function readEnemyVersions(
       'SELECT p.* FROM campaign_enemy_current_version p JOIN campaign_enemy_template t USING(template_id) WHERE t.campaign_id=? ORDER BY template_id',
     )
     .all(scope.campaignId) as Record<string, unknown>[];
-  if ([templates, versions, history, pointers].some((rows) => rows.length !== commits.length))
+  if (
+    versions.length !== commits.length ||
+    history.length !== versions.length ||
+    templates.length !== pointers.length ||
+    new Set(versions.map((row) => row['template_id'])).size !== templates.length
+  )
     return s.fail('SOURCE_CHANGED');
-  const result = versions.map((row, index) => {
+  const result = versions.map((row) => {
     const saved = checked(row);
     const expectedKeys = [
       'identity',
@@ -271,6 +307,7 @@ export function readEnemyVersions(
       'historyId',
       'actorId',
       'operation',
+      ...(row['version'] === 1 ? [] : ['versionSource']),
     ];
     if (
       Object.keys(saved).length !== expectedKeys.length ||
@@ -279,9 +316,12 @@ export function readEnemyVersions(
       return s.fail('SOURCE_CHANGED');
     const identity = enemyVersionIdentityValue(saved['identity']);
     const stored = saved as unknown as EnemyStoredVersion;
-    const template = templates[index]!,
-      h = history[index]!,
-      pointer = pointers[index]!;
+    const template =
+        templates.find((value) => value['template_id'] === identity.templateId) ??
+        s.fail('SOURCE_CHANGED'),
+      h =
+        history.find((value) => value['version_id'] === identity.versionId) ??
+        s.fail('SOURCE_CHANGED');
     const commit = commits.find(
       (event) =>
         event.mutation.kind === 'ENEMY_AUTHORING' &&
@@ -292,7 +332,7 @@ export function readEnemyVersions(
       identity.campaignId !== scope.campaignId ||
       row['template_id'] !== identity.templateId ||
       row['version_id'] !== identity.versionId ||
-      row['version'] !== 1 ||
+      row['version'] !== identity.version ||
       template['template_id'] !== identity.templateId ||
       template['kind'] !== identity.kind ||
       !s.same(checked(template), {
@@ -311,20 +351,89 @@ export function readEnemyVersions(
           actorVisibilityRevision: commit.view.actorVisibilityRevision,
         }),
       ) ||
-      pointer['template_id'] !== identity.templateId ||
-      pointer['version_id'] !== identity.versionId ||
       stored.operationId !== commit.eventId ||
       stored.timestamp !== commit.mutation.cause.timestamp ||
       stored.actorId !== commit.mutation.cause.authorMasterProfileId ||
-      stored.operation !==
-        (identity.kind === 'CUSTOM_MONSTER'
-          ? 'CREATE_CUSTOM_MONSTER_TEMPLATE'
-          : 'CREATE_SENTIENT_ENEMY_TEMPLATE') ||
+      stored.operation !== enemyStoredVersionOperation(identity) ||
       stored.attempt.kind !== identity.kind
     )
       return s.fail('SOURCE_CHANGED');
     return stored;
   });
+  for (const template of templates) {
+    const chain = result.filter(
+      (version) => version.identity.templateId === template['template_id'],
+    );
+    const pointer = pointers.find((value) => value['template_id'] === template['template_id']);
+    if (chain.length === 0 || pointer?.['version_id'] !== chain.at(-1)?.identity.versionId)
+      return s.fail('SOURCE_CHANGED');
+    let previousCommitIndex = -1;
+    for (const [index, version] of chain.entries()) {
+      const commitIndex = events.findIndex((event) => event.eventId === version.operationId);
+      if (
+        version.identity.version !== index + 1 ||
+        commitIndex <= previousCommitIndex ||
+        version.identity.kind !== template['kind']
+      )
+        return s.fail('SOURCE_CHANGED');
+      if (index === 0) {
+        if (version.versionSource !== undefined) return s.fail('SOURCE_CHANGED');
+      } else {
+        const source = version.versionSource ?? s.fail('SOURCE_CHANGED');
+        s.object(source, [
+          'origin',
+          'reason',
+          'retainedMandatoryFacts',
+          ...(version.identity.kind === 'CUSTOM_MONSTER'
+            ? ['unconfiguredAdvisorCardIdOrNull']
+            : []),
+          ...(Object.hasOwn(source, 'configurationConfirmation')
+            ? ['configurationConfirmation']
+            : []),
+        ]);
+        const origin = enemyVersionOriginValue(source.origin);
+        enemyVersionAttemptContextValue({
+          schemaVersion: 1,
+          ...source,
+          replacementPreviewOrNull: null,
+        });
+        const navIndex = events.findIndex((event) => event.eventId === origin.navigationRequestId);
+        const nav = events[navIndex];
+        const beforeCommit =
+          events[commitIndex - 1]?.view.enemyAuthoring?.versionAttempt ?? s.fail('SOURCE_CHANGED');
+        if (
+          !s.same(source, {
+            origin: beforeCommit.origin,
+            reason: beforeCommit.reason,
+            retainedMandatoryFacts: beforeCommit.retainedMandatoryFacts,
+            ...(version.identity.kind === 'CUSTOM_MONSTER'
+              ? { unconfiguredAdvisorCardIdOrNull: beforeCommit.unconfiguredAdvisorCardIdOrNull }
+              : {}),
+            ...(beforeCommit.configurationConfirmation === undefined
+              ? {}
+              : { configurationConfirmation: beforeCommit.configurationConfirmation }),
+          }) ||
+          !s.same(origin.base, chain[index - 1]?.identity) ||
+          typeof source.reason !== 'string' ||
+          source.reason.trim().length === 0 ||
+          navIndex <= previousCommitIndex ||
+          navIndex >= commitIndex ||
+          nav?.mutation.kind !== 'NAV' ||
+          nav.mutation.request.actionKey !== 'ENM-001::CTA::008' ||
+          nav.view.formId !== 'ENM-017' ||
+          !s.same(nav.view.enemyAuthoring?.versionAttempt?.origin, origin) ||
+          nav.view.enemyAuthoring?.attemptOrNull?.attemptId !== version.attempt.attemptId ||
+          origin.expectedRevisions.stateRevision !== events[navIndex - 1]?.view.stateRevision ||
+          origin.expectedRevisions.projectionRevision !==
+            nav.mutation.request.expectedProjectionRevision ||
+          origin.expectedRevisions.actorVisibilityRevision !==
+            events[navIndex - 1]?.view.actorVisibilityRevision
+        )
+          return s.fail('SOURCE_CHANGED');
+      }
+      previousCommitIndex = commitIndex;
+    }
+  }
   const identities = new Map<string, { kind: string; attemptId: string }>();
   const reserve = (id: string, kind: string, attemptId: string) => {
     s.uuid(id);
@@ -375,13 +484,18 @@ export function readEnemyVersions(
         groups.forEach((id) => reserve(id, 'LINKED_SET', attemptId));
       }
     }
-  for (const version of result)
+  const reservedTemplates = new Set<string>();
+  for (const version of result) {
+    if (!reservedTemplates.has(version.identity.templateId)) {
+      reserve(version.identity.templateId, 'TEMPLATE', version.attempt.attemptId);
+      reservedTemplates.add(version.identity.templateId);
+    }
     for (const [id, kind] of [
-      [version.identity.templateId, 'TEMPLATE'],
       [version.identity.versionId, 'VERSION'],
       [version.historyId, 'HISTORY'],
     ] as const)
       reserve(id, kind, version.attempt.attemptId);
+  }
   return result;
 }
 function insert(
@@ -434,6 +548,16 @@ export function commitEnemyAuthoring(
         };
       }
       if (request.payload.campaignId !== scope.campaignId) return s.fail('FOREIGN_OWNER');
+      const liveVersion = source.viewOrNull?.enemyAuthoring?.versionAttempt;
+      if (liveVersion !== undefined) {
+        // Fresh edits must refuse before preparation can acquire facts. Historical replay above
+        // keeps its original receipt; earlier event derivation never consults this live maximum.
+        const latest = readEnemyVersions(db, scope, state.events)
+          .filter((row) => row.identity.templateId === liveVersion.origin.base.templateId)
+          .sort((a, b) => b.identity.version - a.identity.version)[0];
+        if (latest === undefined || !s.same(latest.identity, liveVersion.origin.base))
+          return s.fail('STALE_REVISION');
+      }
       s.assertUnused(db, request.commandId);
       if (legacyLocalIdentityInUse(db, request.commandId)) return s.fail('IDEMPOTENCY_CONFLICT');
       if (
@@ -488,10 +612,7 @@ export function commitEnemyAuthoring(
               version.operationId !== request.commandId ||
               version.timestamp !== mutation.timestamp ||
               version.actorId !== mutation.authorMasterProfileId ||
-              version.operation !==
-                (version.identity.kind === 'CUSTOM_MONSTER'
-                  ? 'CREATE_CUSTOM_MONSTER_TEMPLATE'
-                  : 'CREATE_SENTIENT_ENEMY_TEMPLATE') ||
+              version.operation !== enemyStoredVersionOperation(version.identity) ||
               version.attempt.kind !== version.identity.kind)
           )
             return s.fail('SOURCE_CHANGED');
@@ -506,11 +627,29 @@ export function commitEnemyAuthoring(
               'operationId',
               'timestamp',
               'historyId',
+              ...(version.identity.version === 1 ? [] : ['versionSource']),
             ]);
             s.uuid(version.historyId);
             s.uuid(version.actorId);
             if (version.sourceBaselineVersion !== mutation.sourceBaselineVersion)
               return s.fail('SOURCE_CHANGED');
+            if (version.identity.version !== 1) {
+              const metadata = view.enemyAuthoring?.versionAttempt ?? s.fail('SOURCE_CHANGED');
+              if (
+                !s.same(version.versionSource, {
+                  origin: metadata.origin,
+                  reason: metadata.reason,
+                  retainedMandatoryFacts: metadata.retainedMandatoryFacts,
+                  ...(version.identity.kind === 'CUSTOM_MONSTER'
+                    ? { unconfiguredAdvisorCardIdOrNull: metadata.unconfiguredAdvisorCardIdOrNull }
+                    : {}),
+                  ...(metadata.configurationConfirmation === undefined
+                    ? {}
+                    : { configurationConfirmation: metadata.configurationConfirmation }),
+                })
+              )
+                return s.fail('SOURCE_CHANGED');
+            }
           }
           preparedValue = { mutation, versionOrNull: version };
         },
@@ -526,7 +665,11 @@ export function commitEnemyAuthoring(
         ...allocatedCompositionIds(prepared.mutation),
         ...(version === null
           ? []
-          : [version.identity.templateId, version.identity.versionId, version.historyId]),
+          : [
+              ...(version.identity.version === 1 ? [version.identity.templateId] : []),
+              version.identity.versionId,
+              version.historyId,
+            ]),
       ];
       if (new Set([request.commandId, ...fresh]).size !== fresh.length + 1)
         return s.fail('IDEMPOTENCY_CONFLICT');
@@ -546,22 +689,28 @@ export function commitEnemyAuthoring(
           ids.some((id) => npcIdentityInUse(db, id) || legacyLocalIdentityInUse(db, id))
         )
           return s.fail('IDEMPOTENCY_CONFLICT');
-        insert(
-          db,
-          'campaign_enemy_template',
-          ['template_id', 'campaign_id', 'kind'],
-          [version.identity.templateId, scope.campaignId, version.identity.kind],
-          {
-            campaignId: scope.campaignId,
-            templateId: version.identity.templateId,
-            kind: version.identity.kind,
-          },
-        );
+        if (version.identity.version === 1)
+          insert(
+            db,
+            'campaign_enemy_template',
+            ['template_id', 'campaign_id', 'kind'],
+            [version.identity.templateId, scope.campaignId, version.identity.kind],
+            {
+              campaignId: scope.campaignId,
+              templateId: version.identity.templateId,
+              kind: version.identity.kind,
+            },
+          );
         insert(
           db,
           'campaign_enemy_version',
           ['version_id', 'template_id', 'campaign_id', 'version'],
-          [version.identity.versionId, version.identity.templateId, scope.campaignId, 1],
+          [
+            version.identity.versionId,
+            version.identity.templateId,
+            scope.campaignId,
+            version.identity.version,
+          ],
           version,
         );
         insert(
@@ -580,10 +729,24 @@ export function commitEnemyAuthoring(
             actorVisibilityRevision: request.expectedRevisions.actorVisibilityRevision,
           }),
         );
-        db.prepare('INSERT INTO campaign_enemy_current_version VALUES (?,?)').run(
-          version.identity.templateId,
-          version.identity.versionId,
-        );
+        if (version.identity.version === 1)
+          db.prepare('INSERT INTO campaign_enemy_current_version VALUES (?,?)').run(
+            version.identity.templateId,
+            version.identity.versionId,
+          );
+        else {
+          const source = version.versionSource ?? s.fail('SOURCE_CHANGED');
+          const result = db
+            .prepare(
+              'UPDATE campaign_enemy_current_version SET version_id=? WHERE template_id=? AND version_id=?',
+            )
+            .run(
+              version.identity.versionId,
+              version.identity.templateId,
+              source.origin.base.versionId,
+            );
+          if (result.changes !== 1) return s.fail('STALE_REVISION');
+        }
       }
       const appended = appendGmRequestReviewEventInTransaction(db, scope, {
         eventId: request.commandId,
@@ -592,7 +755,10 @@ export function commitEnemyAuthoring(
       readEnemyVersions(db, scope, readGmRequestReviewViewStateInTransaction(db, scope).events);
       if (
         !db.inTransaction ||
-        s.changes(db) !== before + (version === null ? 0 : 4) + appended.rowWrites
+        s.changes(db) !==
+          before +
+            (version === null ? 0 : version.identity.version === 1 ? 4 : 3) +
+            appended.rowWrites
       )
         return s.fail('SOURCE_CHANGED');
       s.guarded(

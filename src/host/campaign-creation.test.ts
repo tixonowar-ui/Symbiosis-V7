@@ -152,6 +152,7 @@ function harness(
   root = projectRoot,
   contextId: string | null = null,
   runtimeBaseline = baseline,
+  requestReview?: Parameters<typeof createCampaignCreationRuntime>[0]['requestReview'],
 ) {
   const bind = bindManager();
   const runtime = createCampaignCreationRuntime({
@@ -159,6 +160,7 @@ function harness(
     projectRoot: root,
     baseline: runtimeBaseline,
     bind,
+    ...(requestReview === undefined ? {} : { requestReview }),
   });
   let trusted = true;
   const connection: CampaignConnection = {
@@ -477,6 +479,62 @@ describe('campaign creation runtime with real SQLite and TCP bind', () => {
     expect(h.db.prepare('SELECT count(*) AS count FROM campaign_checkpoint').get()).toEqual({
       count: 1,
     });
+  });
+  it('negotiates the actual enemy NEW capability only for an enabled host and an offering resumed client', async () => {
+    const h = await setup();
+    const before = storageSnapshot(h.db),
+      cursor = h.cursor();
+    const negotiate = async (enabled: boolean, offerNew: boolean) => {
+      const resumed = harness(h.db, projectRoot, h.ctx(), baseline, {
+        enemyAuthoringEnabled: enabled,
+        project: () => {
+          throw new Error('Draft resume must not fabricate a review projection');
+        },
+        withLifecycle: (_connection, view) => view,
+        receipt: () => null,
+        refreshConnectionPresentation: () => {
+          throw new Error('Draft resume must not enter review');
+        },
+      });
+      const received = await resumed.send({
+        messageType: 'campaign.local-context.resume',
+        protocolVersion: 3,
+        gmLocalContextId: h.ctx(),
+        reconnectRequestId: `enemy-resume-${enabled}-${offerNew}`,
+        knownRevisions: zero,
+        supportedWorkflowCommandIds: [
+          'UI-CMD-CAMPAIGN-CREATE',
+          'UI-CMD-ENEMY-DRAFT-PATCH',
+          'UI-CMD-ENEMY-COMMIT-V1',
+          ...(offerNew ? ['UI-CMD-ENEMY-NEW-VERSION' as const] : []),
+        ],
+        unacknowledgedCommandIds: [],
+      });
+      const capabilities = received.find(
+        (message) => message.messageType === 'session.reconnect.capabilities',
+      );
+      if (capabilities?.messageType !== 'session.reconnect.capabilities')
+        throw new Error('Actual resume capabilities absent');
+      expect(received.at(-1)).toMatchObject({
+        messageType: 'projection.snapshot',
+        presentation: { base: { formId: 'CMP-001' } },
+      });
+      expect(h.cursor()).toEqual(cursor);
+      expect(storageSnapshot(h.db)).toEqual(before);
+      return capabilities.executableWorkflowCommandIds;
+    };
+    expect(await negotiate(true, true)).toEqual([
+      'UI-CMD-CAMPAIGN-CREATE',
+      'UI-CMD-ENEMY-DRAFT-PATCH',
+      'UI-CMD-ENEMY-COMMIT-V1',
+      'UI-CMD-ENEMY-NEW-VERSION',
+    ]);
+    expect(await negotiate(false, true)).toEqual(['UI-CMD-CAMPAIGN-CREATE']);
+    expect(await negotiate(true, false)).toEqual([
+      'UI-CMD-CAMPAIGN-CREATE',
+      'UI-CMD-ENEMY-DRAFT-PATCH',
+      'UI-CMD-ENEMY-COMMIT-V1',
+    ]);
   });
   it('reuses the exact device-owned context on a fresh explicit Master launch and resumes its draft or paused campaign', async () => {
     const h = await setup();

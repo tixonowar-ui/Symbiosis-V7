@@ -10,7 +10,11 @@ import {
   CHR_011_SET_DECIDE_ACTION_KEYS,
 } from './projections/chr.js';
 import type { ProtocolVocabulary } from '@shared/wire-protocol.js';
-import type { AddressableRouteTemplate, WireV2Vocabulary } from '@shared/wire-v2-protocol.js';
+import type {
+  AddressableRouteTemplate,
+  ProjectionSnapshotV2Message,
+  WireV2Vocabulary,
+} from '@shared/wire-v2-protocol.js';
 
 const PROJECT_ROOT = fileURLToPath(new URL('../..', import.meta.url));
 
@@ -19,6 +23,63 @@ describe('host protocol vocabulary implemented presentation support', () => {
 
   beforeAll(async () => {
     vocabulary = await loadProtocolVocabulary(PROJECT_ROOT);
+  });
+
+  it('publishes only the exact implemented ENM017 campaign route and keeps future monster forms closed', () => {
+    const campaignId = '00000000-0000-4000-8000-000000000001';
+    const route = '/master/campaigns/:campaignId/enemy-catalog/enm-017';
+    const inherited = [{ parameterIndex: 0, source: 'inherited' as const, value: campaignId }];
+    const frame: ProjectionSnapshotV2Message = {
+      messageType: 'projection.snapshot',
+      protocolVersion: 2,
+      projectionRole: 'gm',
+      revisions: { stateRevision: 1, projectionRevision: 1, actorVisibilityRevision: 0 },
+      presentation: {
+        assignment: { reason: 'FORM_ACTION', correlationId: campaignId },
+        base: {
+          formId: 'ENM-017',
+          formType: 'screen',
+          routeTemplate: route,
+          routeBindings: inherited,
+          availableActionKeys: ['ENM-017::CTA::004'],
+          roleFilteredPayload: {},
+        },
+        layers: [],
+      },
+    };
+    // This generic encoder proves route publication only; actual enemy DTO/source checks are separate.
+    expect(vocabulary.isPresentedForm('ENM-017', 'screen', route, inherited)).toBe(true);
+    expect(encodeHostMessageV2(frame, vocabulary).ok).toBe(true);
+    for (const binding of [
+      [],
+      [{ parameterIndex: 1, source: 'inherited' as const, value: campaignId }],
+      [{ parameterIndex: 0, source: 'client-selected' as const, value: campaignId }],
+      [{ parameterIndex: 0, source: 'inherited' as const, value: 'navigation-unbound' }],
+    ]) {
+      expect(vocabulary.isPresentedForm('ENM-017', 'screen', route, binding)).toBe(false);
+      expect(
+        encodeHostMessageV2(
+          {
+            ...frame,
+            presentation: {
+              ...frame.presentation,
+              base: { ...frame.presentation.base, routeBindings: binding },
+            },
+          },
+          vocabulary,
+        ).ok,
+      ).toBe(false);
+    }
+    expect(vocabulary.isPresentedForm('ENM-017', 'dialog', route, inherited)).toBe(false);
+    expect(
+      vocabulary.isPresentedForm('ENM-017', 'screen', route.replace('017', '016'), inherited),
+    ).toBe(false);
+    for (const id of ['ENM-018', 'ENM-019'] as const)
+      expect(
+        vocabulary.isPresentedForm(id, 'screen', route.replace('017', id.slice(-3)), inherited),
+      ).toBe(false);
+    expect(vocabulary.isFormActionKey('ENM-017', 'ENM-017::CTA::004')).toBe(true);
+    expect(vocabulary.isFormActionKey('ENM-017', 'ENM-017::CTA::999')).toBe(false);
   });
 
   it('accepts the exact APP-004 presentation and all source-declared action keys', () => {

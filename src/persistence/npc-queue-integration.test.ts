@@ -569,7 +569,7 @@ describe('technical NPC attempt and actual GM queue transaction integration', ()
         registry = f.db.prepare('SELECT * FROM schema_migration ORDER BY version').all(),
         source = readNpcRecoveryClosure(f.db, f.scope.campaignId, f.readers),
         view = f.view();
-      expect(applyMigrations(f.db)).toBe(22);
+      expect(applyMigrations(f.db)).toBe(23);
       expect(rows(f.db)).toEqual(before);
       expect(
         f.db.prepare('SELECT * FROM schema_migration WHERE version<=20 ORDER BY version').all(),

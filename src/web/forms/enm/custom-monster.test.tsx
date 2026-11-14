@@ -341,9 +341,12 @@ it('renders actual saved V1 absence without accepting a configuration object or 
   }
   const legacy = structuredClone(saved);
   Reflect.deleteProperty(legacy, 'versionConfigurationSummaryOrNull');
+  expect(() => enemyAuthoringProjectionValue(legacy)).toThrow();
+  Reflect.deleteProperty(legacy, 'versionHistory');
   expect(
     Object.hasOwn(enemyAuthoringProjectionValue(legacy), 'versionConfigurationSummaryOrNull'),
   ).toBe(false);
+  expect(Object.hasOwn(enemyAuthoringProjectionValue(legacy), 'versionHistory')).toBe(false);
 });
 it('shows actual Adviser requirements, bonus limits and paid capacity, and requires fresh consent after edits', async () => {
   const source = await createCustomMonsterClientFixture(true);

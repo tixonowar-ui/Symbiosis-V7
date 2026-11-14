@@ -11,6 +11,7 @@ import { customMonsterProjectionValue } from '@shared/custom-monster-presentatio
 import { enemyAuthoringProjectionValue } from '@shared/enemy-authoring.js';
 import { openPersistenceDatabase } from '../persistence/database.js';
 import { migration0022 } from '../persistence/migrations/0022-custom-monster-v1.js';
+import { migration0023 } from '../persistence/migrations/0023-enemy-template-versions.js';
 import type { GmRequestReviewScope } from '../persistence/campaign-creation.js';
 import { readGmRequestReviewSourceWith } from '../persistence/network-device-request.js';
 import { loadLocalCharacterExportBaseline } from './local-character-export.js';
@@ -103,17 +104,19 @@ it.each([
         fixture.schema,
       );
       const expected = before.map((table) =>
-        table.name !== 'schema_migration' || fixture.schema === 22
+        table.name !== 'schema_migration'
           ? table
           : {
               ...table,
               rows: [
                 ...table.rows,
-                {
-                  version: migration0022.version,
-                  name: migration0022.name,
-                  checksum_sha256: createHash('sha256').update(migration0022.sql).digest('hex'),
-                },
+                ...[migration0022, migration0023]
+                  .filter((migration) => migration.version > fixture.schema)
+                  .map((migration) => ({
+                    version: migration.version,
+                    name: migration.name,
+                    checksum_sha256: createHash('sha256').update(migration.sql).digest('hex'),
+                  })),
               ],
             },
       );
