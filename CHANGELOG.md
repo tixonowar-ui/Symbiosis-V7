@@ -51,6 +51,16 @@
 
 ### Добавлено
 
+- **2026-11-14, кандидат runtime #260:** CUSTOM_MONSTER creation012 и N+1/017
+  используют один host workflow для семи независимых натуральных R20 без критов.
+  ENM018/019 показывают исходную неизменяемую квитанцию отдельно от ручных правок;
+  pending body не меняет принятые знания до явного принятия. Один целевой Chrome
+  case с двумя полными потоками прошёл без retry, включая lost ACK/reconnect,
+  restart, сохранение V1/V2 и PLAYER wire/DOM/actual aria. Первый failed attempt
+  сохранён; исправлен пропущенный тестом штатный reconfirm состава после body edit,
+  без изменения360с. Это не финальные clean5/CI/поставка.
+  [Статус, совместимость и границы](docs/status/monster-stat-roll-once-260.md).
+
 - **2026-11-13, кандидат runtime #259:** подготовлены полные N+1 копии SENTIENT и
   CUSTOM_MONSTER через ENM017: причина, читаемый diff, отдельный preview/consent
   замены конфигурации, immutable old versions и отдельный выбор истории ENM020.

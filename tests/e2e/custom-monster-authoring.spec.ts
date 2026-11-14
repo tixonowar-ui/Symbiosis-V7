@@ -116,9 +116,10 @@ test('GM saves a manual CUSTOM_MONSTER NONE V1, replays a lost receipt, restores
     await page.getByLabel('Масса монстра, кг', { exact: true }).fill('10000');
     await page.getByLabel('Возраст монстра, лет', { exact: true }).fill('700');
     await page.getByLabel('Базовый максимум HP', { exact: true }).fill('7');
-    await expect(
-      page.getByRole('button', { name: 'Однократная генерация недоступна', exact: true }),
-    ).toBeDisabled();
+    await expect(page.locator('[data-atlas-action-key="ENM-012::CTA::005"]')).toBeEnabled();
+    expect(
+      commands.some((command) => command['workflowCommandId'] === 'UI-CMD-MONSTER-STATS-ROLL-ONCE'),
+    ).toBe(false);
     await npcAction(page, 'ENM-012::CTA::004', 'ENM-013');
     const armor = page.getByRole('combobox', { name: 'Естественная броня: формула', exact: true });
     await expect(armor.locator('option')).toHaveCount(11);

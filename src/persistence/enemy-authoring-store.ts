@@ -242,7 +242,8 @@ function schema(db: Database.Database): boolean {
       return s.fail('SOURCE_CHANGED');
     return false;
   }
-  if (version !== 21 && version !== 22 && version !== 23) return s.fail('SOURCE_CHANGED');
+  if (version !== 21 && version !== 22 && version !== 23 && version !== 24)
+    return s.fail('SOURCE_CHANGED');
   for (const table of tables) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   return true;
 }

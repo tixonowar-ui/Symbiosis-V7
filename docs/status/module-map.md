@@ -1,6 +1,32 @@
 # Состояние модулей
 
-## Enemy template N+1 runtime #259 — кандидат
+## Однократные характеристики CUSTOM_MONSTER #260 — авторский кандидат
+
+На поставленном #259 переиспользованы enemy application/store, sealed QUEUE,
+known-command replay и GM controls. ENM012/017 → ENM018 даёт семь независимых
+натуральных R20; ENM019 отделяет исходную квитанцию от текущих ручных правок.
+Технический черновик не заменяет принятый body и не забывает знания до его
+явного принятия. Migration0024 расширяет только разрешённые child cursors;
+старые record/receipt JSON и исторические schemas21/22/23 сохраняются.
+
+Один целевой production Chrome case с двумя полными потоками прошёл за125,333с
+без retry: CREATE/V1 и N+1/V2, lost ACK, reconnect, physical restart,
+история, PLAYER wire/DOM/реальный aria snapshot. Первая попытка сохранена FAILED:
+после изменённых stats тест не подтвердил заново состав и ждал отсутствующий NEW.
+Root независимо принял scoped raw report/steps/wire/четыре PNG; это не полный
+verify/E2E/clean5/CI окончательного SHA. [Контракт и пределы доказательств](monster-stat-roll-once-260.md).
+#260 остаётся открытой; #261 ещё не начата, #188/#113 остаются открытыми.
+
+## Фактическая поставка #259 — PR292
+
+Protected squash дал main `fe61e291635f30cf0f5437e9692d8f92f896104f`, tree
+`bfee221e7a2ce1b319bbf9f34a2e9c365eaea5c5`; #259 закрыта COMPLETED.
+Независимые clean5 и CI43540979409 прошли на проверенном дереве:
+7607 tests/312 files,52 production E2E/21 files без retry; size43540979459 прошёл.
+Ниже сохранён исторический снимок кандидата с его отдельными отказами и scoped
+проверками; он не заменён будущими результатами #260.
+
+## Исторический снимок runtime #259 до protected merge PR292
 
 Существующие GM каталог/host/store/widgets расширены до полных обеих kind копий
 ENM017, reason/diff и source-bound explicit replacement, затем атомарного N+1 и

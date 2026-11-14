@@ -13,6 +13,8 @@ import {
 } from '@shared/custom-monster.js';
 import type { CustomMonsterProjection } from '@shared/custom-monster-presentation.js';
 import { admissionJsonEqual } from '@shared/campaign-admission-codec.js';
+import { monsterStatsDraftValue } from '@shared/monster-stat-roll.js';
+import type { MonsterStatGeneration } from '@shared/monster-stat-roll-presentation.js';
 import { calculateSkillSlotCost } from '../../../domain/rules/skill-stage/skills.js';
 import {
   MONSTER_RUNTIME_FORMS,
@@ -94,28 +96,47 @@ export function IdentityFields({
 export function StatsFields({
   attempt,
   onValue,
+  generation,
+  onDraft,
 }: {
   attempt: CustomMonsterAttempt;
   onValue: Publish;
+  generation?: MonsterStatGeneration | null;
+  onDraft?: Publish;
 }) {
+  const initial = generation?.candidateStats ?? attempt.statsOrNull;
   const [stats, setStats] = useState(
     Object.fromEntries(
       CUSTOM_MONSTER_STATS.map((key) => [
         key,
-        attempt.statsOrNull === null ? '' : String(attempt.statsOrNull.baseStats[key]),
+        initial?.baseStats[key] == null ? '' : String(initial.baseStats[key]),
       ]),
     ),
   );
-  const [mass, setMass] = useState(
-    attempt.statsOrNull === null ? '' : String(attempt.statsOrNull.massKg),
-  );
-  const [age, setAge] = useState(
-    attempt.statsOrNull === null ? '' : String(attempt.statsOrNull.ageYears),
-  );
-  const [hp, setHp] = useState(
-    attempt.statsOrNull === null ? '' : String(attempt.statsOrNull.baseMaxHP),
-  );
+  const [mass, setMass] = useState(initial?.massKg == null ? '' : String(initial.massKg));
+  const [age, setAge] = useState(initial?.ageYears == null ? '' : String(initial.ageYears));
+  const [hp, setHp] = useState(initial?.baseMaxHP == null ? '' : String(initial.baseMaxHP));
+  const rawDraft = useMemo(() => {
+    // A read-only child may show genuinely unentered fields; malformed entered text must stay local.
+    try {
+      const entered = (text: string) => (text.trim() === '' ? null : Number(text));
+      return monsterStatsDraftValue({
+        baseStats: Object.fromEntries(
+          CUSTOM_MONSTER_STATS.map((key) => [key, entered(stats[key] ?? '')]),
+        ),
+        massKg: entered(mass),
+        ageYears: entered(age),
+        baseMaxHP: entered(hp),
+      });
+    } catch {
+      return null;
+    }
+  }, [stats, mass, age, hp]);
+  const draftError = rawDraft === null;
   useEffect(() => {
+    onDraft?.(
+      rawDraft === null ? null : structuredClone(w.jsonObject(rawDraft, '$.monsterStatsDraft')),
+    );
     const baseStats = Object.fromEntries(
       CUSTOM_MONSTER_STATS.map((key) => [key, numeric(stats[key] ?? '')]),
     );
@@ -146,13 +167,16 @@ export function StatsFields({
       baseMaxHP,
       rollReceiptOrNull: null,
     });
-  }, [stats, mass, age, hp, onValue]);
+  }, [stats, mass, age, hp, onValue, onDraft, rawDraft]);
   return (
     <fieldset>
       <legend>Ручные характеристики и здоровье</legend>
       <p>
-        Режим: ручной. Семь независимых целых значений 1–35; итоговые характеристики после симбионта
-        могут быть выше 35.
+        {generation?.rollOnceStatus === 'COMMITTED'
+          ? 'Исходные значения получены однократным броском; текущие значения редактируются вручную.'
+          : 'Режим: ручной; однократный бросок ещё не использован.'}{' '}
+        Семь независимых целых значений 1–35; итоговые характеристики после симбионта могут быть
+        выше 35.
       </p>
       {CUSTOM_MONSTER_STATS.map((key) => (
         <label key={key}>
@@ -202,11 +226,100 @@ export function StatsFields({
           onChange={(event) => setHp(event.target.value)}
         />
       </label>
-      <button type="button" disabled>
-        Однократная генерация недоступна
-      </button>
-      <p>Однократная генерация пока недоступна; в ручном режиме бросков нет.</p>
+      <p>
+        Переход к генерации или квитанции сохраняет текущий ввод. Пустые поля останутся
+        незаполненными; ошибочное значение нужно исправить перед переходом.
+      </p>
+      {draftError ? (
+        <p role="alert">
+          Переход не отправлен: проверьте целые базовые значения 1–35, массу 5–10000 с шагом 0,1,
+          положительные целые возраст и HP. Введённые значения сохранены на экране.
+        </p>
+      ) : null}
     </fieldset>
+  );
+}
+export function MonsterStatEvidence({
+  generation,
+  formId,
+}: {
+  generation: MonsterStatGeneration | null | undefined;
+  formId: string;
+}) {
+  if (generation == null) return null;
+  const receipt = generation.randomReceiptOrNull;
+  return (
+    <section aria-label="Однократные характеристики монстра">
+      <h3>
+        {receipt === null
+          ? 'Однократная генерация ещё не использована'
+          : 'Квитанция однократной генерации'}
+      </h3>
+      {formId === 'ENM-018' ? (
+        <p>
+          Хост бросит семь независимых R20 в порядке S, D, M, Z, I, W, C, без критических цепочек.
+          Бросок не зависит от ручного или автоматического ввода кубиков. Масса, возраст и HP не
+          генерируются.
+        </p>
+      ) : null}
+      <p>
+        Базовые значения можно исправлять вручную в пределах 1–35. Возврат и просмотр квитанции не
+        повторяют бросок и не заменяют текущие правки исходными значениями.
+      </p>
+      <table>
+        <caption>Исходный бросок и текущие значения</caption>
+        <thead>
+          <tr>
+            <th scope="col">Характеристика</th>
+            <th scope="col">Исходный R20</th>
+            <th scope="col">Текущее значение</th>
+            <th scope="col">Допустимый ввод</th>
+          </tr>
+        </thead>
+        <tbody>
+          {CUSTOM_MONSTER_STATS.map((key) => (
+            <tr key={key}>
+              <th scope="row">{key}</th>
+              <td>{receipt?.originalGeneratedStats[key] ?? 'Броска не было'}</td>
+              <td>{generation.candidateStats.baseStats[key] ?? 'Не заполнено'}</td>
+              <td>
+                {generation.eligibleStatRanges[key].min}–{generation.eligibleStatRanges[key].max}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <dl>
+        <dt>Масса, кг</dt>
+        <dd>{generation.candidateStats.massKg ?? 'Не заполнено'}</dd>
+        <dt>Возраст, лет</dt>
+        <dd>{generation.candidateStats.ageYears ?? 'Не заполнено'}</dd>
+        <dt>Базовый максимум HP</dt>
+        <dd>{generation.candidateStats.baseMaxHP ?? 'Не заполнено'}</dd>
+      </dl>
+      {generation.requiresBodyAcceptance ? (
+        <p role="status">
+          Это ещё не принятый полный лист. Проверьте характеристики и примените полный ввод перед
+          сохранением версии или изменением симбионта.
+        </p>
+      ) : null}
+      <details>
+        <summary>Данные квитанции для проверки</summary>
+        <dl>
+          <dt>Попытка</dt>
+          <dd>{generation.attemptId}</dd>
+          <dt>Ревизия попытки</dt>
+          <dd>{generation.attemptRevision}</dd>
+          <dt>Группа аудита</dt>
+          <dd>{generation.generationSeed ?? 'Ещё не открыта'}</dd>
+          <dt>Квитанция</dt>
+          <dd>{generation.randomReceiptId ?? 'Отсутствует'}</dd>
+          <dt>Операция</dt>
+          <dd>{generation.operationId ?? 'Отсутствует'}</dd>
+        </dl>
+        {receipt === null ? null : <p>Натуральные грани: {receipt.dieFaces.join(', ')}.</p>}
+      </details>
+    </section>
   );
 }
 function DefinitionFields({
@@ -927,10 +1040,12 @@ export function CustomMonsterContent({
   projection: p,
   onValue,
   onPrepare,
+  onMonsterDraft,
 }: {
   projection: CustomMonsterProjection;
   onValue: Publish;
   onPrepare: (value: JsonObject) => { ok: boolean; detail?: string };
+  onMonsterDraft?: Publish;
 }) {
   const attempt = p.context.attemptOrNull;
   return (
@@ -952,13 +1067,21 @@ export function CustomMonsterContent({
       {attempt === null ? null : p.formId === 'ENM-011' ? (
         <IdentityFields attempt={attempt} onValue={onValue} />
       ) : p.formId === 'ENM-012' ? (
-        <StatsFields attempt={attempt} onValue={onValue} />
+        <StatsFields
+          attempt={attempt}
+          onValue={onValue}
+          generation={p.statGeneration ?? null}
+          {...(onMonsterDraft === undefined ? {} : { onDraft: onMonsterDraft })}
+        />
       ) : p.formId === 'ENM-013' ? (
         <PhysicsFields attempt={attempt} onValue={onValue} />
       ) : p.formId === 'ENM-014' ? (
         <AttackFields attempt={attempt} onValue={onValue} />
       ) : p.formId === 'ENM-015' ? (
         <SymbiontFields p={p} attempt={attempt} onValue={onValue} onPrepare={onPrepare} />
+      ) : null}
+      {p.formId === 'ENM-018' || p.formId === 'ENM-019' || p.formId === 'ENM-020' ? (
+        <MonsterStatEvidence generation={p.statGeneration} formId={p.formId} />
       ) : null}
       {p.sheetOrNull === null ? null : <Sheet sheet={p.sheetOrNull} />}
     </section>

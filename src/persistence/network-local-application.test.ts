@@ -1552,7 +1552,7 @@ describe('local network application/outbox aggregate', () => {
     const before = p.db.serialize();
     // Migration 23 must retain the same unresolved-outbox close guard.
     expect(p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
-      version: 23,
+      version: 24,
     });
     expect(() => close(p, sent.current)).toThrow('CLOSE_UNAVAILABLE');
     expect(p.db.serialize().equals(before)).toBe(true);

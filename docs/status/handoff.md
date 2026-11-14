@@ -1,6 +1,36 @@
 # Передача контекста — 2026-11-14
 
-## Runtime #259 — WIP, сквозная публикация ещё не принята
+## Текущее состояние — только runtime #260
+
+#259 фактически поставлена [PR292](https://github.com/tixonowar-ui/Symbiosis-V7/pull/292):
+main `fe61e291635f30cf0f5437e9692d8f92f896104f`, tree `bfee221e7a2ce1b319bbf9f34a2e9c365eaea5c5`.
+Root подтвердил CLOSED COMPLETED, clean5 и CI43540979409:
+7607 tests/312 files,52 production E2E/21 files без retry; size43540979459 прошёл.
+Старые failed de06, named stash, checkout и доказательства сохранены.
+#188/#113 открыты; #261 не начата. Следующая задача не подменяет текущую #260.
+
+Подготовлены семь натуральных R20 только для CUSTOM_MONSTER creation012 и N+1
+017, один workflow, immutable receipt и отдельный pending body. Child018/019
+привязаны к owning origin/attempt/revisions; replay/cancel/view не обновляют
+семь faces и не копируют их поверх ручных исправлений. Accepted body остаётся
+MANUAL/null; квитанция живёт в отдельном attempt ledger. Реальные SENTIENT,
+включая symbiotic MONSTER, SYSTEM и PLAYER канал не получают.
+
+Текущие scoped domain/owning/compatibility/client/schema проверки и один Chrome
+case с двумя полными потоками приняты root в своих отдельных областях.
+Chrome02:125,333с,1 attempt,0 retry,58 intermediate comparisons в15 успешных
+poll groups,0 вне них; все восемь completion tails достигнуты. PLAYER проверен
+по реальным wire/DOM и18 comparisons по actual aria snapshot. Четыре PNG
+просмотрены root. Chrome01 FAILED сохранён: изменённый принятый body снял
+подтверждение состава, а тест пропустил штатный preview/confirm/FINISH NONE и
+ждал отсутствующий NEW277,939с. Исправлен только тестовый поток;360с сохранены.
+
+[Полный текущий статус #260](monster-stat-roll-once-260.md) отделяет эти scoped
+результаты от ещё ожидаемых final committed SHA, независимого clean5, полного
+CI, protected merge и actual delivery. Полный авторский verify не запускался.
+Артефакты/CHECKSUMS/generated/ADR/CI/defaults/hooks/workers/retries не менялись.
+
+## Исторический снимок runtime #259 до protected merge PR292
 
 Source #288 фактически поставлен PR289: source commit
 `a04c632f91a54d386055c63e1a7ab30d93896424`, tree `04df155d`;

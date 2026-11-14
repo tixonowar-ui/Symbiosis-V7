@@ -62,6 +62,17 @@ import {
   type EnemyVersionConfigurationSummary,
 } from './enemy-version-history.js';
 import { enemyVersionEditorValue, type EnemyVersionEditor } from './enemy-version-editor.js';
+import {
+  MONSTER_STAT_DRAFT_ACTIONS,
+  monsterStatDraftPatchValue,
+  monsterStatDraftRequiresAcceptance,
+  monsterStatOpeningDraft,
+  monsterStatRollBindingValue,
+  monsterStatRollCommandPayloadValue,
+  monsterStatRollStateValue,
+  type MonsterStatRollBinding,
+  type MonsterStatRollState,
+} from './monster-stat-roll.js';
 
 export const SENTIENT_ENEMY_AUTHORING_FORMS = [
   'ENM-005',
@@ -87,6 +98,8 @@ export const ENEMY_AUTHORING_FORMS = [
   'ENM-015',
   'ENM-016',
   'ENM-017',
+  'ENM-018',
+  'ENM-019',
   'ENM-020',
 ] as const;
 export type EnemyAuthoringForm = (typeof ENEMY_AUTHORING_FORMS)[number];
@@ -100,6 +113,7 @@ export const ENEMY_AUTHORING_WORKFLOWS = [
   'UI-CMD-ENEMY-DRAFT-PATCH',
   'UI-CMD-ENEMY-COMMIT-V1',
   'UI-CMD-ENEMY-NEW-VERSION',
+  'UI-CMD-MONSTER-STATS-ROLL-ONCE',
 ] as const;
 export const ENEMY_STATS = ['S', 'D', 'M', 'Z', 'I', 'W', 'C'] as const;
 export type EnemyStats = Readonly<Record<(typeof ENEMY_STATS)[number], number>>;
@@ -166,9 +180,11 @@ export interface EnemyAuthoringContext {
   readonly attemptOrNull: EnemyAuthoringAttempt | null;
   readonly selectedVersionOrNull: EnemyVersionIdentity | null;
   readonly versionAttempt?: EnemyVersionAttemptContext;
+  readonly monsterStatRoll?: MonsterStatRollState;
 }
 export type EnemyUserEntry = EnemyVersionIdentity & { readonly displayName: string };
 export type EnemyPatchStage =
+  | 'MONSTER_STAT_DRAFT'
   | 'VERSION_CONFIGURATION'
   | 'SENTIENT_IDENTITY'
   | 'SENTIENT_STATS'
@@ -183,6 +199,11 @@ export type EnemyWorkflowPayload = {
   readonly stage?: EnemyPatchStage;
   readonly data?: JsonObject;
   readonly reason?: string;
+  readonly attemptId?: string;
+  readonly monsterDraftId?: string;
+  readonly originFormId?: 'ENM-012' | 'ENM-017';
+  readonly returnFormId?: 'ENM-012' | 'ENM-017';
+  readonly versionBindingOrNull?: MonsterStatRollBinding['versionBindingOrNull'];
 };
 export type EnemyWorkflowRequest = WorkflowCommandRequestMessage<
   (typeof ENEMY_AUTHORING_WORKFLOWS)[number],
@@ -202,6 +223,7 @@ export interface EnemyAuthoringMutation {
   readonly preparedMonsterComposition?: PreparedCustomMonsterComposition;
   readonly preparedMonsterKnowledge?: PreparedMonsterKnowledge;
   readonly preparedVersionConfiguration?: PreparedEnemyVersionConfiguration;
+  readonly preparedMonsterStatRoll?: MonsterStatRollState;
 }
 export interface EnemySheet {
   readonly skillPlanState?: EnemySkillPlanState;
@@ -307,10 +329,17 @@ export const ENEMY_AUTHORING_NAV_TARGETS = {
   'ENM-016::CTA::001': 'ENM-015',
   'ENM-016::CTA::003': 'ENM-015',
   'ENM-017::CTA::005': 'ENM-020',
+  'ENM-018::CTA::001': 'ENM-012',
+  'ENM-018::CTA::003': 'ENM-012',
+  'ENM-018::CTA::004': 'ENM-017',
+  'ENM-018::CTA::006': 'ENM-017',
+  'ENM-019::CTA::001': 'ENM-012',
+  'ENM-019::CTA::002': 'ENM-017',
 } as const;
 export const ENEMY_STAGE_FORMS = {
   VERSION_CONFIGURATION: ['ENM-017', 'ENM-017', 'ENM-017::CTA::004'],
   ...CUSTOM_MONSTER_STAGE_FORMS,
+  MONSTER_STAT_DRAFT: ['ENM-012', 'ENM-018', 'ENM-012::CTA::005'],
   SENTIENT_IDENTITY: ['ENM-005', 'ENM-006', 'ENM-005::CTA::003'],
   SENTIENT_STATS: ['ENM-006', 'ENM-007', 'ENM-006::CTA::002'],
   SENTIENT_BUILD: ['ENM-007', 'ENM-008', 'ENM-007::CTA::004'],
@@ -332,11 +361,13 @@ export function enemyWorkflowRequestValue(value: unknown): EnemyWorkflowRequest 
   revisionValue(row['expectedRevisions']);
   const patch = row['workflowCommandId'] === 'UI-CMD-ENEMY-DRAFT-PATCH';
   const append = row['workflowCommandId'] === 'UI-CMD-ENEMY-NEW-VERSION';
+  const roll = row['workflowCommandId'] === 'UI-CMD-MONSTER-STATS-ROLL-ONCE';
   const payload = r.exact(
     row['payload'],
     'campaignId creationAttemptId expectedAttemptRevision' +
       (patch ? ' stage data' : '') +
-      (append ? ' reason' : ''),
+      (append ? ' reason' : '') +
+      (roll ? ' attemptId monsterDraftId originFormId returnFormId versionBindingOrNull' : ''),
     '$.payload',
   );
   r.uuid(payload['campaignId'], '$.campaignId');
@@ -347,7 +378,9 @@ export function enemyWorkflowRequestValue(value: unknown): EnemyWorkflowRequest 
     w.jsonObject(payload['data'], '$.data');
     if (payload['stage'] === 'VERSION_CONFIGURATION')
       enemyVersionConfigurationPatchValue(payload['data']);
+    if (payload['stage'] === 'MONSTER_STAT_DRAFT') monsterStatDraftPatchValue(payload['data']);
   }
+  if (roll) monsterStatRollCommandPayloadValue(payload);
   if (append && r.raw(payload['reason'], '$.reason').trim().length === 0)
     r.invalid('$.reason', 'required meaningful change reason', null);
   return w.validated(structuredClone(row));
@@ -648,12 +681,21 @@ export function enemyAuthoringMutationValue(value: unknown): EnemyAuthoringMutat
       (Object.hasOwn(raw, 'preparedSkillState') ? ' preparedSkillState' : '') +
       (Object.hasOwn(raw, 'preparedMonsterComposition') ? ' preparedMonsterComposition' : '') +
       (Object.hasOwn(raw, 'preparedMonsterKnowledge') ? ' preparedMonsterKnowledge' : '') +
+      (Object.hasOwn(raw, 'preparedMonsterStatRoll') ? ' preparedMonsterStatRoll' : '') +
       (Object.hasOwn(raw, 'preparedVersionConfiguration') ? ' preparedVersionConfiguration' : ''),
     '$.enemyMutation',
   );
   r.text(row['sourceBaselineVersion'], '$.sourceBaselineVersion');
   r.uuid(row['authorMasterProfileId'], '$.authorMasterProfileId');
   const request = enemyWorkflowRequestValue(row['request']);
+  const statCommand =
+    request.workflowCommandId === 'UI-CMD-MONSTER-STATS-ROLL-ONCE' ||
+    request.payload.stage === 'MONSTER_STAT_DRAFT';
+  if (Object.hasOwn(row, 'preparedMonsterStatRoll')) {
+    if (!statCommand) r.invalid('$.preparedMonsterStatRoll', 'own monster stat command only', null);
+    monsterStatRollStateValue(row['preparedMonsterStatRoll']);
+  } else if (statCommand)
+    r.invalid('$.preparedMonsterStatRoll', 'host prepared once/draft state', null);
   if (Object.hasOwn(row, 'versionPatchSourceFormId')) {
     w.literal(row['versionPatchSourceFormId'], 'ENM-017', '$.versionPatchSourceFormId');
     w.literal(request.workflowCommandId, 'UI-CMD-ENEMY-DRAFT-PATCH', '$.versionPatchWorkflow');
@@ -744,19 +786,36 @@ export function enemyAuthoringReceipt(
       timestamp: mutation.timestamp,
       workflowCommandId: mutation.request.workflowCommandId,
       sourceFormId:
-        mutation.versionPatchSourceFormId === 'ENM-017' ||
-        mutation.request.workflowCommandId === 'UI-CMD-ENEMY-NEW-VERSION'
-          ? 'ENM-017'
-          : mutation.request.payload.stage === undefined
-            ? mutation.committedVersionOrNull?.kind === 'CUSTOM_MONSTER'
-              ? 'ENM-016'
-              : 'ENM-010'
-            : ENEMY_STAGE_FORMS[mutation.request.payload.stage][0],
+        mutation.request.workflowCommandId === 'UI-CMD-MONSTER-STATS-ROLL-ONCE'
+          ? 'ENM-018'
+          : mutation.request.payload.stage === 'MONSTER_STAT_DRAFT'
+            ? MONSTER_STAT_DRAFT_ACTIONS[
+                monsterStatDraftPatchValue(mutation.request.payload.data).sourceActionKey
+              ][0]
+            : mutation.versionPatchSourceFormId === 'ENM-017' ||
+                mutation.request.workflowCommandId === 'UI-CMD-ENEMY-NEW-VERSION'
+              ? 'ENM-017'
+              : mutation.request.payload.stage === undefined
+                ? mutation.committedVersionOrNull?.kind === 'CUSTOM_MONSTER'
+                  ? 'ENM-016'
+                  : 'ENM-010'
+                : ENEMY_STAGE_FORMS[mutation.request.payload.stage][0],
       stageOrNull: mutation.request.payload.stage ?? null,
       attemptRevision:
         mutation.request.payload.expectedAttemptRevision +
         (mutation.committedVersionOrNull === null ? 1 : 0),
       committedVersionOrNull: mutation.committedVersionOrNull as unknown as JsonValue,
+      ...(mutation.request.workflowCommandId !== 'UI-CMD-MONSTER-STATS-ROLL-ONCE'
+        ? {}
+        : {
+            randomStatsReceipt: (monsterStatRollStateValue(mutation.preparedMonsterStatRoll)
+              .randomReceiptOrNull ??
+              r.invalid(
+                '$.randomStatsReceipt',
+                'actual committed seven-face receipt',
+                null,
+              )) as unknown as JsonValue,
+          }),
       ...(mutation.preparedComposition === undefined
         ? {}
         : { compositionPhase: mutation.preparedComposition.phase }),
@@ -1396,14 +1455,42 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
   return w.validated(row);
 }
 /** Closed structural state. Source mechanics are re-evaluated by the owning host observer. */
+/** The actual owning NAV context chooses origin/version; client echoes never choose a target. */
+export function enemyMonsterStatRollBinding(
+  context: EnemyAuthoringContext,
+): MonsterStatRollBinding {
+  const attempt = context.attemptOrNull;
+  if (attempt?.kind !== 'CUSTOM_MONSTER')
+    return r.invalid('$.monsterStatRoll', 'own open CUSTOM_MONSTER attempt', null);
+  const base = context.versionAttempt?.origin.base;
+  if (base !== undefined && base.kind !== 'CUSTOM_MONSTER')
+    return r.invalid('$.monsterStatRoll', 'own CUSTOM_MONSTER version origin', null);
+  return monsterStatRollBindingValue({
+    kind: 'CUSTOM_MONSTER',
+    attemptId: attempt.attemptId,
+    campaignId: attempt.campaignId,
+    originFormId: base === undefined ? 'ENM-012' : 'ENM-017',
+    versionBindingOrNull:
+      base === undefined
+        ? null
+        : {
+            templateId: base.templateId,
+            expectedCurrentVersion: base.version,
+          },
+  });
+}
 export function enemyAuthoringContextValue(value: unknown): EnemyAuthoringContext {
   const rawContext = w.record(value, '$.enemyAuthoring');
   const row = r.exact(
     value,
     'attemptOrNull selectedVersionOrNull' +
-      (Object.hasOwn(rawContext, 'versionAttempt') ? ' versionAttempt' : ''),
+      (Object.hasOwn(rawContext, 'versionAttempt') ? ' versionAttempt' : '') +
+      (Object.hasOwn(rawContext, 'monsterStatRoll') ? ' monsterStatRoll' : ''),
     '$.enemyAuthoring',
   );
+  if (Object.hasOwn(row, 'monsterStatRoll')) {
+    monsterStatRollStateValue(row['monsterStatRoll']);
+  }
   if (Object.hasOwn(row, 'versionAttempt')) {
     const version = enemyVersionAttemptContextValue(row['versionAttempt']);
     const attempt = w.record(row['attemptOrNull'], '$.attempt');
@@ -1439,6 +1526,7 @@ export function enemyAuthoringContextValue(value: unknown): EnemyAuthoringContex
     const rawAttempt = w.record(row['attemptOrNull'], '$.attempt');
     if (rawAttempt['kind'] === 'CUSTOM_MONSTER') {
       customMonsterAttemptValue(rawAttempt);
+      assertMonsterStatContextBinding(row);
       return w.validated(row);
     }
     const attempt = r.exact(
@@ -1573,7 +1661,15 @@ export function enemyAuthoringContextValue(value: unknown): EnemyAuthoringContex
       r.uuid(key, '$.itemTemplateKey'),
     );
   }
+  assertMonsterStatContextBinding(row);
   return w.validated(row);
+}
+function assertMonsterStatContextBinding(row: Record<string, unknown>): void {
+  if (!Object.hasOwn(row, 'monsterStatRoll')) return;
+  const state = monsterStatRollStateValue(row['monsterStatRoll']);
+  const own = enemyMonsterStatRollBinding(w.validated(row));
+  if (!admissionJsonEqual(state.binding, own) || row['selectedVersionOrNull'] !== null)
+    r.invalid('$.monsterStatRoll', 'actual owning open attempt/origin/version', null);
 }
 export function newEnemyAttempt(
   attemptId: string,
@@ -1623,6 +1719,119 @@ export function reduceEnemyAuthoring(
   )
     r.invalid('$.expectedRevisions', 'current revisions', null);
   const versionState = context.versionAttempt;
+  const pendingStats =
+    attempt.kind === 'CUSTOM_MONSTER' &&
+    monsterStatDraftRequiresAcceptance(
+      context.monsterStatRoll?.draftOrNull ?? null,
+      attempt.statsOrNull,
+    );
+  if (pendingStats && payload.stage === 'MONSTER_SYMBIONT')
+    r.invalid(
+      '$.monsterStatRoll.draftOrNull',
+      'accept the complete body before composition changes',
+      null,
+    );
+  if (
+    (request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1' ||
+      request.workflowCommandId === 'UI-CMD-ENEMY-NEW-VERSION') &&
+    pendingStats
+  )
+    r.invalid(
+      '$.monsterStatRoll.draftOrNull',
+      'accept the complete valid body before saving',
+      null,
+    );
+  const rollCommand = request.workflowCommandId === 'UI-CMD-MONSTER-STATS-ROLL-ONCE';
+  if (rollCommand || payload.stage === 'MONSTER_STAT_DRAFT') {
+    const binding = enemyMonsterStatRollBinding(context);
+    if (attempt.kind !== 'CUSTOM_MONSTER') return r.invalid('$.kind', 'CUSTOM_MONSTER', null);
+    const previous = context.monsterStatRoll;
+    const prepared = monsterStatRollStateValue(mutation.preparedMonsterStatRoll);
+    if (
+      !admissionJsonEqual(prepared.binding, binding) ||
+      mutation.preparedComposition !== undefined ||
+      mutation.preparedSkillState !== undefined ||
+      mutation.preparedMonsterComposition !== undefined ||
+      mutation.preparedMonsterKnowledge !== undefined ||
+      mutation.preparedVersionConfiguration !== undefined
+    )
+      r.invalid('$.preparedMonsterStatRoll', 'closed own provisional stat state only', null);
+    if (previous !== undefined && prepared.generationSeed !== previous.generationSeed)
+      r.invalid('$.generationSeed', 'immutable owning attempt nonce', null);
+    let target: EnemyAuthoringForm;
+    if (rollCommand) {
+      const echo = monsterStatRollCommandPayloadValue(payload);
+      const receipt = prepared.randomReceiptOrNull;
+      if (
+        formId !== 'ENM-018' ||
+        previous === undefined ||
+        previous.rollOnceStatus !== 'NOT_ROLLED' ||
+        prepared.rollOnceStatus !== 'COMMITTED' ||
+        receipt === null ||
+        receipt.operationId !== request.commandId ||
+        receipt.randomReceiptId !== mutation.receiptId ||
+        receipt.attemptRevision !== attempt.revision ||
+        receipt.authorMasterProfileId !== mutation.authorMasterProfileId ||
+        receipt.timestamp !== mutation.timestamp ||
+        receipt.sourceBaselineVersion !== mutation.sourceBaselineVersion ||
+        receipt.artSha256 !== CUSTOM_MONSTER_PLACEHOLDER_SHA256 ||
+        !admissionJsonEqual(receipt.beforeDraftOrNull, previous.draftOrNull) ||
+        !admissionJsonEqual(
+          {
+            kind: 'CUSTOM_MONSTER',
+            attemptId: echo.attemptId,
+            campaignId: echo.campaignId,
+            originFormId: echo.originFormId,
+            versionBindingOrNull: echo.versionBindingOrNull,
+          },
+          binding,
+        ) ||
+        !admissionJsonEqual(prepared.draftOrNull, {
+          ...(previous.draftOrNull ?? { massKg: null, ageYears: null, baseMaxHP: null }),
+          baseStats: receipt.originalGeneratedStats,
+        })
+      )
+        r.invalid(
+          '$.preparedMonsterStatRoll',
+          'once-only actual018 operation and unchanged metadata',
+          null,
+        );
+      target = binding.originFormId;
+    } else {
+      const patch = monsterStatDraftPatchValue(payload.data);
+      const action = MONSTER_STAT_DRAFT_ACTIONS[patch.sourceActionKey];
+      if (
+        (versionState === undefined
+          ? mutation.versionPatchSourceFormId !== undefined
+          : mutation.versionPatchSourceFormId !== 'ENM-017') ||
+        formId !== binding.originFormId ||
+        action[0] !== binding.originFormId ||
+        action[2] !== (previous?.rollOnceStatus ?? 'NOT_ROLLED') ||
+        prepared.rollOnceStatus !== (previous?.rollOnceStatus ?? 'NOT_ROLLED') ||
+        !admissionJsonEqual(prepared.randomReceiptOrNull, previous?.randomReceiptOrNull ?? null) ||
+        !admissionJsonEqual(
+          prepared.draftOrNull,
+          monsterStatOpeningDraft(patch, attempt.statsOrNull),
+        ) ||
+        (previous?.draftOrNull != null && patch.draftOrNull === null) ||
+        versionState?.replacementPreviewOrNull != null
+      )
+        r.invalid(
+          '$.monsterStatDraftPatch',
+          'actual available origin child with retained right/receipt',
+          null,
+        );
+      target = action[1];
+    }
+    return {
+      context: enemyAuthoringContextValue({
+        ...context,
+        attemptOrNull: { ...attempt, revision: attempt.revision + 1 },
+        monsterStatRoll: prepared,
+      }),
+      formId: target,
+    };
+  }
   if (versionState !== undefined) {
     if (formId !== 'ENM-017') r.invalid('$.versionAttempt', 'own ENM-017 version attempt', null);
     if (request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1')
@@ -1694,6 +1903,13 @@ export function reduceEnemyAuthoring(
           attemptOrNull: prepared.attempt,
           selectedVersionOrNull: null,
           versionAttempt: prepared.state,
+          ...(context.monsterStatRoll === undefined
+            ? {}
+            : {
+                // CUSTOM configuration changes own choices, not the pending body input.
+                // Only the separately accepted MONSTER_STATS boundary reconciles that draft.
+                monsterStatRoll: context.monsterStatRoll,
+              }),
         }),
         formId: 'ENM-017',
       };
@@ -1731,7 +1947,18 @@ export function reduceEnemyAuthoring(
       delete nextVersion.ownChoicesPending;
     }
     return {
-      context: enemyAuthoringContextValue({ ...reduced.context, versionAttempt: nextVersion }),
+      context: enemyAuthoringContextValue({
+        ...reduced.context,
+        versionAttempt: nextVersion,
+        ...(context.monsterStatRoll === undefined
+          ? {}
+          : {
+              monsterStatRoll: {
+                ...context.monsterStatRoll,
+                draftOrNull: stage === 'MONSTER_STATS' ? null : context.monsterStatRoll.draftOrNull,
+              },
+            }),
+      }),
       formId: 'ENM-017',
     };
   }
@@ -1772,7 +1999,18 @@ export function reduceEnemyAuthoring(
       mutation.preparedMonsterKnowledge,
     );
     return {
-      context: { attemptOrNull: next, selectedVersionOrNull: null },
+      context: {
+        attemptOrNull: next,
+        selectedVersionOrNull: null,
+        ...(context.monsterStatRoll === undefined
+          ? {}
+          : {
+              monsterStatRoll: {
+                ...context.monsterStatRoll,
+                draftOrNull: stage === 'MONSTER_STATS' ? null : context.monsterStatRoll.draftOrNull,
+              },
+            }),
+      },
       formId:
         stage === 'MONSTER_SYMBIONT' && next.compositionOrNull?.phase !== 'CONFIRMED'
           ? 'ENM-015'
@@ -1925,6 +2163,42 @@ export function enemyAuthoringActions(p: EnemyAuthoringProjection): readonly Act
     .filter(([key]) => key.startsWith(p.formId + '::'))
     .map(([key]) => key as ActionKey);
   if (p.formId === 'ENM-020') return back;
+  if (p.kind === 'CUSTOM_MONSTER_AUTHORING') {
+    const generation = p.statGeneration;
+    if (p.formId === 'ENM-018')
+      return generation?.originFormId === 'ENM-012'
+        ? ['ENM-018::CTA::001', 'ENM-018::CTA::002', 'ENM-018::CTA::003']
+        : generation?.originFormId === 'ENM-017'
+          ? ['ENM-018::CTA::004', 'ENM-018::CTA::005', 'ENM-018::CTA::006']
+          : [];
+    if (p.formId === 'ENM-019')
+      return generation?.originFormId === 'ENM-012'
+        ? ['ENM-019::CTA::001']
+        : generation?.originFormId === 'ENM-017'
+          ? ['ENM-019::CTA::002']
+          : [];
+    const currentVersion = p.context.versionAttempt?.origin.base;
+    const mayOpen =
+      generation != null &&
+      p.context.versionAttempt?.replacementPreviewOrNull == null &&
+      (p.formId === 'ENM-012' ||
+        (p.formId === 'ENM-017' &&
+          admissionJsonEqual(currentVersion, p.versionEditor?.currentVersion)));
+    const rollActions: readonly ActionKey[] = !mayOpen
+      ? []
+      : p.formId === 'ENM-012'
+        ? generation.rollOnceStatus === 'COMMITTED'
+          ? ['ENM-012::CTA::002']
+          : ['ENM-012::CTA::001', 'ENM-012::CTA::005']
+        : generation.rollOnceStatus === 'COMMITTED'
+          ? ['ENM-017::CTA::007']
+          : ['ENM-017::CTA::006'];
+    if (p.formId === 'ENM-017')
+      return p.validationErrors.length === 0
+        ? [...back, ...rollActions, 'ENM-017::CTA::004']
+        : [...back, ...rollActions];
+    if (p.formId === 'ENM-012') return [...back, ...rollActions, 'ENM-012::CTA::004'];
+  }
   if (p.formId === 'ENM-017')
     return p.validationErrors.length === 0 ? [...back, 'ENM-017::CTA::004'] : back;
   if (p.kind === 'CUSTOM_MONSTER_AUTHORING') {

@@ -3,6 +3,7 @@ import {
   ENEMY_AUTHORING_NAV_TARGETS,
   enemyAuthoringContextValue,
   enemyAuthoringMutationValue,
+  enemyMonsterStatRollBinding,
   newEnemyAttempt,
   reduceEnemyAuthoring,
   type EnemyAuthoringContext,
@@ -671,7 +672,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 20 ||
     version === 21 ||
     version === 22 ||
-    version === 23
+    version === 23 ||
+    version === 24
       ? ([
           ['local_network_application_event', ['event_id', 'receipt_id']],
           ['hosted_network_command', ['command_id', 'receipt_id']],
@@ -695,7 +697,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 20 ||
     version === 21 ||
     version === 22 ||
-    version === 23
+    version === 23 ||
+    version === 24
       ? ([
           ['hosted_device_request_decision', ['command_id', 'receipt_id']],
           ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
@@ -715,7 +718,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 20 ||
     version === 21 ||
     version === 22 ||
-    version === 23
+    version === 23 ||
+    version === 24
       ? CAMPAIGN_ADMISSION_IDENTITIES
       : [];
   if (
@@ -729,7 +733,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 20 ||
     version === 21 ||
     version === 22 ||
-    version === 23
+    version === 23 ||
+    version === 24
   )
     for (const [table, columns] of [
       ...CAMPAIGN_LOBBY_IDENTITIES,
@@ -2900,6 +2905,19 @@ function reduceQueue(
     )
       return fail('STALE_REVISION');
     const target = queueNavigationTarget(mutation.request);
+    if (old.formId === 'ENM-018' || old.formId === 'ENM-019') {
+      const context = old.enemyAuthoring ?? fail('DRAFT_UNAVAILABLE');
+      const binding = enemyMonsterStatRollBinding(context),
+        roll = context.monsterStatRoll ?? fail('DRAFT_UNAVAILABLE');
+      if (
+        target !== binding.originFormId ||
+        (old.formId === 'ENM-019' && roll.rollOnceStatus !== 'COMMITTED') ||
+        ((mutation.request.actionKey === 'ENM-018::CTA::003' ||
+          mutation.request.actionKey === 'ENM-018::CTA::006') &&
+          roll.rollOnceStatus !== 'NOT_ROLLED')
+      )
+        return fail('INVALID_INPUT');
+    }
     const started = state.events.some(
       (event) =>
         event.mutation.kind === 'LOBBY_SOURCE' &&
@@ -3087,7 +3105,8 @@ function queueSchema(db: Database.Database): void {
     row['version'] !== 20 &&
     row['version'] !== 21 &&
     row['version'] !== 22 &&
-    row['version'] !== 23
+    row['version'] !== 23 &&
+    row['version'] !== 24
   )
     return fail();
   for (const table of DEVICE_REQUEST_REVIEW_TABLES)
@@ -3104,7 +3123,8 @@ function queueSchema(db: Database.Database): void {
     row['version'] === 20 ||
     row['version'] === 21 ||
     row['version'] === 22 ||
-    row['version'] === 23
+    row['version'] === 23 ||
+    row['version'] === 24
   )
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();

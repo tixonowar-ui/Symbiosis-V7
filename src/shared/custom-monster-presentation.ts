@@ -1,6 +1,6 @@
 import type { JsonObject, RevisionVector } from './wire-protocol.js';
 import type { EnemyStats } from './enemy-authoring.js';
-import { enemyAuthoringContextValue } from './enemy-authoring.js';
+import { enemyAuthoringContextValue, enemyMonsterStatRollBinding } from './enemy-authoring.js';
 import { enemyCompositionCatalogShape } from './enemy-composition-presentation.js';
 import { enemyCompositionReaders as r } from './enemy-composition-codec.js';
 import { wireCodecPrimitives as w } from './wire-codec.js';
@@ -29,6 +29,13 @@ import {
 } from './enemy-version-history.js';
 import { enemyVersionEditorValue, type EnemyVersionEditor } from './enemy-version-editor.js';
 import type { EnemyVersionAttemptContext } from './enemy-version-configuration.js';
+import type { MonsterStatRollState } from './monster-stat-roll.js';
+import { monsterStatDraftRequiresAcceptance } from './monster-stat-roll.js';
+import {
+  monsterStatGeneration,
+  monsterStatGenerationValue,
+  type MonsterStatGeneration,
+} from './monster-stat-roll-presentation.js';
 
 export const CUSTOM_MONSTER_FORMS = [
   'ENM-011',
@@ -38,6 +45,8 @@ export const CUSTOM_MONSTER_FORMS = [
   'ENM-015',
   'ENM-016',
   'ENM-017',
+  'ENM-018',
+  'ENM-019',
   'ENM-020',
 ] as const;
 export interface CustomMonsterProjection extends RevisionVector {
@@ -50,7 +59,9 @@ export interface CustomMonsterProjection extends RevisionVector {
     readonly attemptOrNull: CustomMonsterAttempt | null;
     readonly selectedVersionOrNull: CustomMonsterVersionIdentity | null;
     readonly versionAttempt?: EnemyVersionAttemptContext;
+    readonly monsterStatRoll?: MonsterStatRollState;
   };
+  readonly statGeneration?: MonsterStatGeneration | null;
   readonly sheetOrNull: CustomMonsterSheet | null;
   /** Existing V1 has no separate N+1 configuration confirmation; no stored field is added. */
   readonly versionConfigurationSummaryOrNull?: EnemyVersionConfigurationSummary | null;
@@ -192,7 +203,8 @@ export function customMonsterProjectionValue(value: unknown): CustomMonsterProje
         ? ' versionConfigurationSummaryOrNull'
         : '') +
       (Object.hasOwn(rawProjection, 'versionHistory') ? ' versionHistory' : '') +
-      (Object.hasOwn(rawProjection, 'versionEditor') ? ' versionEditor' : ''),
+      (Object.hasOwn(rawProjection, 'versionEditor') ? ' versionEditor' : '') +
+      (Object.hasOwn(rawProjection, 'statGeneration') ? ' statGeneration' : ''),
     '$.monsterProjection',
   );
   w.literal(row['kind'], 'CUSTOM_MONSTER_AUTHORING', '$.kind');
@@ -209,8 +221,12 @@ export function customMonsterProjectionValue(value: unknown): CustomMonsterProje
   for (const key of ['stateRevision', 'projectionRevision', 'actorVisibilityRevision'])
     r.integer(row[key], '$.' + key, 0);
   const context = enemyAuthoringContextValue(row['context']);
+  const child = form === 'ENM-018' || form === 'ENM-019';
   if (form === 'ENM-017') enemyVersionEditorValue(row['versionEditor'], context);
-  else if (Object.hasOwn(rawProjection, 'versionEditor') || context.versionAttempt !== undefined)
+  else if (
+    Object.hasOwn(rawProjection, 'versionEditor') ||
+    (!child && context.versionAttempt !== undefined)
+  )
     r.invalid('$.versionEditor', 'own ENM-017 only', null);
   if (
     row['versionConfigurationSummaryOrNull'] != null &&
@@ -238,6 +254,51 @@ export function customMonsterProjectionValue(value: unknown): CustomMonsterProje
       r.invalid('$.versionHistory', 'own saved selected version and configuration summary', null);
   }
   const attempt = context.attemptOrNull;
+  const pending =
+    attempt?.kind === 'CUSTOM_MONSTER' &&
+    monsterStatDraftRequiresAcceptance(
+      context.monsterStatRoll?.draftOrNull ?? null,
+      attempt.statsOrNull,
+    );
+  if (Object.hasOwn(rawProjection, 'statGeneration') && row['statGeneration'] !== null) {
+    const generation = monsterStatGenerationValue(row['statGeneration']);
+    if (generation.binding.campaignId !== row['campaignId'])
+      r.invalid('$.statGeneration', 'own campaign', null);
+    if (attempt?.kind === 'CUSTOM_MONSTER') {
+      const expected = monsterStatGeneration(
+        enemyMonsterStatRollBinding(context),
+        attempt.revision,
+        attempt.statsOrNull,
+        context.monsterStatRoll,
+      );
+      if (!admissionJsonEqual(generation, expected))
+        r.invalid('$.statGeneration', 'exact actual context and current candidate', null);
+    } else if (
+      form !== 'ENM-020' ||
+      context.selectedVersionOrNull?.kind !== 'CUSTOM_MONSTER' ||
+      generation.requiresBodyAcceptance ||
+      (generation.binding.originFormId === 'ENM-012'
+        ? context.selectedVersionOrNull.version !== 1
+        : generation.versionBindingOrNull?.templateId !==
+            context.selectedVersionOrNull.templateId ||
+          generation.versionBindingOrNull.expectedCurrentVersion + 1 !==
+            context.selectedVersionOrNull.version)
+    )
+      r.invalid('$.statGeneration', 'own saved version origin and accepted body', null);
+  } else if (child || context.monsterStatRoll !== undefined)
+    r.invalid('$.statGeneration', 'actual bound generation view', null);
+  if (child) {
+    const state = context.monsterStatRoll;
+    if (
+      state === undefined ||
+      (form === 'ENM-018'
+        ? state.rollOnceStatus !== 'NOT_ROLLED'
+        : state.rollOnceStatus !== 'COMMITTED')
+    )
+      r.invalid('$.context.monsterStatRoll', 'same attempt child and correct spent right', null);
+  }
+  if (pending && row['sheetOrNull'] !== null)
+    r.invalid('$.sheet', 'pending stats are not an accepted sheet', null);
   if (row['advisorPreparationOrNull'] !== null) {
     const preparation = r.exact(
       row['advisorPreparationOrNull'],
@@ -281,10 +342,15 @@ export function customMonsterProjectionValue(value: unknown): CustomMonsterProje
       'attackOrNull',
       'compositionOrNull',
     ] as const;
-    for (const field of fields.slice(
-      0,
-      form === 'ENM-017' ? 0 : CUSTOM_MONSTER_FORMS.indexOf(form),
-    ))
+    // Child origin, not array position, determines prerequisites: initial generation needs no stats.
+    const prerequisiteCount = child
+      ? context.monsterStatRoll?.binding.originFormId === 'ENM-012'
+        ? 1
+        : 0
+      : form === 'ENM-017'
+        ? 0
+        : ['ENM-011', 'ENM-012', 'ENM-013', 'ENM-014', 'ENM-015', 'ENM-016'].indexOf(form);
+    for (const field of fields.slice(0, prerequisiteCount))
       if (attempt[field] === null) r.invalid('$.attempt.' + field, 'preceding saved stage', null);
   }
   const catalog = r.exact(row['catalog'], 'compositionCatalog advisorSkills', '$.monsterCatalog');
@@ -333,7 +399,9 @@ export function customMonsterProjectionValue(value: unknown): CustomMonsterProje
           r.invalid('$.advisorLoss', 'actual source skill', null);
     }
     const preparationExpected =
-      (form === 'ENM-015' || form === 'ENM-017') && composition?.advisorCardIdOrNull != null;
+      !pending &&
+      (form === 'ENM-015' || form === 'ENM-017') &&
+      composition?.advisorCardIdOrNull != null;
     if (preparationExpected !== (row['advisorPreparationOrNull'] !== null))
       r.invalid('$.advisorPreparation', 'exact current acquired personality', null);
   }
@@ -357,6 +425,18 @@ export function customMonsterProjectionValue(value: unknown): CustomMonsterProje
     r.invalid('$.art', 'canonical PNG base64', null);
   if (row['sheetOrNull'] !== null) {
     const sheet = customMonsterSheetValue(row['sheetOrNull']);
+    if (form === 'ENM-020' && row['statGeneration'] != null) {
+      const generation = monsterStatGenerationValue(row['statGeneration']);
+      if (
+        !admissionJsonEqual(generation.candidateStats, {
+          baseStats: sheet.stats.baseStats,
+          massKg: sheet.stats.massKg,
+          ageYears: sheet.stats.ageYears,
+          baseMaxHP: sheet.stats.baseMaxHP,
+        })
+      )
+        r.invalid('$.statGeneration.candidateStats', 'selected saved sheet accepted inputs', null);
+    }
     const sym = sheet.symbiontOrNull;
     if (sym !== null) {
       selectionBindings(

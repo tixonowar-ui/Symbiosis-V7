@@ -24,6 +24,7 @@ import {
   AttackFields as MonsterAttackFields,
   SymbiontFields as MonsterSymbiontFields,
   Sheet as MonsterSheetContent,
+  MonsterStatEvidence,
 } from './custom-monster-content.js';
 import { customMonsterProjectionValue } from '@shared/custom-monster-presentation.js';
 import {
@@ -1369,11 +1370,13 @@ function EnemyVersionContent({
   projection: p,
   onValue,
   onStage,
+  onMonsterDraft,
 }: {
   projection: EnemyAuthoringProjection;
   onValue: (value: JsonObject | null) => void;
   onStage:
     ((stage: EnemyPatchStage, value: JsonObject) => { ok: boolean; detail?: string }) | undefined;
+  onMonsterDraft: ((value: JsonObject | null) => void) | undefined;
 }) {
   const attempt = p.context.attemptOrNull,
     state = p.context.versionAttempt,
@@ -1427,6 +1430,29 @@ function EnemyVersionContent({
   }, [attempt.kind, draft]);
   const reasonDirty = reason !== state.reason;
   const configDirty = input === null || !admissionJsonEqual(input, currentInput);
+  const acceptMonsterDraft = useCallback(
+    (value: JsonObject | null) => {
+      onMonsterDraft?.(
+        !reasonDirty &&
+          !configDirty &&
+          state.replacementPreviewOrNull === null &&
+          (section === 'SUMMARY' || section === 'MONSTER_STATS')
+          ? value
+          : null,
+      );
+    },
+    [onMonsterDraft, reasonDirty, configDirty, state.replacementPreviewOrNull, section],
+  );
+  useEffect(() => {
+    if (p.kind !== 'CUSTOM_MONSTER_AUTHORING') return;
+    if (section === 'SUMMARY')
+      acceptMonsterDraft(
+        p.statGeneration == null
+          ? null
+          : structuredClone(w.jsonObject(p.statGeneration.candidateStats, '$.candidateStats')),
+      );
+    else if (section !== 'MONSTER_STATS') onMonsterDraft?.(null);
+  }, [p, section, acceptMonsterDraft, onMonsterDraft]);
   const reasonWouldDiscard = configDirty || state.replacementPreviewOrNull !== null;
   const shownPreview =
     state.replacementPreviewOrNull !== null &&
@@ -1940,7 +1966,13 @@ function EnemyVersionContent({
           ) : attempt.kind !== 'CUSTOM_MONSTER' ? null : section === 'MONSTER_IDENTITY' ? (
             <MonsterIdentityFields key={section} attempt={attempt} onValue={acceptSection} />
           ) : section === 'MONSTER_STATS' ? (
-            <MonsterStatsFields key={section} attempt={attempt} onValue={acceptSection} />
+            <MonsterStatsFields
+              key={section}
+              attempt={attempt}
+              onValue={acceptSection}
+              generation={p.kind === 'CUSTOM_MONSTER_AUTHORING' ? (p.statGeneration ?? null) : null}
+              onDraft={acceptMonsterDraft}
+            />
           ) : section === 'MONSTER_PHYSICS' ? (
             <MonsterPhysicsFields key={section} attempt={attempt} onValue={acceptSection} />
           ) : section === 'MONSTER_ATTACK' ? (
@@ -1975,12 +2007,10 @@ function EnemyVersionContent({
         </section>
       )}
       {attempt.kind !== 'CUSTOM_MONSTER' ? null : (
-        <>
-          <button type="button" disabled>
-            Однократная генерация характеристик
-          </button>
-          <p>Однократная генерация пока недоступна; в ручном режиме бросков характеристик нет.</p>
-        </>
+        <MonsterStatEvidence
+          generation={p.kind === 'CUSTOM_MONSTER_AUTHORING' ? p.statGeneration : null}
+          formId={p.formId}
+        />
       )}
       {notice === null ? null : <p role="status">{notice}</p>}
       {p.kind === 'SENTIENT_ENEMY_AUTHORING' ? (
@@ -1998,6 +2028,7 @@ export function EnemyAuthoringContent(props: {
   readonly projection: JsonObject;
   readonly onValue: (data: JsonObject | null) => void;
   readonly onPrepare: (data: JsonObject) => { readonly ok: boolean; readonly detail?: string };
+  readonly onMonsterDraft?: (data: JsonObject | null) => void;
   readonly onSelectVersion?: (identity: EnemyVersionIdentity) => void;
   readonly onStage?: (
     stage: EnemyPatchStage,
@@ -2006,7 +2037,14 @@ export function EnemyAuthoringContent(props: {
 }) {
   const p = anyEnemyAuthoringProjectionValue(props.projection);
   if (p.formId === 'ENM-017')
-    return <EnemyVersionContent projection={p} onValue={props.onValue} onStage={props.onStage} />;
+    return (
+      <EnemyVersionContent
+        projection={p}
+        onValue={props.onValue}
+        onStage={props.onStage}
+        onMonsterDraft={props.onMonsterDraft}
+      />
+    );
   return (
     <>
       {p.versionHistory === undefined ? null : (

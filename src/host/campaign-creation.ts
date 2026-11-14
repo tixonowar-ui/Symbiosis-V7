@@ -1075,7 +1075,8 @@ export function createCampaignCreationRuntime(d: Dependencies) {
                     (d.requestReview?.enemyAuthoringEnabled === true &&
                       (id === 'UI-CMD-ENEMY-DRAFT-PATCH' ||
                         id === 'UI-CMD-ENEMY-COMMIT-V1' ||
-                        id === 'UI-CMD-ENEMY-NEW-VERSION')) ||
+                        id === 'UI-CMD-ENEMY-NEW-VERSION' ||
+                        id === 'UI-CMD-MONSTER-STATS-ROLL-ONCE')) ||
                     (d.requestReview?.npcEnabled === true &&
                       (id === 'UI-CMD-NPC-COMMIT-V1' || id === 'UI-CMD-NPC-NEW-VERSION')) ||
                     id === 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW' ||

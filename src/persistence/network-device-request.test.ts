@@ -1,3 +1,4 @@
+import { migration0023 } from './migrations/0023-enemy-template-versions.js';
 import { migration0011 } from './migrations/0011-device-request-review.js';
 import { migration0012 } from './migrations/0012-campaign-admission.js';
 import { migration0013 } from './migrations/0013-campaign-lobby.js';
@@ -115,7 +116,7 @@ function withBatchHash(value: Omit<NetworkPreparedBatch, 'batchSha256'>): Networ
   };
   return { ...body, batchSha256: sha(canonical(body)) };
 }
-const open = (filename = ':memory:', legacy: boolean | 'SCHEMA22' = false) => {
+const open = (filename = ':memory:', legacy: boolean | 'SCHEMA22' | 'SCHEMA23' = false) => {
   const db = legacy ? new Database(filename) : openPersistenceDatabase(filename);
   if (legacy) {
     configurePersistenceDatabase(db);
@@ -130,7 +131,7 @@ const open = (filename = ':memory:', legacy: boolean | 'SCHEMA22' = false) => {
       migration0008,
       migration0009,
       migration0010,
-      ...(legacy === 'SCHEMA22'
+      ...(legacy === 'SCHEMA22' || legacy === 'SCHEMA23'
         ? [
             migration0011,
             migration0012,
@@ -144,6 +145,7 @@ const open = (filename = ':memory:', legacy: boolean | 'SCHEMA22' = false) => {
             migration0020,
             migration0021,
             migration0022,
+            ...(legacy === 'SCHEMA23' ? [migration0023] : []),
           ]
         : []),
     ]);
@@ -153,7 +155,7 @@ const open = (filename = ':memory:', legacy: boolean | 'SCHEMA22' = false) => {
 };
 function setup(
   filename = ':memory:',
-  legacy: boolean | 'SCHEMA22' = false,
+  legacy: boolean | 'SCHEMA22' | 'SCHEMA23' = false,
   existing?: { db: Database.Database; draftId: string },
 ) {
   const db = existing?.db ?? open(filename, legacy),
@@ -372,7 +374,8 @@ function submission(
     schemaVersion === 20 ||
     schemaVersion === 21 ||
     schemaVersion === 22 ||
-    schemaVersion === 23
+    schemaVersion === 23 ||
+    schemaVersion === 24
       ? { schemaVersion: 2 as const, localControllerSeatId: randomUUID() }
       : {}),
     requestId,
@@ -2273,8 +2276,8 @@ describe('hosted network session and addressed request journal', () => {
       ),
     ).toThrow('STALE_REVISION');
   });
-  it.each([22, 23] as const)('rejects a v1 batch on schema %s without writes', (version) => {
-    const p = setup(':memory:', version === 22 ? 'SCHEMA22' : false),
+  it.each([22, 23, 24] as const)('rejects a v1 batch on schema %s without writes', (version) => {
+    const p = setup(':memory:', version === 22 ? 'SCHEMA22' : version === 23 ? 'SCHEMA23' : false),
       opening = connect(p),
       request = submission(p, opening);
     expect(p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({

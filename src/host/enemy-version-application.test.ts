@@ -1,4 +1,5 @@
 import { ENEMY_AUTHORING_SOURCE_SEALS } from './enemy-authoring-source-seals.js';
+import { readAppliedMigrationVersion } from '../persistence/migrations/index.js';
 import { CUSTOM_MONSTER_PLACEHOLDER } from '@shared/custom-monster.js';
 import {
   ENEMY_PLACEHOLDER,
@@ -310,8 +311,17 @@ for (const [folder, file, kind, variant] of [
             ),
           ).toBe(true);
           expect(db.prepare('SELECT MAX(version) n FROM schema_migration').get()).toEqual({
-            n: 23,
+            n: 24,
           });
+          expect(
+            structural.events.some(
+              (event) => event.view.enemyAuthoring?.monsterStatRoll !== undefined,
+            ),
+          ).toBe(false);
+          // No #260 context exists here: retain the explicit, intact23 -> missing23 source boundary.
+          expect(db.prepare('DELETE FROM schema_migration WHERE version=24').run().changes).toBe(1);
+          expect(readAppliedMigrationVersion(db)).toBe(23);
+          expect(readCurrent().viewOrNull?.formId).toBe('GM-001');
           expect(db.prepare('DELETE FROM schema_migration WHERE version=23').run().changes).toBe(1);
           expect(db.prepare('SELECT MAX(version) n FROM schema_migration').get()).toEqual({
             n: 22,
@@ -458,9 +468,11 @@ for (const [folder, file, kind, variant] of [
               }),
             );
             const manual = enemyAuthoringProjectionValue(app().project().base.roleFilteredPayload);
-            expect(isEnemyAuthoringForm('ENM-018')).toBe(false);
-            expect(isEnemyAuthoringForm('ENM-019')).toBe(false);
-            expect(app().project().base.availableActionKeys).not.toContain('ENM-017::CTA::006');
+            expect(isEnemyAuthoringForm('ENM-018')).toBe(true);
+            expect(isEnemyAuthoringForm('ENM-019')).toBe(true);
+            expect(app().project().base.availableActionKeys.includes('ENM-017::CTA::006')).toBe(
+              kind === 'CUSTOM_MONSTER',
+            );
             expect(app().project().base.availableActionKeys).not.toContain('ENM-017::CTA::007');
             for (const key of ['ENM-017::CTA::006', 'ENM-017::CTA::007'] as const) {
               const bytes = db.serialize();
@@ -485,17 +497,36 @@ for (const [folder, file, kind, variant] of [
               '$.rollCommandId',
             );
             expect(rollCommandId).toBe('UI-CMD-MONSTER-STATS-ROLL-ONCE');
-            expect(ENEMY_AUTHORING_WORKFLOWS).not.toContain(rollCommandId);
+            expect(ENEMY_AUTHORING_WORKFLOWS).toContain(rollCommandId);
+            const rollAttempt = manual.context.attemptOrNull,
+              currentBase = manual.context.versionAttempt?.origin.base;
+            if (rollAttempt === null || currentBase === undefined)
+              throw new Error('Missing actual current version binding');
             const noRoll = {
               ...request('VERSION_CONFIGURATION', {
                 operation: 'SET_REASON',
                 reason: 'Недоступный бросок',
               }),
               workflowCommandId: rollCommandId,
+              payload: {
+                campaignId: scope.campaignId,
+                creationAttemptId: rollAttempt.attemptId,
+                expectedAttemptRevision: rollAttempt.revision,
+                attemptId: rollAttempt.attemptId,
+                monsterDraftId: rollAttempt.attemptId,
+                originFormId: 'ENM-017',
+                returnFormId: 'ENM-017',
+                versionBindingOrNull: {
+                  templateId: currentBase.templateId,
+                  expectedCurrentVersion: currentBase.version,
+                },
+              },
             };
-            const beforeRoll = db.serialize();
-            expect(() => app().command(noRoll)).toThrow('UNRECOGNIZED');
+            const beforeRoll = db.serialize(),
+              beforeSamples = vi.mocked(randomInt).mock.calls.length;
+            expect(() => app().command(noRoll)).toThrow('INVALID_INPUT');
             expect(callsFor(noRoll)).toBe(0);
+            expect(vi.mocked(randomInt).mock.calls.length).toBe(beforeSamples);
             expect(db.serialize()).toEqual(beforeRoll);
             if (manual.context.attemptOrNull?.kind === 'CUSTOM_MONSTER') {
               const stats = manual.context.attemptOrNull.statsOrNull;

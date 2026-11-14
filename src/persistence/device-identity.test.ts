@@ -1,3 +1,4 @@
+import { migration0024 } from './migrations/0024-monster-stat-roll-once.js';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -74,7 +75,7 @@ describe('device identity migration', () => {
       )
       .run('preserved', 'DRAFT', '{ "source": "v2" }');
 
-    expect(applyMigrations(database)).toBe(23);
+    expect(applyMigrations(database)).toBe(24);
     expect(
       database.prepare('SELECT version, name FROM schema_migration ORDER BY version').all(),
     ).toEqual([
@@ -101,6 +102,7 @@ describe('device identity migration', () => {
       { version: 21, name: 'sentient-enemy-v1' },
       { version: 22, name: 'custom-monster-v1' },
       { version: 23, name: 'enemy-template-versions' },
+      { version: migration0024.version, name: migration0024.name },
     ]);
     expect(
       database
@@ -173,7 +175,7 @@ describe('device identity store', () => {
     databases.splice(databases.indexOf(firstDatabase), 1);
     const restartedDatabase = new Database(carrier);
     configurePersistenceDatabase(restartedDatabase);
-    expect(applyMigrations(restartedDatabase)).toBe(23);
+    expect(applyMigrations(restartedDatabase)).toBe(24);
     databases.push(restartedDatabase);
 
     expect(bootstrapDeviceIdentity(restartedDatabase)).toBe(firstBootstrap);

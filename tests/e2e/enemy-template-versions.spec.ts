@@ -357,7 +357,7 @@ for (const kind of ['SENTIENT', 'CUSTOM_MONSTER'] as const) {
       const confirmed = current().context.versionAttempt?.configurationConfirmation;
       expect(confirmed?.input).toEqual(preview.input);
       expect(attempt().compositionOrNull).toBeNull();
-      await expect(button(page, 'Однократная генерация характеристик')).toHaveCount(
+      await expect(page.locator('[data-atlas-action-key="ENM-017::CTA::006"]')).toHaveCount(
         kind === 'CUSTOM_MONSTER' ? 1 : 0,
       );
       if (kind === 'SENTIENT') {
@@ -379,7 +379,7 @@ for (const kind of ['SENTIENT', 'CUSTOM_MONSTER'] as const) {
         await button(page, 'Имущество и экипировка').click();
         await publish('Применить поле к текущей копии');
       } else {
-        await expect(button(page, 'Однократная генерация характеристик')).toBeDisabled();
+        await expect(page.locator('[data-atlas-action-key="ENM-017::CTA::006"]')).toBeEnabled();
         await button(page, 'Ручные характеристики').click();
         await page.getByLabel('Базовая S', { exact: true }).fill('21');
         await publish('Применить поле к текущей копии');

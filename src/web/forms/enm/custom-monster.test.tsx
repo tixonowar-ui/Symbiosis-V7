@@ -1,13 +1,14 @@
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { JsonObject } from '@shared/wire-protocol.js';
+import type { JsonObject, CommandReceipt } from '@shared/wire-protocol.js';
 import { wireCodecPrimitives as w } from '@shared/wire-codec.js';
 import { enemyCompositionReaders as r } from '@shared/enemy-composition-codec.js';
 import {
   ENEMY_AUTHORING_WORKFLOWS,
   enemyAuthoringActions,
   enemyAuthoringProjectionValue,
+  enemyWorkflowRequestValue,
 } from '@shared/enemy-authoring.js';
 import type { CustomMonsterProjection } from '@shared/custom-monster-presentation.js';
 import {
@@ -17,7 +18,17 @@ import {
 } from '../../ws-client.js';
 import { GM_CONTEXT_STORAGE_KEY } from '../cmp/campaign-create.js';
 import { EnemyAuthoringContent } from './enemy-authoring-content.js';
-import { createCustomMonsterClientFixture } from '../../../../tests/fixtures/custom-monster-client.js';
+import {
+  createCustomMonsterClientFixture,
+  loadMonsterStatRollClientSnapshots,
+} from '../../../../tests/fixtures/custom-monster-client.js';
+import {
+  enemyBrowserWorkflow,
+  enemyBrowserReceipt,
+  enemyBrowserDestination,
+} from './enemy-authoring-application.js';
+import { App } from '../../app.js';
+import { MONSTER_STAT_ROLL_ORDER } from '@shared/monster-stat-roll.js';
 
 class Socket {
   static readonly CONNECTING = 0;
@@ -68,6 +79,7 @@ function mount(p: CustomMonsterProjection) {
   const container = document.createElement('div'),
     root = createRoot(container);
   const onValue = vi.fn((_value: JsonObject | null) => undefined),
+    onMonsterDraft = vi.fn((_value: JsonObject | null) => undefined),
     onPrepare = vi.fn((_value: JsonObject) => ({ ok: true }));
   document.body.append(container);
   roots.push({ root, container });
@@ -76,11 +88,12 @@ function mount(p: CustomMonsterProjection) {
       createElement(EnemyAuthoringContent, {
         projection: p as unknown as JsonObject,
         onValue,
+        onMonsterDraft,
         onPrepare,
       }),
     ),
   );
-  return { container, onValue, onPrepare };
+  return { container, onValue, onPrepare, onMonsterDraft };
 }
 function frame(p: CustomMonsterProjection, reason: string, correlationId: string) {
   return {
@@ -147,7 +160,7 @@ async function connect(p: CustomMonsterProjection, ownerDeviceId: string) {
   });
   socket.message(frame(p, 'RECONNECT', request.reconnectRequestId));
   expect(states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId: p.formId } });
-  return { socket, states };
+  return { socket, states, connection };
 }
 it('uses actual source monster controls, explicit empty consent, and rejects malformed/foreign-kind packets before replacing the real complete sheet', async () => {
   // This individual integration body includes the real host/source/SQLite preparation measured at 7.1s.
@@ -306,6 +319,232 @@ it('uses actual source monster controls, explicit empty consent, and rejects mal
     expect(states.filter((state) => state.kind === 'ready').at(-1), label).toEqual(before);
   }
 }, 30_000);
+
+it('binds actual two-origin roll receipts and real App draft-to019 controls, retains invalid local input, and refuses malformed child wire projections', async () => {
+  const raw = r.record(await loadMonsterStatRollClientSnapshots(), '$.hostSnapshots');
+  const snapshots = r.record(raw['statRollSnapshots'], '$.statRollSnapshots');
+  expect(snapshots['immutableVersionRowsUnchanged']).toBe(true);
+  const ownerDeviceId = r.uuid(raw['ownerDeviceId'], '$.ownerDeviceId');
+  const projection = (value: unknown) => {
+    const p = enemyAuthoringProjectionValue(value);
+    if (p.kind !== 'CUSTOM_MONSTER_AUTHORING')
+      throw new Error('Expected actual host monster projection');
+    return p;
+  };
+  const vector = (value: CustomMonsterProjection) => ({
+    stateRevision: value.stateRevision,
+    projectionRevision: value.projectionRevision,
+    actorVisibilityRevision: value.actorVisibilityRevision,
+  });
+  const receiptValue = (value: unknown): CommandReceipt => {
+    const row = r.exact(value, 'commandId receiptId result revisions', '$.hostReceipt'),
+      revisions = r.exact(
+        row['revisions'],
+        'stateRevision projectionRevision actorVisibilityRevision',
+        '$.revisions',
+      );
+    return {
+      commandId: r.uuid(row['commandId'], '$.commandId'),
+      receiptId: r.uuid(row['receiptId'], '$.receiptId'),
+      result: structuredClone(w.jsonObject(row['result'], '$.result')),
+      revisions: {
+        stateRevision: r.integer(revisions['stateRevision'], '$.stateRevision', 0),
+        projectionRevision: r.integer(revisions['projectionRevision'], '$.projectionRevision', 0),
+        actorVisibilityRevision: r.integer(
+          revisions['actorVisibilityRevision'],
+          '$.actorVisibilityRevision',
+          0,
+        ),
+      },
+    };
+  };
+  const json = (value: unknown) => structuredClone(w.jsonObject(value, '$.unit'));
+  for (const kind of ['creation', 'version'] as const) {
+    const roll = r.record(snapshots[kind + 'Roll'], '$.roll'),
+      source = projection(roll['source']),
+      destination = projection(roll['destination']),
+      request = enemyWorkflowRequestValue(roll['request']),
+      receipt = receiptValue(roll['receipt']);
+    const actionKey = kind === 'creation' ? 'ENM-018::CTA::002' : 'ENM-018::CTA::005';
+    expect(source.formId).toBe('ENM-018');
+    expect(enemyBrowserWorkflow(source, actionKey, request.commandId, null)).toEqual(request);
+    expect(enemyBrowserReceipt(receipt, request, source)).toEqual(receipt);
+    expect(
+      enemyBrowserDestination(
+        {
+          formId: destination.formId,
+          projection: json(destination),
+          revisions: vector(destination),
+        },
+        source,
+        receipt,
+      ),
+    ).toBe(true);
+    for (const key of ['massKg', 'ageYears', 'baseMaxHP'] as const) {
+      const bad = structuredClone(destination),
+        state = bad.context.monsterStatRoll,
+        generation = bad.statGeneration;
+      if (state?.draftOrNull == null || generation == null)
+        throw new Error('Expected actual pending roll draft');
+      const changed = key === 'massKg' ? 6.1 : 2;
+      Reflect.set(state.draftOrNull, key, changed);
+      Reflect.set(generation.candidateStats, key, changed);
+      Reflect.set(generation, 'requiresBodyAcceptance', true);
+      // The shape is deliberately coherent. Destination correlation must preserve ALL original metadata.
+      expect(() => enemyAuthoringProjectionValue(bad)).not.toThrow();
+      expect(
+        enemyBrowserDestination(
+          { formId: bad.formId, projection: json(bad), revisions: vector(bad) },
+          source,
+          receipt,
+        ),
+      ).toBe(false);
+    }
+    const evidence = projection(snapshots[kind + 'Receipt']),
+      rendered = mount(evidence).container;
+    expect(evidence.formId).toBe('ENM-019');
+    expect(rendered.querySelector('table caption')?.textContent).toBe(
+      'Исходный бросок и текущие значения',
+    );
+    expect(rendered.querySelectorAll('table tbody tr')).toHaveLength(7);
+    expect(rendered.querySelector('input')).toBeNull();
+    expect(evidence.statGeneration?.randomReceiptOrNull).toEqual(
+      destination.statGeneration?.randomReceiptOrNull,
+    );
+    const connected = await connect(source, ownerDeviceId);
+    expect(connected.connection.requestFormAction(actionKey)).toEqual({ ok: true });
+    const sent = connected.socket.sent
+      .map((value) => w.jsonObject(JSON.parse(value), '$.sent'))
+      .filter((value) => value['messageType'] === 'command.request');
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({
+      workflowCommandId: 'UI-CMD-MONSTER-STATS-ROLL-ONCE',
+      payload: request.payload,
+    });
+    connected.connection.disconnect();
+    for (const p of [source, evidence]) {
+      const { socket, states, connection } = await connect(p, ownerDeviceId),
+        before = states.at(-1),
+        bad = structuredClone(p);
+      Reflect.set(bad, 'projectionRevision', bad.projectionRevision + 1);
+      if (bad.statGeneration == null) throw new Error('Missing actual child generation');
+      Reflect.set(bad.statGeneration.candidateStats.baseStats, 'S', 36);
+      socket.message(frame(bad, 'HOST_SYSTEM_EVENT', 'network-gm-view:' + 'a'.repeat(64)));
+      expect(states.at(-1)).toMatchObject({
+        kind: 'protocol-error',
+        snapshot: { formId: p.formId },
+      });
+      expect(states.filter((state) => state.kind === 'ready').at(-1)).toEqual(before);
+      connection.disconnect();
+    }
+    const p = destination;
+    vi.stubGlobal('crypto', {
+      getRandomValues: (values: Uint8Array | Uint32Array) => {
+        for (let index = 0; index < values.length; index++) values[index] = index + 1;
+        return values;
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(JSON.stringify({ deviceId: ownerDeviceId }), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+        ),
+      ),
+    );
+    vi.stubGlobal('WebSocket', Socket);
+    window.sessionStorage.setItem(GM_CONTEXT_STORAGE_KEY, p.contextId);
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    const container = document.createElement('div'),
+      root = createRoot(container);
+    document.body.append(container);
+    try {
+      act(() => root.render(createElement(App)));
+      await act(async () => new Promise<void>((resolve) => setTimeout(resolve, 0)));
+      const socket = Socket.instances.at(-1);
+      if (socket === undefined) throw new Error('App socket absent');
+      act(() => socket.open());
+      const reconnect = w.jsonObject(JSON.parse(socket.sent[0] ?? ''), '$.reconnect');
+      act(() => {
+        socket.message({
+          messageType: 'session.reconnect.capabilities',
+          protocolVersion: 2,
+          reconnectRequestId: reconnect['reconnectRequestId'],
+          executableWorkflowCommandIds: ENEMY_AUTHORING_WORKFLOWS,
+          revisions: vector(p),
+        });
+        socket.message(frame(p, 'RECONNECT', w.string(reconnect['reconnectRequestId'], '$.id')));
+      });
+      if (kind === 'version') {
+        const edit = [...container.querySelectorAll('button')].find(
+          (button) => button.textContent === 'Ручные характеристики',
+        );
+        if (edit === undefined) throw new Error('Actual version stats control absent');
+        act(() => edit.click());
+      }
+      for (const key of MONSTER_STAT_ROLL_ORDER)
+        expect(
+          container.querySelector<HTMLInputElement>(`input[aria-label="Базовая ${key}"]`)?.value,
+        ).toBe(
+          String(destination.statGeneration?.randomReceiptOrNull?.originalGeneratedStats[key]),
+        );
+      const input = container.querySelector<HTMLInputElement>('input[aria-label="Базовая S"]'),
+        descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+      if (input === null || descriptor?.set === undefined)
+        throw new Error('Actual stats input absent');
+      const edit = (text: string) =>
+        act(() => {
+          descriptor.set?.call(input, text);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+      const control = () => {
+        const button = container.querySelector<HTMLButtonElement>(
+          `[data-atlas-action-key="${kind === 'creation' ? 'ENM-012::CTA::002' : 'ENM-017::CTA::007'}"]`,
+        );
+        if (button === null) throw new Error('Actual receipt control absent');
+        return button;
+      };
+      const commands = () =>
+        socket.sent
+          .map((value) => w.jsonObject(JSON.parse(value), '$.sent'))
+          .filter((value) => value['messageType'] === 'command.request');
+      edit('36');
+      act(() => control().click());
+      expect(commands()).toEqual([]);
+      expect(input.value).toBe('36');
+      expect(container.textContent).toContain('Проверьте введённые характеристики');
+      edit('35');
+      act(() => control().click());
+      const sent = commands();
+      expect(sent).toHaveLength(1);
+      expect(sent[0]).toMatchObject({
+        workflowCommandId: 'UI-CMD-ENEMY-DRAFT-PATCH',
+        expectedRevisions: vector(p),
+        payload: {
+          campaignId: p.campaignId,
+          creationAttemptId: p.context.attemptOrNull?.attemptId,
+          expectedAttemptRevision: p.context.attemptOrNull?.revision,
+          stage: 'MONSTER_STAT_DRAFT',
+          data: {
+            sourceActionKey: kind === 'creation' ? 'ENM-012::CTA::002' : 'ENM-017::CTA::007',
+            draftOrNull: {
+              baseStats: { ...destination.statGeneration?.candidateStats.baseStats, S: 35 },
+              massKg: destination.statGeneration?.candidateStats.massKg,
+              ageYears: destination.statGeneration?.candidateStats.ageYears,
+              baseMaxHP: destination.statGeneration?.candidateStats.baseMaxHP,
+            },
+          },
+        },
+      });
+    } finally {
+      act(() => root.unmount());
+      container.remove();
+    }
+  }
+}, 120_000); // One actual Node host/SQLite producer reused for both origins; no shared hook/default or LAN claim.
 
 it('renders actual saved V1 absence without accepting a configuration object or a summary on another form', async () => {
   const source = await createCustomMonsterClientFixture(false, { captureSavedV1: true });

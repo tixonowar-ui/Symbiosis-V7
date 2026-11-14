@@ -1,6 +1,7 @@
 import type { JsonObject } from '@shared/wire-protocol.js';
 import { EnemyAuthoringContent } from './forms/enm/enemy-authoring-content.js';
 import { ENEMY_STAGE_FORMS, isEnemyAuthoringForm } from '@shared/enemy-authoring.js';
+import { MONSTER_STAT_DRAFT_ACTIONS } from '@shared/monster-stat-roll.js';
 import { EnemyLibraryContent } from './forms/enm/enemy-library-content.js';
 import { isEnemyLibraryForm } from '@shared/enemy-library.js';
 import {
@@ -2705,6 +2706,7 @@ export function App(): ReactElement {
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
   const connectionRef = useRef<ProjectionConnection | null>(null);
   const enemyInputRef = useRef<JsonObject | null>({});
+  const enemyStatsDraftRef = useRef<JsonObject | null>(null);
 
   useEffect(() => {
     const connection = connectProjection(
@@ -2892,6 +2894,9 @@ export function App(): ReactElement {
                 }}
                 onValue={(data) => {
                   enemyInputRef.current = data;
+                }}
+                onMonsterDraft={(data) => {
+                  enemyStatsDraftRef.current = data;
                 }}
                 onPrepare={(data) => {
                   const result = connectionRef.current?.submitEnemyStage(
@@ -3501,6 +3506,23 @@ export function App(): ReactElement {
               }
               formId={snapshot.formId}
               onAction={(selection) => {
+                if (Object.hasOwn(MONSTER_STAT_DRAFT_ACTIONS, selection.actionKey)) {
+                  const draft = enemyStatsDraftRef.current;
+                  if (draft === null) {
+                    setActionNotice(
+                      'Проверьте введённые характеристики и сохраните или отмените остальные несохранённые изменения.',
+                    );
+                    return;
+                  }
+                  const result = connectionRef.current?.submitEnemyStage('MONSTER_STAT_DRAFT', {
+                    sourceActionKey: selection.actionKey,
+                    draftOrNull: draft,
+                  });
+                  setActionNotice(
+                    result?.ok ? null : (result?.detail ?? 'Переход к генерации недоступен.'),
+                  );
+                  return;
+                }
                 const enemyVersionCommit =
                   snapshot.formId === 'ENM-017' && selection.actionKey === 'ENM-017::CTA::004';
                 if (enemyVersionCommit && enemyInputRef.current === null) {
