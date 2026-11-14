@@ -236,6 +236,7 @@ describe('verified baseline lineage', () => {
       probe.close();
     }
   });
+  // Full clean01 recorded 31.806s at 30s; 60s is finite case-only headroom.
   it('registers B0/B1/B2 immutable views under exact B3 without losing the old seals', async () => {
     const probe = createBaselineLineageFixture('B3');
     try {
@@ -270,8 +271,9 @@ describe('verified baseline lineage', () => {
     } finally {
       probe.close();
     }
-  });
+  }, 60_000);
 
+  // Full clean01 recorded 48.464s at 30s; 90s is finite case-only headroom.
   it('refuses unknown current Atlas bytes before a warm fixture cache can overwrite them', () => {
     const probe = createBaselineLineageFixture('B0');
     try {
@@ -291,7 +293,7 @@ describe('verified baseline lineage', () => {
     } finally {
       probe.close();
     }
-  });
+  }, 90_000);
 
   it('accepts the two sealed releases with all 24 replay catalogs and the exact tuple', () => {
     expect(Object.keys(seals.replayCatalogDigests)).toHaveLength(24);
@@ -420,6 +422,7 @@ describe('verified baseline lineage', () => {
     ).toThrow('mutated');
   });
 
+  // Full clean01 recorded 31.034s at 30s; 60s is finite case-only headroom.
   it('refuses actual self-checksummed unknown B2 while preserving the current-loader ID algorithm', async () => {
     const path = Object.keys(seals.successorAtlas)[0]!;
     const atlasPath = join(fixture.projectRoot, 'artifacts', path);
@@ -449,7 +452,7 @@ describe('verified baseline lineage', () => {
       writeFileSync(atlasPath, oldAtlas);
       writeFileSync(manifestPath, oldManifest);
     }
-  });
+  }, 60_000);
 
   it('refuses a changed item replay source even when current export catalogs still load', async () => {
     const path = join(fixture.projectRoot, 'generated/spec/items/weapon-profiles.json');

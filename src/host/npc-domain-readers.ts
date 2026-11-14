@@ -2502,7 +2502,7 @@ export function createNpcOrdinaryDomainReaders(
     evidence: NpcVersionDerivationEvidence,
     calendar: NpcCalendarReadContext,
     pending: NpcPendingCommitEvidence | null,
-  ) {
+  ): ReturnType<typeof poisonReaders.context> | null {
     if (
       !Object.hasOwn(
         s.object(s.object(evidence.current.openAttempt.values)['initialState']),
@@ -2515,10 +2515,36 @@ export function createNpcOrdinaryDomainReaders(
       evidence.committedOrNull === null
         ? calendar
         : historicalCalendar(evidence.committedOrNull.operation, calendar);
-    return poisonReaders.context(evidence.current.openAttempt, current, {
-      operationId: evidence.target.commitOperationId,
-      committedAt: time.committedAt,
-    });
+    const read = () =>
+      poisonReaders.context(evidence.current.openAttempt, current, {
+        operationId: evidence.target.commitOperationId,
+        committedAt: time.committedAt,
+      });
+    if (evidence.previousOrNull === null) return read();
+    // Nested coating/mode reads still check their current SQL and original clocks.
+    // Keep only this invocation's checked saved predecessor available until they return.
+    const source = initialStateSourceBasis(evidence.current.openAttempt, current);
+    equal(
+      source.evidence.current.openAttempt,
+      evidence.current.openAttempt,
+      'poison owner attempt',
+    );
+    equal(
+      source.evidence.previousOrNull?.record ?? null,
+      evidence.previousOrNull.record,
+      'poison owner saved predecessor',
+    );
+    const completed = source.completedPrefix ?? fail('missing checked poison owner predecessor');
+    assertCompletedInventoryPrefix(completed);
+    const parent = completedInventoryPrefix;
+    completedInventoryPrefix = completed;
+    try {
+      const result = read();
+      assertCompletedInventoryPrefix(completed);
+      return result;
+    } finally {
+      completedInventoryPrefix = parent;
+    }
   }
   type SnapshotPoisonRead = NonNullable<ReturnType<typeof poisonState>> & {
     readonly evidence: NpcVersionDerivationEvidence;

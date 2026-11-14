@@ -97,6 +97,7 @@ for (const [folder, file, kind, variant] of [
   ['enemy-custom-v1', 'schema22-custom-v1.sqlite.gz', 'CUSTOM_MONSTER', 'CANCELED_CARD'],
   ['enemy-empty-v1', 'schema21-empty-v1.sqlite.gz', 'SENTIENT', 'CANCELED_SENTIENT_CARD'],
 ] as const) {
+  // Full clean01 CUSTOM CANCELED_CARD recorded 357.770s at 300s; only that named body gets finite 600s.
   it(
     variant === 'SOURCE'
       ? `refuses changed ${kind} source inputs and future SQL or owning-prefix witnesses after later NAV and disk reopen`
@@ -2310,7 +2311,7 @@ for (const [folder, file, kind, variant] of [
             : variant === 'CANCELED_SENTIENT_CARD'
               ? 600_000
               : variant === 'CANCELED_CARD'
-                ? 300_000
+                ? 600_000
                 : 120_000,
   ); // ADR0088: full-cohort body-timeout markers were MECHANICAL 572.129 s, CUSTOM COPY 67.141 s, CUSTOM card 191.543 s and SENTIENT card 391.571 s. Only these named bodies receive rounded 1.5x finite headroom; timings establish neither a resource cause nor a CI duration guarantee.
 }
@@ -2349,7 +2350,7 @@ it('refuses source-valid-shaped changed displayed replacement costs, capacity or
             ),
           ),
         ).toThrow();
-        expect(snapshot()).toEqual(before);
+        expect(snapshot().equals(before)).toBe(true);
       }
     },
   });

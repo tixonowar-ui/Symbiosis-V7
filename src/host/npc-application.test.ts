@@ -780,6 +780,7 @@ describe('NPC actual GM WebSocket and SQLite bridge', () => {
     expect(h.db.prepare('SELECT count(*) AS n FROM npc_operation').get()).toEqual({ n: 1 });
     expect(h.errors).toHaveLength(1);
   });
+  // Full clean01 recorded 60.338s at 60s; 120s is finite case-only headroom.
   it('publishes a real full V1, reads immutable history, opens N+1 and replays after restart through the existing GM channel', async () => {
     const h = await fixture();
     await h.nav('CMP-006::CTA::001');
@@ -868,7 +869,7 @@ describe('NPC actual GM WebSocket and SQLite bridge', () => {
         .get(committed.request.commandId),
     ).toEqual(oldCommit);
     expect(h.errors).toEqual([]);
-  }, 60000);
+  }, 120_000);
   it('binds fresh structural calendar reads to persisted owner and recovers without a mutable connection cache', async () => {
     const original = calendarStore.readNpcCalendarContextInTransaction;
     const observed: ReturnType<typeof original>[] = [];

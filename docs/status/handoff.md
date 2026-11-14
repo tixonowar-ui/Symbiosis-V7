@@ -30,6 +30,28 @@ poll groups,0 вне них; все восемь completion tails достигн
 CI, protected merge и actual delivery. Полный авторский verify не запускался.
 Артефакты/CHECKSUMS/generated/ADR/CI/defaults/hooks/workers/retries не менялись.
 
+Первый clean01 на `6710a491` завершился FAILED:7654 PASS/14 FAIL в318 files,
+Vitest7862,63с/verify8108,312с. Сохранены13 body timeouts, stale protocol oracle
+и отдельный afterAll EPERM; длительности не установили общую ресурсную причину.
+Последующая единственная production-коррекция ставит existing checked NPC
+poison predecessor frame вокруг одного N+1 poisonState owner window: свежие
+SQL/history/callback проверки и finally restore сохранены, V1 branch не менялась.
+Дополнительно уточнены закрытый protocol oracle, один native full-Buffer equality
+и конечные именованные body budgets; общие настройки и исходные guard assertions
+сохранены. Новая N+1 regression, прежние controls, displayed-cost и42 budget cases
+имеют отдельные PASS scopes; фильтрованные cases ими не засчитываются.
+
+Весь исходный replacement-case с неизменённым body5400с прошёл1 completed PASS
+за2913,6833632с (48м33,683с): V3/archive/restore/first-publication, immutable
+V1/V2, native Buffer reopen и exact receipt replay реально достигнуты. Root52
+независимо проверил raw/source; natural exit0, без cap/refusal/forced cleanup,
+финальные owned/unclaimed/observers пусты. Это не новый общий verify или CI;
+новый исправленный committed SHA и свежий независимый clean5/CI ещё требуются.
+Непарный bounded A/B и97 samples не объявлены универсальным ускорением или
+истинными пиками; наличие или отсутствие утечки памяти они не устанавливают.
+Текущие77 candidate paths
+до нового freeze не отправлялись. #261 не начинать до фактической поставки260.
+
 ## Исторический снимок runtime #259 до protected merge PR292
 
 Source #288 фактически поставлен PR289: source commit

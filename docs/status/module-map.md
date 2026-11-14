@@ -17,6 +17,19 @@ Root независимо принял scoped raw report/steps/wire/четыре
 verify/E2E/clean5/CI окончательного SHA. [Контракт и пределы доказательств](monster-stat-roll-once-260.md).
 #260 остаётся открытой; #261 ещё не начата, #188/#113 остаются открытыми.
 
+Первый кандидат `6710a491` сохранил FAILED clean01:7654 PASS/14 FAIL,
+318 files;13 body timeouts, stale protocol oracle и отдельный cleanup EPERM.
+Последующая коррекция ограничивает existing checked NPC poison predecessor
+одним N+1 owner window, сохраняя fresh SQL/history/callback guards и finally
+restoration. Один Buffer assertion теперь сравнивает полные serialized bytes
+через native equals; protocol oracle и конечные именные body budgets уточнены,
+общие настройки не менялись. Scoped12 protocol,1 новый N+1,5 прежних controls,
+1 displayed-cost и42 budget cases прошли в отдельных областях. Весь исходный
+replacement-case прошёл за48м33,683с при прежнем body5400с; root подтвердил
+полные native-reopen/replay tails и пустые финальные process lists.
+Новый исправленный SHA, независимый clean5/CI и поставка #260 ещё ожидаются;
+исходный clean01 остаётся FAIL. Подробные границы — в статусе выше.
+
 ## Фактическая поставка #259 — PR292
 
 Protected squash дал main `fe61e291635f30cf0f5437e9692d8f92f896104f`, tree

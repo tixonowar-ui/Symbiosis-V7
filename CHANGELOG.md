@@ -9,6 +9,17 @@
 
 ### Исправлено
 
+- **2026-11-14, последующая проверка #260:** сохранён FAILED clean01 кандидата
+  `6710a491`:7654 PASS/14 FAIL и отдельный cleanup error. NPC poison predecessor
+  переиспользуется только в проверенном N+1 owner window со свежими SQL/history/
+  callback guards и finally restore. Один serialized Buffer matcher заменён
+  полным native byte equality; закрытый protocol oracle и именные конечные body
+  budgets уточнены, общие настройки сохранены. Целевые scopes прошли отдельно;
+  весь исходный replacement-case прошёл за48м33,683с при прежнем body5400с,
+  с native reopen/replay и чистым завершением процессов. Новый final SHA,
+  независимый clean5/CI и поставка ещё ожидаются.
+  [Исходные отказы, измерения и пределы](docs/status/monster-stat-roll-once-260.md).
+
 - **2026-11-14, проверки #259:** после сохранённого FAILED clean01 уточнены
   registry23/capability/legacy test oracles и строгий отказ повреждённого prefix.
   Ровно пять именных body budgets получили измеренный конечный запас; production

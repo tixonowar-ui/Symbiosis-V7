@@ -25,7 +25,7 @@ describe('host protocol vocabulary implemented presentation support', () => {
     vocabulary = await loadProtocolVocabulary(PROJECT_ROOT);
   });
 
-  it('publishes only the exact implemented ENM017 campaign route and keeps future monster forms closed', () => {
+  it('publishes exact ENM017 and monster child campaign routes with inherited bindings and source actions', () => {
     const campaignId = '00000000-0000-4000-8000-000000000001';
     const route = '/master/campaigns/:campaignId/enemy-catalog/enm-017';
     const inherited = [{ parameterIndex: 0, source: 'inherited' as const, value: campaignId }];
@@ -74,10 +74,51 @@ describe('host protocol vocabulary implemented presentation support', () => {
     expect(
       vocabulary.isPresentedForm('ENM-017', 'screen', route.replace('017', '016'), inherited),
     ).toBe(false);
-    for (const id of ['ENM-018', 'ENM-019'] as const)
-      expect(
-        vocabulary.isPresentedForm(id, 'screen', route.replace('017', id.slice(-3)), inherited),
-      ).toBe(false);
+    for (const [id, actions] of [
+      ['ENM-018', ['001', '002', '003', '004', '005', '006']],
+      ['ENM-019', ['001', '002']],
+    ] as const) {
+      const childRoute = route.replace('017', id.slice(-3));
+      const childFrame: ProjectionSnapshotV2Message = {
+        ...frame,
+        presentation: {
+          ...frame.presentation,
+          base: {
+            ...frame.presentation.base,
+            formId: id,
+            routeTemplate: childRoute,
+            availableActionKeys: [`${id}::CTA::${actions[0]}`],
+          },
+        },
+      };
+      expect(vocabulary.isPresentedForm(id, 'screen', childRoute, inherited)).toBe(true);
+      expect(encodeHostMessageV2(childFrame, vocabulary).ok).toBe(true);
+      expect(vocabulary.isPresentedForm(id, 'dialog', childRoute, inherited)).toBe(false);
+      expect(vocabulary.isPresentedForm(id, 'screen', route, inherited)).toBe(false);
+      for (const binding of [
+        [],
+        [{ parameterIndex: 1, source: 'inherited' as const, value: campaignId }],
+        [{ parameterIndex: 0, source: 'client-selected' as const, value: campaignId }],
+        [{ parameterIndex: 0, source: 'inherited' as const, value: 'navigation-unbound' }],
+      ]) {
+        expect(vocabulary.isPresentedForm(id, 'screen', childRoute, binding)).toBe(false);
+        expect(
+          encodeHostMessageV2(
+            {
+              ...childFrame,
+              presentation: {
+                ...childFrame.presentation,
+                base: { ...childFrame.presentation.base, routeBindings: binding },
+              },
+            },
+            vocabulary,
+          ).ok,
+        ).toBe(false);
+      }
+      for (const suffix of actions)
+        expect(vocabulary.isFormActionKey(id, id + '::CTA::' + suffix)).toBe(true);
+      expect(vocabulary.isFormActionKey(id, id + '::CTA::999')).toBe(false);
+    }
     expect(vocabulary.isFormActionKey('ENM-017', 'ENM-017::CTA::004')).toBe(true);
     expect(vocabulary.isFormActionKey('ENM-017', 'ENM-017::CTA::999')).toBe(false);
   });

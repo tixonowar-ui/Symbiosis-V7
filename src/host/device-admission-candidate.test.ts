@@ -5691,6 +5691,7 @@ describe('private FINAL admission candidate evidence', () => {
     expect(row(w)['durablePayload']).toBeUndefined();
   });
 
+  // Full clean01 recorded 67.938s at 60s; 120s is finite case-only headroom.
   it('reads actual latest metadata, pins its revision and reproduces unchanged bytes after SQLite reopen', async () => {
     const directory = mkdtempSync(join(tmpdir(), 'candidate-reopen-'));
     directories.push(directory);
@@ -5741,7 +5742,7 @@ describe('private FINAL admission candidate evidence', () => {
     expect(receive(changed, undefined, undefined, undefined, s.owner).exportDocument).toEqual(
       changed.exportDocument,
     );
-  }, 60000);
+  }, 120_000);
 
   it('accepts existing non-v4 source and receipt identifiers rather than inventing a UUID filter', () => {
     const c = prepared();

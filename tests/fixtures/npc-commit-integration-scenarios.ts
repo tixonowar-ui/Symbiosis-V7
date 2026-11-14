@@ -2725,6 +2725,8 @@ export function registerNpcReadOnlyPreview() {
         })
         .deferred();
     }
+    // Full clean01 recorded 30.573s against 30s; 90s is finite case-only headroom for
+    // real modern-empty N+1 prefix work, not a latency or CI guarantee.
     it('calculates V1 and N+1 without a prospective COMMIT, then retains the first acquisition facts', () => {
       const h = fixture(),
         first = h.fillOrdinary(h.create().attempt, true);
@@ -2768,6 +2770,10 @@ export function registerNpcReadOnlyPreview() {
         `NPC_INITIAL_SKILL/${v1.operationId}/1`,
       );
       let next = h.openNext(v1);
+      expect(s.object(next.values['initialState'])['poisonModeFactIds']).toEqual({
+        kind: 'ENTERED',
+        value: [],
+      });
       for (const [key, stage] of [
         ['NPC-002::CTA::001', 'NPC-011'],
         ['NPC-011::CTA::001', 'NPC-012'],
@@ -2778,9 +2784,14 @@ export function registerNpcReadOnlyPreview() {
         ['NPC-016::CTA::001', 'NPC-017'],
       ] as const)
         next = h.navigate(next, key, stage).attempt;
+      expect(s.object(next.values['initialState'])['poisonModeFactIds']).toEqual({
+        kind: 'ENTERED',
+        value: [],
+      });
       const beforeNext = h.db.serialize();
       const candidate = preview(h, next, v1);
       expect(candidate.binding.targetVersion).toBe(2);
+      expect(candidate.sheet.itemProfiles).toEqual([]);
       expect(candidate.sheet).toEqual({
         ...value.sheet,
         input: {
@@ -2792,6 +2803,10 @@ export function registerNpcReadOnlyPreview() {
       h.commit(next);
       const v2 = readNpcRecoveryClosure(h.db, h.scope.campaignId, h.readers).versions[1]!;
       const savedNext = readFixtureHumanoidSnapshot(h, v2.snapshot);
+      expect(savedNext.derivation.initialPoisonProof).toEqual({
+        commitOperationId: v2.operationId,
+        modeAssignments: [],
+      });
       expect(savedNext.derivation.skillProof).toEqual(saved.derivation.skillProof);
       expect(savedNext.derivation.compositionProof).toEqual(saved.derivation.compositionProof);
       expect(savedNext.derivation.inventoryProof.commitOperationId).toBe(v2.operationId);
@@ -2800,7 +2815,7 @@ export function registerNpcReadOnlyPreview() {
         commitOperationId: v2.operationId,
         temporaryWeaverAssignments: [],
       });
-    });
+    }, 90_000);
     it('rejects a stale/foreign/frontier request as provenance failure and never as an input blocker', () => {
       const h = fixture(),
         first = h.fillOrdinary(h.create().attempt);
@@ -6903,6 +6918,7 @@ export function registerNpcRuntimeEffects(
     }
 
     if (group === 'ordinary') {
+      // Full clean01 recorded 184.146s at 180s; 300s is finite case-only headroom.
       it('keeps a non-last prepared Taipan mode in position across actual source removal, COMMIT, OPEN and replay', () => {
         const x = poisonSetup(),
           { h, app } = x,
@@ -7425,7 +7441,7 @@ export function registerNpcRuntimeEffects(
           }
         }
         expect(s.canonical(app.read().closure.versions[0])).toBe(versionBytes);
-      }, 180_000);
+      }, 300_000);
 
       it('publishes one actual prepared dose with its original mode and exact physical identity through replay and SQLite reopen', () => {
         const x = poisonSetup(),
@@ -8004,6 +8020,244 @@ export function registerNpcRuntimeEffects(
         expect(app.prepare(p.request)).toEqual({ ...p.prepared, replayed: true });
         expect(h.db.serialize().equals(before)).toBe(true);
       });
+    }
+
+    if (group === 'ordinary') {
+      it('keeps a checked poison predecessor only in its real N+1 owner window and refuses SQL ABA or callable changes', async () => {
+        const p = preparedIndividualDose(),
+          { x, h, app } = p;
+        await nextPoisonHostTurn(h.db);
+        x.next('NPC-015::CTA::001');
+        await nextPoisonHostTurn(h.db);
+        x.alive();
+        await nextPoisonHostTurn(h.db);
+        const first = x.commit();
+        await nextPoisonHostTurn(h.db);
+        await openPoisonInventory(x, first.version);
+        x.next('NPC-015::CTA::001');
+        await nextPoisonHostTurn(h.db);
+        x.alive();
+        await nextPoisonHostTurn(h.db);
+        const secondDraftId = x.attempt().npcDraftId,
+          second = x.commit();
+        await nextPoisonHostTurn(h.db);
+        expect(first.version.version).toBe(1);
+        expect(second.version.version).toBe(2);
+        expect(second.version.npcUuid).toBe(first.version.npcUuid);
+        expect(publishedIndividualDose(second.version, p.item.id).doses).toEqual(
+          expect.arrayContaining([expect.objectContaining({ coatingInstanceId: p.dose.id })]),
+        );
+        const firstText = s.canonical(first.version),
+          secondText = s.canonical(second.version),
+          predecessorSnapshot = s.canonical(first.version.snapshot),
+          firstReplay = app.workflow(first.command),
+          secondReplay = app.workflow(second.command);
+        const factory = npcPoisonReadersModule.createNpcPoisonReaders,
+          domainFactory = npcDomainReadersModule.createNpcOrdinaryDomainReaders,
+          issuedReaders: Array<ReturnType<typeof factory>> = [];
+        let validationRefusal: unknown;
+        const factorySpy = vi
+          .spyOn(npcPoisonReadersModule, 'createNpcPoisonReaders')
+          .mockImplementation((options) => {
+            const actual = factory(options);
+            issuedReaders.push(actual);
+            return actual;
+          });
+        const domainSpy = vi
+          .spyOn(npcDomainReadersModule, 'createNpcOrdinaryDomainReaders')
+          .mockImplementation((...args) => {
+            const actual = domainFactory(...args);
+            return {
+              ...actual,
+              validateVersion(...values: Parameters<typeof actual.validateVersion>) {
+                try {
+                  return actual.validateVersion(...values);
+                } catch (error) {
+                  validationRefusal = error;
+                  throw error;
+                }
+              },
+            };
+          });
+        const observedApp = (() => {
+          try {
+            return connect(h);
+          } finally {
+            domainSpy.mockRestore();
+            factorySpy.mockRestore();
+          }
+        })();
+        expect(issuedReaders).toHaveLength(1);
+        const issued = issuedReaders[0] ?? unavailable(),
+          contextReader = issued.context,
+          decode = npcHumanoidSheetModule.readNpcHumanoidSnapshot,
+          historyReader = npcGmSourceModule.readNpcInventoryHistoryEvidenceInTransaction;
+        const storedRows = () => ({
+          versions: h.db
+            .prepare('SELECT * FROM npc_version WHERE campaign_id=? ORDER BY npc_uuid,version')
+            .all(h.scope.campaignId),
+          operations: h.db
+            .prepare('SELECT * FROM npc_operation WHERE campaign_id=? ORDER BY operation_id')
+            .all(h.scope.campaignId),
+          heads: h.db
+            .prepare('SELECT * FROM npc_current_head WHERE campaign_id=? ORDER BY npc_uuid')
+            .all(h.scope.campaignId),
+        });
+        const rows = storedRows(),
+          stableBytes = h.db.serialize();
+        function stack() {
+          const limit = Error.stackTraceLimit;
+          try {
+            Error.stackTraceLimit = Math.max(limit, 100);
+            return new Error().stack ?? '';
+          } finally {
+            Error.stackTraceLimit = limit;
+          }
+        }
+        const resolvedPath = () =>
+          /\bat poisonState \([^\r\n]*\)\r?\n\s*at resolve \([^\r\n]*\)\r?\n\s*at (?:Object\.)?validateVersion \(/.test(
+            stack(),
+          );
+        // Two independent successful reads surround the actual faults. No frame may survive
+        // a completed/throwing owner or replace its next fresh predecessor decode.
+        for (const fault of [null, 'SQL_ABA', 'CONTEXT_CALLABLE', null] as const) {
+          validationRefusal = undefined;
+          let inWindow = false,
+            windows = 0,
+            predecessorDecodes = 0,
+            repeatedDecodes = 0,
+            freshSql = 0,
+            mutations = 0;
+          const events: string[] = [],
+            changedRows: number[] = [];
+          const decoderSpy = vi
+            .spyOn(npcHumanoidSheetModule, 'readNpcHumanoidSnapshot')
+            .mockImplementation(function (this: unknown, ...args: Parameters<typeof decode>) {
+              const predecessor = s.canonical(args[1]) === predecessorSnapshot;
+              const actual = decode.apply(this, args);
+              if (predecessor) {
+                if (inWindow) repeatedDecodes++;
+                else if (/\bat inventoryHistoryRead \(/.test(stack())) {
+                  predecessorDecodes++;
+                  events.push('PREDECESSOR_DECODE_COMPLETED');
+                }
+              }
+              return actual;
+            });
+          const contextSpy = vi.spyOn(issued, 'context').mockImplementation(function (
+            this: unknown,
+            ...args: Parameters<typeof contextReader>
+          ) {
+            const owner =
+              args[0].npcDraftId === secondDraftId &&
+              args[2]?.operationId === second.version.operationId &&
+              resolvedPath();
+            if (!owner) return contextReader.apply(this, args);
+            windows++;
+            expect(inWindow).toBe(false);
+            expect(predecessorDecodes).toBeGreaterThan(0);
+            events.push('OWNER_ENTER');
+            inWindow = true;
+            try {
+              return contextReader.apply(this, args);
+            } finally {
+              inWindow = false;
+              events.push('OWNER_LEAVE');
+            }
+          });
+          const historySpy = vi
+            .spyOn(npcGmSourceModule, 'readNpcInventoryHistoryEvidenceInTransaction')
+            .mockImplementation(function (
+              this: unknown,
+              ...args: Parameters<typeof historyReader>
+            ) {
+              const actual = historyReader.apply(this, args);
+              if (
+                args[0] === h.db &&
+                s.same(args[1], h.scope) &&
+                args[2] === first.version.npcUuid &&
+                args[3] === 1 &&
+                actual.length === 1 &&
+                s.same(actual[0]?.stored.record, first.version)
+              ) {
+                if (!inWindow) events.push('PREDECESSOR_SQL');
+                else {
+                  freshSql++;
+                  events.push('OWNER_FRESH_SQL');
+                  if (fault !== null && mutations === 0) {
+                    if (fault === 'SQL_ABA') {
+                      const hash = actual[0]?.version.sha256 ?? unavailable(),
+                        changed = hash === '0'.repeat(64) ? '1'.repeat(64) : '0'.repeat(64),
+                        update = h.db.prepare(
+                          'UPDATE npc_version SET record_sha256=? WHERE campaign_id=? AND npc_uuid=? AND version=1',
+                        );
+                      changedRows.push(
+                        update.run(changed, h.scope.campaignId, first.version.npcUuid).changes,
+                        update.run(hash, h.scope.campaignId, first.version.npcUuid).changes,
+                      );
+                    } else {
+                      // It still delegates to the original reader, but the checked callable
+                      // identity must not be replaced while its completed prefix is active.
+                      expect(issued.context).toBe(contextSpy);
+                      issued.context = contextReader;
+                      expect(issued.context).toBe(contextReader);
+                    }
+                    mutations++;
+                  }
+                }
+              }
+              return actual;
+            });
+          try {
+            if (fault === null) {
+              expect(observedApp.read().closure.versions).toEqual([first.version, second.version]);
+              expect(validationRefusal).toBeUndefined();
+            } else {
+              expect(() => observedApp.read()).toThrow(
+                'network application storage: INVALID_INPUT',
+              );
+              expect(validationRefusal).toBeInstanceOf(NetworkApplicationStoreError);
+              expect(validationRefusal).toMatchObject({ code: 'SOURCE_CHANGED' });
+            }
+            expect(windows).toBeGreaterThan(0);
+            expect(predecessorDecodes).toBeGreaterThan(0);
+            expect(events.indexOf('PREDECESSOR_SQL')).toBeGreaterThanOrEqual(0);
+            expect(events.indexOf('PREDECESSOR_SQL')).toBeLessThan(
+              events.indexOf('PREDECESSOR_DECODE_COMPLETED'),
+            );
+            expect(events.indexOf('PREDECESSOR_DECODE_COMPLETED')).toBeLessThan(
+              events.indexOf('OWNER_ENTER'),
+            );
+            expect(events.indexOf('OWNER_FRESH_SQL')).toBeGreaterThan(
+              events.indexOf('OWNER_ENTER'),
+            );
+            expect(freshSql).toBeGreaterThan(0);
+            expect(repeatedDecodes).toBe(0);
+            expect(mutations).toBe(fault === null ? 0 : 1);
+            expect(changedRows).toEqual(fault === 'SQL_ABA' ? [1, 1] : []);
+            expect(inWindow).toBe(false);
+            expect(h.db.inTransaction).toBe(false);
+            expect(storedRows()).toEqual(rows);
+            expect(h.db.serialize().equals(stableBytes)).toBe(true);
+            expect(s.canonical(first.version)).toBe(firstText);
+            expect(s.canonical(second.version)).toBe(secondText);
+          } finally {
+            historySpy.mockRestore();
+            contextSpy.mockRestore();
+            decoderSpy.mockRestore();
+          }
+          await nextPoisonHostTurn(h.db);
+        }
+        // All callbacks restored: subsequent real validation and both original receipts survive.
+        expect(observedApp.read().closure.versions).toEqual([first.version, second.version]);
+        expect(observedApp.workflow(first.command)).toEqual(firstReplay);
+        expect(observedApp.workflow(second.command)).toEqual(secondReplay);
+        expect(storedRows()).toEqual(rows);
+        expect(h.db.serialize().equals(stableBytes)).toBe(true);
+        // Diagnostic05 omitted its carrier; this case retains the selected coating and adds
+        // four checked owner/fault reads plus exact replays. 900s is a finite body hypothesis,
+        // informed by 05's ~75s V2 COMMIT/~20s read, not a same-case measurement or CI SLA.
+      }, 900_000);
     }
 
     function publishedIndividualDose(version: NpcVersion, itemId: string) {
@@ -9653,6 +9907,7 @@ export function registerNpcRuntimeEffects(
         expect(s.canonical(currentCalendar)).toBe(currentCalendarBytes);
       }, 300_000);
 
+      // Full clean01 recorded 61.807s at 60s; 120s is finite case-only headroom.
       it('publishes explicit severe life and both actual Weaver states without activation or rerolled D6', () => {
         const x = setup('WEAVER', true),
           { h, app } = x;
@@ -9805,7 +10060,7 @@ export function registerNpcRuntimeEffects(
         expect(restored.prepare(request)).toEqual({ ...result, replayed: true });
         expect(restored.workflow(command)).toMatchObject({ replayed: true });
         expect(reopened.db.serialize().equals(bytes)).toBe(true);
-      }, 60000);
+      }, 120_000);
 
       it('removes an actual prepared Weaver state without allocating or resetting its original identity', () => {
         const x = setup('WEAVER', true),

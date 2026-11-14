@@ -2,8 +2,10 @@
 
 Дата авторского состояния: 2026-11-14. Это WIP от поставленного #259/PR292:
 main `fe61e291635f30cf0f5437e9692d8f92f896104f`, tree `bfee221e7a2ce1b319bbf9f34a2e9c365eaea5c5`.
-#260 ещё открыта; окончательный committed SHA, независимый clean five-stage,
-полный CI, protected merge и actual delivery пока не выполнены.
+#260 ещё открыта. Первый committed кандидат `6710a491` получил FAILED в clean01;
+последующие исправления и целевые PASS описаны ниже. Окончательный исправленный
+SHA, новый независимый clean five-stage, полный CI, protected merge и actual
+delivery пока не выполнены.
 #188/#113 открыты, #261 не начата. Предыдущая #259 действительно закрыта COMPLETED;
 её clean5/CI и52 E2E не являются результатами текущей #260.
 
@@ -163,6 +165,90 @@ Host/client errors пусты. Root независимо проверил raw/st
 первый считал все raw replays обычными, второй ожидал отдельный ariaSnapshot
 step и неверное имя refusal. Коррекции используют доказанный exact held suffix,
 actual source call и18 passed comparisons; E2E ради readers не повторялся.
+
+## Первый clean01 и последующая коррекция
+
+Независимый clean01 на `6710a4919d437c7fd2b364f704dd5376e8c20cb5`
+сохранил FAILED:7654 PASS/14 FAIL,318 files (309 PASS/9 FAIL),
+Vitest7862,63с/verify8108,312с. Фактически это13 body timeouts, один устаревший
+protocol oracle и отдельный afterAll EPERM. Validate и следующие этапы не были
+достигнуты. Исходные checkout, лог, результат и все доказательства сохранены;
+длительность сама по себе не устанавливает общую ресурсную причину.
+
+Закрытый protocol test теперь проверяет настоящие018/019, правильные actions,
+origin/bindings и отрицательные mixed/route случаи вместо прежнего запрета
+этих уже реализованных форм. Whole-file scope:12 PASS, TSC/lint/format прошли;
+первый test-only typing failure сохранён отдельно.
+
+### Ограниченное переиспользование NPC predecessor
+
+Диагностика исходного90-минутного replacement-case выделила повторную работу
+в poisonState/coating/domain history. CPU sample interval95,710071с содержит
+перекрывающиеся inclusive paths: проценты не складываются и не доказывают
+исчерпание canonical cache. Ранние bounded controller failures остаются FAIL,
+даже если их префиксы пригодны для анализа. Непарный unprofiled A/B достиг
+одинакового второго OPEN:459,909с →404,512с; V1 controls тоже стали короче,
+поэтому весь сдвиг12,05% не приписывается одной коррекции.
+
+Единственная production-коррекция этой фазы — existing completed-prefix frame
+в `npc-domain-readers.ts` только вокруг N+1 poisonState. Независимый source read,
+свежие SQL/history/callback проверки до/после и `finally` restoration сохраняются.
+V1 fast branch, другие call sites, initialInventoryProfiles и canonical cache
+не менялись. Межвызовное кэширование результатов правил не добавлялось;
+рамка снимается в finally, authority проверки сохраняются.
+
+Один новый реальный coated V1→V2 case прошёл за356,091с при конечном body900с:
+проверенный predecessor до окна, fresh SQL внутри без повторного completed
+decoder, отдельные owning-вызовы: два успешных чтения и отказы после SQL ABA
+и подмены callable,
+strict refusals, rollback/immutable old rows/receipts/bytes и восстановление
+последующего real read. Exact replays в этом case не названы новой записью.
+Отдельно прошли пять прежних контролей: modern present-empty N+1 preview18,014с,
+V1 dose45,535с и три local-snapshot cases22,860/21,647/0,636с. Остальные
+отфильтрованные cases этими запусками не проверялись.
+
+### Полные байты и конечные индивидуальные бюджеты
+
+В displayed-cost refusal test заменён один общий Buffer matcher на native
+`snapshot().equals(before)`: helper возвращает обычный SQLite serialized Buffer,
+длина и все байты по-прежнему сравниваются. Все три tamper requests и строгие
+отказы сохранены. Тот же case прошёл за13,210с без увеличения body360с.
+Это не доказывает, что matcher был единственной причиной прежних1594,319с.
+
+По разрешённой индивидуальной политике ровно девять budget expressions получили
+конечный измеренный запас: Taipan300с, Weaver120с, baseline B3/self60с и warm90с,
+device120с, canceled CUSTOM600с, NPC GM120с и одна same-scenario Git table90с
+для её34 directional rows. Регистрация rows и данные не переписаны.
+Все42 выбранных cases прошли с первой попытки;339 отфильтрованы и не засчитаны.
+Наблюдённые длительности: Taipan102,864с, Weaver33,808с, baseline0,478–1,620с,
+device1,155с, canceled CUSTOM75,175с, NPC GM40,407с, Git rows0,809–3,778с.
+Очистка device-теста завершилась с exit0; это не устанавливает общую причину
+старого EPERM.
+Preview имеет отдельный body90с после full-cohort30,573с;900с относится только
+к новому N+1 regression. Остальные bodies, hooks/defaults/workers/retries и CI
+сохранены. Эти scoped измерения не гарантируют сроки полного4-worker/CI набора.
+
+### Весь исходный replacement-case — PASS
+
+Первый полный целевой запуск после коррекции завершился:1 completed PASS,
+0 FAIL/0 pending,2913,6833632с (48м33,683с), body5400с сохранён. Выполнены все
+V3/archive/restore/first-publication, old V1/V2 immutability, native Buffer reopen
+и receipt replay assertions. Root независимо принял весь source/raw outcome:
+`root-full-replacement-outcome-review52.json`, SHA
+`f0593b5777c4c447055295fc88ea0077aacf6c3508a5b4701b88b76fca40fee2`.
+
+Внешний controller отсчитывал6000с от npm spawn,120с до наблюдённого runner
+(не до инструментированного case entry),15с на shutdown. Npm spawn→close:
+2918,4778767с; natural exit0, cleanup1,562с, без forced kill/refusal/cap.
+Финальные owned/unclaimed/observer списки пусты. Все84 author pins и оба
+отдельных frozen checkout сохранились.97 периодических samples — наблюдения,
+не полная process-creation история или истинные пики. Они не устанавливают
+наличие или отсутствие утечки памяти,
+общую причину full-cohort задержек или универсальное ускорение.
+
+Этот PASS закрывает целевой полный callback, но не заменяет новый clean5/CI.
+Предыдущая Chrome02 остаётся доказательством своего feature source scope;
+она не повторялась ради последующих NPC/test изменений.
 
 ## Что ещё требуется перед поставкой
 
