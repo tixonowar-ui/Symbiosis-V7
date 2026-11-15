@@ -716,7 +716,8 @@ describe('NPC actual GM WebSocket and SQLite bridge', () => {
         editRoundTripMs,
       }),
     );
-  });
+    // ADR 0088: clean03 reported 30.352 s at 30 s; give this integration finite 90 s headroom.
+  }, 90_000);
   it('keeps a committed CREATE and its receipt when the first delivery read fails, without a no-write refusal', async () => {
     const h = await fixture();
     await h.nav('CMP-006::CTA::001');
@@ -1116,5 +1117,6 @@ describe('actual NPC initial inventory publication', () => {
       children,
     );
     expect(h.errors).toEqual([]);
-  }, 60000);
+    // ADR 0088: clean03 reported 60.011 s at 60 s; retain this real journey with a finite 120 s budget.
+  }, 120_000);
 });

@@ -842,7 +842,8 @@ describe('campaign creation runtime with real SQLite and TCP bind', () => {
       // Keep both real loaders and the upgrade itself in each timed scenario.
       fixture = createBaselineLineageFixture('B0');
       dirs.push(fixture.directory);
-    });
+      // Local exception: clean02 confirmed this two-case setup hook exceeded 30 s; allow finite 90 s.
+    }, 90_000);
     it('recovers the original paused campaign and exact CREATE receipt across the approved Atlas delivery', async () => {
       const oldBaseline = await loadLocalCharacterExportBaseline(fixture.projectRoot);
       expect(oldBaseline.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B0);

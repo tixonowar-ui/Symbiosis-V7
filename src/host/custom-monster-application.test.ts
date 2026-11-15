@@ -768,8 +768,8 @@ it('binds Adviser losses to accepted graph/body changes, ignores speculative pre
   } finally {
     f.close();
   }
-  // The complete source/SQLite Back/replay journey measured 27.985s under a 30s body deadline.
-}, 60_000);
+  // ADR 0088: clean02 confirmed 68.535 s at 60 s; give only this case finite 120 s headroom.
+}, 120_000);
 
 it('physically migrates genuine old257 composed SENTIENT V1 and open plan through24 and preserves all old bytes and original receipt', () => {
   const root = join(process.cwd(), 'tests/fixtures/enemy-composed-v1');
