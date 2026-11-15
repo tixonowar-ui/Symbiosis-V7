@@ -330,7 +330,7 @@ for (const [folder, file, kind, variant] of [
           const bytes = db.serialize();
           expect(() => readCurrent()).toThrow('SOURCE_CHANGED');
           expect(() => app().project()).toThrow('SOURCE_CHANGED');
-          expect(db.serialize()).toEqual(bytes);
+          expect(db.serialize().equals(bytes)).toBe(true);
           expect(oldRows()).toEqual(original);
           return;
         }
@@ -444,11 +444,11 @@ for (const [folder, file, kind, variant] of [
             ).toThrow('FOREIGN_OWNER');
             const directCalls = callsFor(foreignKind);
             expect(directCalls).toBe(1);
-            expect(db.serialize()).toEqual(foreignBytes);
+            expect(db.serialize().equals(foreignBytes)).toBe(true);
             expect(() => app().command(foreignKind)).toThrow('INVALID_INPUT');
             expect(callsFor(foreignKind)).toBeGreaterThan(directCalls);
             // No durable receipt, fact, event or identifier allocation survives the refusal.
-            expect(db.serialize()).toEqual(foreignBytes);
+            expect(db.serialize().equals(foreignBytes)).toBe(true);
             const changedSource = join(sourceRoot, 'generated/spec/character/skills.json');
             const sourceBytes = readFileSync(changedSource);
             const target = request('VERSION_CONFIGURATION', {
@@ -459,7 +459,7 @@ for (const [folder, file, kind, variant] of [
             writeFileSync(changedSource, Buffer.concat([sourceBytes, Buffer.from([10])]));
             expect(() => scopedApp.command(target)).toThrow('INVALID_INPUT');
             expect(callsFor(target)).toBe(0);
-            expect(db.serialize()).toEqual(beforeDrift);
+            expect(db.serialize().equals(beforeDrift)).toBe(true);
             writeFileSync(changedSource, sourceBytes);
             expect(scopedApp.project().base.formId).toBe('ENM-017');
             app().command(
@@ -478,7 +478,7 @@ for (const [folder, file, kind, variant] of [
             for (const key of ['ENM-017::CTA::006', 'ENM-017::CTA::007'] as const) {
               const bytes = db.serialize();
               expect(() => nav(key)).toThrow('CORRUPT_STORAGE');
-              expect(db.serialize()).toEqual(bytes);
+              expect(db.serialize().equals(bytes)).toBe(true);
             }
             const forms = r.record(
               JSON.parse(readFileSync('generated/spec/atlas/forms-by-id.json', 'utf8')),
@@ -528,14 +528,14 @@ for (const [folder, file, kind, variant] of [
             expect(() => app().command(noRoll)).toThrow('INVALID_INPUT');
             expect(callsFor(noRoll)).toBe(0);
             expect(vi.mocked(randomInt).mock.calls.length).toBe(beforeSamples);
-            expect(db.serialize()).toEqual(beforeRoll);
+            expect(db.serialize().equals(beforeRoll)).toBe(true);
             if (manual.context.attemptOrNull?.kind === 'CUSTOM_MONSTER') {
               const stats = manual.context.attemptOrNull.statsOrNull;
               if (stats === null) throw new Error('Missing actual manual stats');
               const rollMode = request('MONSTER_STATS', json({ ...stats, statMode: 'ROLL_ONCE' }));
               const bytes = db.serialize();
               expect(() => app().command(rollMode)).toThrow('INVALID_INPUT');
-              expect(db.serialize()).toEqual(bytes);
+              expect(db.serialize().equals(bytes)).toBe(true);
             }
             nav('ENM-017::CTA::005');
             nav('ENM-020::CTA::002');
@@ -584,7 +584,7 @@ for (const [folder, file, kind, variant] of [
             expect(lib().project().base.availableActionKeys).not.toContain('ENM-001::CTA::008');
             const beforeSystem = db.serialize();
             expect(() => nav('ENM-001::CTA::008')).toThrow('CORRUPT_STORAGE');
-            expect(db.serialize()).toEqual(beforeSystem);
+            expect(db.serialize().equals(beforeSystem)).toBe(true);
             choose(null, identity);
             nav('ENM-001::CTA::008');
             app().command(
@@ -666,7 +666,7 @@ for (const [folder, file, kind, variant] of [
             expect(() => readCurrent()).toThrow('SOURCE_CHANGED');
             expect(() => app().command(currentRequest)).toThrow('INVALID_INPUT');
             expect(callsFor(currentRequest)).toBe(0);
-            expect(db.serialize()).toEqual(beforeRejected);
+            expect(db.serialize().equals(beforeRejected)).toBe(true);
             // Restore only the exact original SQL mirrors before the independent owning-QUEUE tamper.
             db.prepare(
               'UPDATE campaign_enemy_version SET record_json=?,record_sha256=? WHERE version_id=?',
@@ -760,7 +760,7 @@ for (const [folder, file, kind, variant] of [
             expect(() => readCurrent()).toThrow('SOURCE_CHANGED');
             expect(() => app().command(currentRequest)).toThrow('INVALID_INPUT');
             expect(callsFor(currentRequest)).toBe(0);
-            expect(db.serialize()).toEqual(badBytes);
+            expect(db.serialize().equals(badBytes)).toBe(true);
             expect(oldRows()).toEqual(original);
             expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
             expect(db.pragma('integrity_check')).toEqual([{ integrity_check: 'ok' }]);
@@ -824,7 +824,7 @@ for (const [folder, file, kind, variant] of [
             const samples = vi.mocked(randomInt).mock.calls.length;
             expect(() => app().command(command)).toThrow(marker); // Proves the actual intended SQL site was reached.
             expect(db.inTransaction).toBe(false);
-            expect(db.serialize()).toEqual(before);
+            expect(db.serialize().equals(before)).toBe(true);
             expect(allRows()).toEqual(rows);
             expect(schema()).toEqual(beforeSchema);
             expect(readCurrent().viewOrNull).toEqual(beforeView);
@@ -842,7 +842,7 @@ for (const [folder, file, kind, variant] of [
           const persistedRows = allRows(),
             stable = db.serialize();
           expect(app().command(command)).toEqual({ ...committed, replayed: true });
-          expect(db.serialize()).toEqual(stable);
+          expect(db.serialize().equals(stable)).toBe(true);
           expect(allRows()).toEqual(persistedRows);
           db.close();
           db = openPersistenceDatabase(filename);
@@ -854,7 +854,7 @@ for (const [folder, file, kind, variant] of [
             ...r.record(metadata['commitResult'], '$.oldCommitResult'),
             replayed: true,
           });
-          expect(db.serialize()).toEqual(reopened);
+          expect(db.serialize().equals(reopened)).toBe(true);
           const full = enemyAuthoringProjectionValue(app().project().base.roleFilteredPayload);
           expect(full.formId).toBe('ENM-020');
           expect(full.context.selectedVersionOrNull?.version).toBe(2);
@@ -988,7 +988,7 @@ for (const [folder, file, kind, variant] of [
               expect(() => app().command(negative.request)).toThrow(negative.code);
               expect(callsFor(negative.request)).toBe(0); // Historical observer calls have different actual requests.
               expect(vi.mocked(randomInt).mock.calls.length).toBe(sampleCount);
-              expect(db.serialize()).toEqual(bytes);
+              expect(db.serialize().equals(bytes)).toBe(true);
             }
             const clientOrigin = {
               ...confirmation,
@@ -998,7 +998,7 @@ for (const [folder, file, kind, variant] of [
             const beforeHiddenOrigin = db.serialize();
             expect(() => app().command(clientOrigin)).toThrow('UNRECOGNIZED');
             expect(callsFor(clientOrigin)).toBe(0);
-            expect(db.serialize()).toEqual(beforeHiddenOrigin);
+            expect(db.serialize().equals(beforeHiddenOrigin)).toBe(true);
             const acquired = app().command(confirmation);
             expect(callsFor(confirmation)).toBeGreaterThan(0);
             const actualCard = readCurrent().viewOrNull?.enemyAuthoring?.attemptOrNull;
@@ -1028,7 +1028,7 @@ for (const [folder, file, kind, variant] of [
             expect(app().command(commit)).toEqual({ ...committed, replayed: true });
             expect(readCurrent().viewOrNull?.formId).toBe('ENM-017');
             expect(readCurrent().viewOrNull?.enemyAuthoring).toEqual(currentContext);
-            expect(db.serialize()).toEqual(stable);
+            expect(db.serialize().equals(stable)).toBe(true);
             const changed = {
               ...previewRequest,
               payload: {
@@ -1038,7 +1038,7 @@ for (const [folder, file, kind, variant] of [
             };
             expect(() => app().command(changed)).toThrow('IDEMPOTENCY_CONFLICT');
             expect(callsFor(changed)).toBe(0);
-            expect(db.serialize()).toEqual(stable);
+            expect(db.serialize().equals(stable)).toBe(true);
             const beforeAdvance = readCurrent().viewOrNull?.enemyAuthoring?.attemptOrNull;
             if (beforeAdvance == null) throw new Error('Missing actual current attempt');
             const priorAttemptRevision = beforeAdvance.revision;
@@ -1066,7 +1066,7 @@ for (const [folder, file, kind, variant] of [
             const beforeStaleAttempt = db.serialize();
             expect(() => app().command(staleAttempt)).toThrow('INVALID_INPUT');
             expect(callsFor(staleAttempt)).toBe(0);
-            expect(db.serialize()).toEqual(beforeStaleAttempt);
+            expect(db.serialize().equals(beforeStaleAttempt)).toBe(true);
             // A new active GM context is used only to revoke this context, never to fabricate a stale live base.
             const masterProfileId = readCurrent().context.masterProfileId;
             let denied = 0;
@@ -1110,7 +1110,7 @@ for (const [folder, file, kind, variant] of [
               const beforeDenied = denied;
               expect(() => authorized.command(target)).toThrow('CORRUPT_STORAGE');
               expect(denied).toBe(beforeDenied + 1);
-              expect(db.serialize()).toEqual(beforeRevoked);
+              expect(db.serialize().equals(beforeRevoked)).toBe(true);
             }
             expect(callsFor(fresh)).toBe(0);
             expect(oldRows()).toEqual(original);
@@ -1360,7 +1360,7 @@ for (const [folder, file, kind, variant] of [
           });
           const bytes = db.serialize();
           expect(() => app().command(invalidLoadout)).toThrow('INVALID_INPUT');
-          expect(db.serialize()).toEqual(bytes);
+          expect(db.serialize().equals(bytes)).toBe(true);
           expect(accounting()).toEqual(beforeBody);
           const lost = body();
           expect(accounting().knownSkills.some((skill) => skill.skillKey === 'UNARMED')).toBe(
@@ -2409,7 +2409,7 @@ it('rederives a coherently rehashed historical replacement summary at its actual
       ).toBe('SENTIENT');
       const bytes = database.serialize();
       expect(() => checkedRead()).toThrow('network application storage: SOURCE_CHANGED');
-      expect(database.serialize()).toEqual(bytes);
+      expect(database.serialize().equals(bytes)).toBe(true);
       expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     },
   });

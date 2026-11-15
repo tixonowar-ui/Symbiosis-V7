@@ -239,296 +239,302 @@ function fixture(mode: 'AUTO' | 'MANUAL', authoringCatalog = catalog) {
   };
 }
 
+// ADR 0088: clean02 AUTO recorded 183.251 s through cleanup at a 120 s deadline.
+// Give this AUTO case 300 s of finite headroom; retain MANUAL's 120 s budget.
 for (const mode of ['MANUAL', 'AUTO'] as const)
-  it(`owns exactly seven natural R20 in ${mode}, preserves edits and receipts across physical restart, and gives a distinct version attempt its own right`, () => {
-    const started = performance.now(),
-      phases: Record<string, number> = {};
-    let previous = started;
-    const mark = (name: string) => {
-      const now = performance.now();
-      phases[name] = now - previous;
-      previous = now;
-    };
-    const h = fixture(mode),
-      { f } = h;
-    mark('campaignSetupMs');
-    try {
-      h.begin();
-      const project = () => {
-        const value = enemyAuthoringProjectionValue(h.app().project().base.roleFilteredPayload);
-        if (value.kind !== 'CUSTOM_MONSTER_AUTHORING')
-          throw new Error('Missing actual monster projection');
-        return value;
+  it(
+    `owns exactly seven natural R20 in ${mode}, preserves edits and receipts across physical restart, and gives a distinct version attempt its own right`,
+    () => {
+      const started = performance.now(),
+        phases: Record<string, number> = {};
+      let previous = started;
+      const mark = (name: string) => {
+        const now = performance.now();
+        phases[name] = now - previous;
+        previous = now;
       };
-      expect(project().statGeneration?.candidateStats.baseStats).toEqual({
-        S: null,
-        D: null,
-        M: null,
-        Z: null,
-        I: null,
-        W: null,
-        C: null,
-      });
-      expect(readAppliedMigrationVersion(f.db)).toBe(24);
-      const initial = h.view().enemyAuthoring?.attemptOrNull;
-      expect(initial?.kind === 'CUSTOM_MONSTER' && initial.statsOrNull).toBeNull();
-      vi.mocked(randomInt).mockClear();
-      h.open('ENM-012::CTA::005');
-      const seed = h.view().enemyAuthoring?.monsterStatRoll?.generationSeed;
-      expect(h.view().formId).toBe('ENM-018');
-      expect(project().statGeneration?.generationSeed).toBe(seed);
-      expect(h.app().project().base.availableActionKeys).toEqual([
-        'ENM-018::CTA::001',
-        'ENM-018::CTA::002',
-        'ENM-018::CTA::003',
-      ]);
-      h.nav('ENM-018::CTA::003');
-      expect(randomInt).not.toHaveBeenCalled();
-      h.open('ENM-012::CTA::005');
-      expect(h.view().enemyAuthoring?.monsterStatRoll?.generationSeed).toBe(seed);
-      const rollRequest = h.rollRequest(),
-        rolled = h.app().command(rollRequest);
-      expect(randomInt).toHaveBeenCalledTimes(7);
-      expect(vi.mocked(randomInt).mock.calls).toEqual(Array.from({ length: 7 }, () => [1, 21]));
-      const receipt = monsterStatRollReceiptValue(rolled.receipt.result.randomStatsReceipt);
-      mark('creationOpenRollMs');
-      expect(receipt.randomReceiptId).toBe(rolled.receipt.receiptId);
-      expect(receipt.operationId).toBe(rollRequest.commandId);
-      expect(receipt.dieFaces).toHaveLength(7);
-      expect(h.view().formId).toBe('ENM-012');
-      expect(project().statGeneration?.candidateStats.baseStats).toEqual(
-        receipt.originalGeneratedStats,
-      );
-      expect(h.view().enemyAuthoring?.monsterStatRoll?.draftOrNull?.massKg).toBeNull();
-      const pendingBytes = f.db.serialize();
-      expect(() => h.open('ENM-012::CTA::002', null)).toThrow('INVALID_INPUT');
-      expect(f.db.serialize()).toEqual(pendingBytes);
-      expect(randomInt).toHaveBeenCalledTimes(7);
-      const draft = {
-        baseStats: edited.baseStats,
-        massKg: edited.massKg,
-        ageYears: edited.ageYears,
-        baseMaxHP: edited.baseMaxHP,
-      };
-      h.open('ENM-012::CTA::002', draft);
-      expect(h.view().formId).toBe('ENM-019');
-      const receiptView = project();
-      expect(receiptView.statGeneration?.randomReceiptOrNull).toEqual(receipt);
-      expect(receiptView.statGeneration?.candidateStats).toEqual(draft);
-      expect(receiptView.sheetOrNull).toBeNull();
-      expect(h.app().project().base.availableActionKeys).toEqual(['ENM-019::CTA::001']);
-      for (const tamper of [
-        {
-          ...receiptView,
-          statGeneration: { ...receiptView.statGeneration, attemptId: randomUUID() },
-        },
-        {
-          ...receiptView,
-          statGeneration: {
-            ...receiptView.statGeneration,
-            candidateStats: { ...draft, massKg: 5.2 },
+      const h = fixture(mode),
+        { f } = h;
+      mark('campaignSetupMs');
+      try {
+        h.begin();
+        const project = () => {
+          const value = enemyAuthoringProjectionValue(h.app().project().base.roleFilteredPayload);
+          if (value.kind !== 'CUSTOM_MONSTER_AUTHORING')
+            throw new Error('Missing actual monster projection');
+          return value;
+        };
+        expect(project().statGeneration?.candidateStats.baseStats).toEqual({
+          S: null,
+          D: null,
+          M: null,
+          Z: null,
+          I: null,
+          W: null,
+          C: null,
+        });
+        expect(readAppliedMigrationVersion(f.db)).toBe(24);
+        const initial = h.view().enemyAuthoring?.attemptOrNull;
+        expect(initial?.kind === 'CUSTOM_MONSTER' && initial.statsOrNull).toBeNull();
+        vi.mocked(randomInt).mockClear();
+        h.open('ENM-012::CTA::005');
+        const seed = h.view().enemyAuthoring?.monsterStatRoll?.generationSeed;
+        expect(h.view().formId).toBe('ENM-018');
+        expect(project().statGeneration?.generationSeed).toBe(seed);
+        expect(h.app().project().base.availableActionKeys).toEqual([
+          'ENM-018::CTA::001',
+          'ENM-018::CTA::002',
+          'ENM-018::CTA::003',
+        ]);
+        h.nav('ENM-018::CTA::003');
+        expect(randomInt).not.toHaveBeenCalled();
+        h.open('ENM-012::CTA::005');
+        expect(h.view().enemyAuthoring?.monsterStatRoll?.generationSeed).toBe(seed);
+        const rollRequest = h.rollRequest(),
+          rolled = h.app().command(rollRequest);
+        expect(randomInt).toHaveBeenCalledTimes(7);
+        expect(vi.mocked(randomInt).mock.calls).toEqual(Array.from({ length: 7 }, () => [1, 21]));
+        const receipt = monsterStatRollReceiptValue(rolled.receipt.result.randomStatsReceipt);
+        mark('creationOpenRollMs');
+        expect(receipt.randomReceiptId).toBe(rolled.receipt.receiptId);
+        expect(receipt.operationId).toBe(rollRequest.commandId);
+        expect(receipt.dieFaces).toHaveLength(7);
+        expect(h.view().formId).toBe('ENM-012');
+        expect(project().statGeneration?.candidateStats.baseStats).toEqual(
+          receipt.originalGeneratedStats,
+        );
+        expect(h.view().enemyAuthoring?.monsterStatRoll?.draftOrNull?.massKg).toBeNull();
+        const pendingBytes = f.db.serialize();
+        expect(() => h.open('ENM-012::CTA::002', null)).toThrow('INVALID_INPUT');
+        expect(f.db.serialize().equals(pendingBytes)).toBe(true);
+        expect(randomInt).toHaveBeenCalledTimes(7);
+        const draft = {
+          baseStats: edited.baseStats,
+          massKg: edited.massKg,
+          ageYears: edited.ageYears,
+          baseMaxHP: edited.baseMaxHP,
+        };
+        h.open('ENM-012::CTA::002', draft);
+        expect(h.view().formId).toBe('ENM-019');
+        const receiptView = project();
+        expect(receiptView.statGeneration?.randomReceiptOrNull).toEqual(receipt);
+        expect(receiptView.statGeneration?.candidateStats).toEqual(draft);
+        expect(receiptView.sheetOrNull).toBeNull();
+        expect(h.app().project().base.availableActionKeys).toEqual(['ENM-019::CTA::001']);
+        for (const tamper of [
+          {
+            ...receiptView,
+            statGeneration: { ...receiptView.statGeneration, attemptId: randomUUID() },
           },
-        },
-        {
-          ...receiptView,
-          statGeneration: { ...receiptView.statGeneration, generationSeed: '0'.repeat(64) },
-        },
-        {
-          ...receiptView,
-          statGeneration: {
-            ...receiptView.statGeneration,
-            eligibleStatRanges: {
-              ...receiptView.statGeneration?.eligibleStatRanges,
-              S: { min: 1, max: 20 },
+          {
+            ...receiptView,
+            statGeneration: {
+              ...receiptView.statGeneration,
+              candidateStats: { ...draft, massKg: 5.2 },
             },
           },
-        },
-      ])
-        expect(() => enemyAuthoringProjectionValue(tamper)).toThrow();
-      h.nav('ENM-019::CTA::001');
-      expect(h.view().enemyAuthoring?.monsterStatRoll?.draftOrNull).toEqual(draft);
-      f.restartFromDisk();
-      expect(h.view().enemyAuthoring?.monsterStatRoll?.draftOrNull).toEqual(draft);
-      expect(randomInt).toHaveBeenCalledTimes(7);
-      h.patch('MONSTER_STATS', edited);
-      h.patch('MONSTER_PHYSICS', physics);
-      h.patch('MONSTER_ATTACK', attack);
-      h.patch('MONSTER_SYMBIONT', { operation: 'PREVIEW', selection: { mode: 'NONE' } });
-      const preview = h.view().enemyAuthoring?.attemptOrNull;
-      if (preview?.kind !== 'CUSTOM_MONSTER' || preview.compositionOrNull === null)
-        throw new Error('Missing actual NONE preview');
-      h.patch('MONSTER_SYMBIONT', {
-        operation: 'CONFIRM',
-        previewCommandId: preview.compositionOrNull.previewCommandId,
-        manualFacesOrNull: null,
-      });
-      h.patch('MONSTER_SYMBIONT', {
-        operation: 'FINISH',
-        previewCommandId: preview.compositionOrNull.previewCommandId,
-        advisorSkills: [],
-      });
-      const commitRequest = h.request('UI-CMD-ENEMY-COMMIT-V1');
-      const committed = h.app().command(commitRequest);
-      mark('editReceiptReopenAcceptV1Ms');
-      const identity = enemyVersionIdentityValue(committed.receipt.result.committedVersionOrNull);
-      let oldRows = f.db.prepare('SELECT * FROM campaign_enemy_version ORDER BY rowid').all();
-      const chain = [identity];
-      const originalReplay = h.app().command(rollRequest);
-      expect(originalReplay.replayed).toBe(true);
-      expect(originalReplay.receipt).toEqual(rolled.receipt);
-      expect(h.view().formId).toBe('ENM-020');
-      expect(project().statGeneration?.randomReceiptOrNull).toEqual(receipt);
-      expect(project().statGeneration?.candidateStats).toEqual(draft);
-      expect(project().statGeneration?.requiresBodyAcceptance).toBe(false);
-      const savedProjection = project();
-      expect(() =>
-        enemyAuthoringProjectionValue({
-          ...savedProjection,
-          statGeneration: {
-            ...savedProjection.statGeneration,
-            candidateStats: { ...draft, massKg: 5.2 },
+          {
+            ...receiptView,
+            statGeneration: { ...receiptView.statGeneration, generationSeed: '0'.repeat(64) },
           },
-        }),
-      ).toThrow();
-      expect(randomInt).toHaveBeenCalledTimes(7);
-      h.nav('ENM-020::CTA::002');
-      h.select(identity);
-      h.nav('ENM-001::CTA::008');
-      expect(h.view().enemyAuthoring?.monsterStatRoll).toBeUndefined();
-      const copied = h.view().enemyAuthoring?.attemptOrNull;
-      expect(copied?.kind === 'CUSTOM_MONSTER' && copied.statsOrNull).toEqual(edited);
-      h.open('ENM-017::CTA::006');
-      expect(h.view().enemyAuthoring?.monsterStatRoll?.rollOnceStatus).toBe('NOT_ROLLED');
-      if (mode === 'AUTO') {
-        // Merely viewing018 must not make an unchanged, already accepted body require repair.
-        const cached = structuredClone(h.view().enemyAuthoring?.monsterStatRoll);
-        h.nav('ENM-018::CTA::006');
-        expect(h.view().enemyAuthoring?.monsterStatRoll).toEqual(cached);
-        h.patch('VERSION_CONFIGURATION', {
-          operation: 'SET_REASON',
-          reason: 'Полная неизменная копия после возврата без броска',
-        });
-        const state = h.view().enemyAuthoring?.versionAttempt;
-        if (state === undefined) throw new Error('Missing actual version state');
-        const copiedVersion = h
-          .app()
-          .command(h.request('UI-CMD-ENEMY-NEW-VERSION', { reason: state.reason }));
-        const nextIdentity = enemyVersionIdentityValue(
-          copiedVersion.receipt.result.committedVersionOrNull,
-        );
-        expect(nextIdentity.version).toBe(2);
-        chain.push(nextIdentity);
-        expect(
-          f.db
-            .prepare('SELECT * FROM campaign_enemy_version WHERE version_id=?')
-            .get(identity.versionId),
-        ).toEqual(oldRows[0]);
-        const saved = h.versions().find((v) => v.identity.versionId === nextIdentity.versionId);
-        expect(saved?.attempt.kind === 'CUSTOM_MONSTER' && saved.attempt.statsOrNull).toEqual(
-          edited,
-        );
+          {
+            ...receiptView,
+            statGeneration: {
+              ...receiptView.statGeneration,
+              eligibleStatRanges: {
+                ...receiptView.statGeneration?.eligibleStatRanges,
+                S: { min: 1, max: 20 },
+              },
+            },
+          },
+        ])
+          expect(() => enemyAuthoringProjectionValue(tamper)).toThrow();
+        h.nav('ENM-019::CTA::001');
+        expect(h.view().enemyAuthoring?.monsterStatRoll?.draftOrNull).toEqual(draft);
+        f.restartFromDisk();
+        expect(h.view().enemyAuthoring?.monsterStatRoll?.draftOrNull).toEqual(draft);
         expect(randomInt).toHaveBeenCalledTimes(7);
-        oldRows = f.db.prepare('SELECT * FROM campaign_enemy_version ORDER BY rowid').all();
-        h.nav('ENM-020::CTA::002');
-        h.select(nextIdentity);
-        h.nav('ENM-001::CTA::008');
-        h.open('ENM-017::CTA::006');
-      }
-      const validVersionRequest = h.rollRequest(),
-        binding = validVersionRequest.payload.versionBindingOrNull;
-      if (binding == null) throw new Error('Missing actual version binding');
-      if (mode === 'AUTO')
-        for (const changed of [
-          { ...binding, templateId: randomUUID() },
-          { ...binding, expectedCurrentVersion: binding.expectedCurrentVersion - 1 },
-        ]) {
-          const before = f.db.serialize();
-          expect(() =>
-            h.app().command({
-              ...validVersionRequest,
-              payload: { ...validVersionRequest.payload, versionBindingOrNull: changed },
-            }),
-          ).toThrow('INVALID_INPUT');
-          expect(f.db.serialize()).toEqual(before);
-          expect(randomInt).toHaveBeenCalledTimes(7);
-        }
-      const versionRollRequest = validVersionRequest,
-        versionRoll = h.app().command(versionRollRequest);
-      expect(randomInt).toHaveBeenCalledTimes(14);
-      expect(vi.mocked(randomInt).mock.calls).toEqual(Array.from({ length: 14 }, () => [1, 21]));
-      const versionReceipt = monsterStatRollReceiptValue(
-        versionRoll.receipt.result.randomStatsReceipt,
-      );
-      expect(versionReceipt.creationAttemptId).not.toBe(receipt.creationAttemptId);
-      expect(versionReceipt.randomReceiptId).not.toBe(receipt.randomReceiptId);
-      expect(h.view().enemyAuthoring?.monsterStatRoll?.draftOrNull).toMatchObject({
-        massKg: 5.1,
-        ageYears: 17,
-        baseMaxHP: 42,
-      });
-      h.nav('ENM-017::CTA::005');
-      expect(h.view().formId).toBe('ENM-020');
-      expect(f.db.prepare('SELECT * FROM campaign_enemy_version ORDER BY rowid').all()).toEqual(
-        oldRows,
-      );
-      expect(h.versions().map((v) => v.identity)).toEqual(chain);
-      expect(campaignEnemyIdentityInUse(f.db, versionReceipt.randomReceiptId)).toBe(true);
-      f.restartFromDisk();
-      expect(h.app().command(versionRollRequest)).toEqual({
-        replayed: true,
-        receipt: versionRoll.receipt,
-      });
-      expect(h.app().command(rollRequest)).toEqual({ replayed: true, receipt: rolled.receipt });
-      expect(h.app().command(commitRequest)).toEqual({
-        replayed: true,
-        receipt: committed.receipt,
-      });
-      expect(randomInt).toHaveBeenCalledTimes(14);
-      expect(h.view().formId).toBe('ENM-020');
-      if (mode === 'AUTO') {
-        const current = project();
-        expect(current.context.selectedVersionOrNull).toEqual(chain[1]);
-        expect(current.statGeneration?.rollOnceStatus).toBe('NOT_ROLLED');
-        expect(current.statGeneration?.randomReceiptOrNull).toBeNull();
-        expect(current.statGeneration?.candidateStats).toEqual(draft);
-        const view = h.view();
-        h.lib().select({
-          messageType: 'network.enemy-selection.replace',
-          protocolVersion: 3,
-          operationId: randomUUID(),
-          contextId: f.scope.gmLocalContextId,
-          campaignId: f.scope.campaignId,
-          sourceFormId: 'ENM-020',
-          activeTab: 'MONSTERS',
-          expectedRevisions: {
-            stateRevision: view.stateRevision,
-            projectionRevision: view.projectionRevision,
-            actorVisibilityRevision: view.actorVisibilityRevision,
-          },
-          selectionOrNull: null,
-          userSelectionOrNull: identity,
+        h.patch('MONSTER_STATS', edited);
+        h.patch('MONSTER_PHYSICS', physics);
+        h.patch('MONSTER_ATTACK', attack);
+        h.patch('MONSTER_SYMBIONT', { operation: 'PREVIEW', selection: { mode: 'NONE' } });
+        const preview = h.view().enemyAuthoring?.attemptOrNull;
+        if (preview?.kind !== 'CUSTOM_MONSTER' || preview.compositionOrNull === null)
+          throw new Error('Missing actual NONE preview');
+        h.patch('MONSTER_SYMBIONT', {
+          operation: 'CONFIRM',
+          previewCommandId: preview.compositionOrNull.previewCommandId,
+          manualFacesOrNull: null,
         });
-        const historical = project();
-        expect(historical.context.selectedVersionOrNull).toEqual(identity);
-        expect(historical.versionHistory?.current).toEqual(chain[1]);
-        expect(historical.statGeneration?.randomReceiptOrNull).toEqual(receipt);
-        expect(historical.statGeneration?.candidateStats).toEqual(draft);
+        h.patch('MONSTER_SYMBIONT', {
+          operation: 'FINISH',
+          previewCommandId: preview.compositionOrNull.previewCommandId,
+          advisorSkills: [],
+        });
+        const commitRequest = h.request('UI-CMD-ENEMY-COMMIT-V1');
+        const committed = h.app().command(commitRequest);
+        mark('editReceiptReopenAcceptV1Ms');
+        const identity = enemyVersionIdentityValue(committed.receipt.result.committedVersionOrNull);
+        let oldRows = f.db.prepare('SELECT * FROM campaign_enemy_version ORDER BY rowid').all();
+        const chain = [identity];
+        const originalReplay = h.app().command(rollRequest);
+        expect(originalReplay.replayed).toBe(true);
+        expect(originalReplay.receipt).toEqual(rolled.receipt);
+        expect(h.view().formId).toBe('ENM-020');
+        expect(project().statGeneration?.randomReceiptOrNull).toEqual(receipt);
+        expect(project().statGeneration?.candidateStats).toEqual(draft);
+        expect(project().statGeneration?.requiresBodyAcceptance).toBe(false);
+        const savedProjection = project();
+        expect(() =>
+          enemyAuthoringProjectionValue({
+            ...savedProjection,
+            statGeneration: {
+              ...savedProjection.statGeneration,
+              candidateStats: { ...draft, massKg: 5.2 },
+            },
+          }),
+        ).toThrow();
+        expect(randomInt).toHaveBeenCalledTimes(7);
+        h.nav('ENM-020::CTA::002');
+        h.select(identity);
+        h.nav('ENM-001::CTA::008');
+        expect(h.view().enemyAuthoring?.monsterStatRoll).toBeUndefined();
+        const copied = h.view().enemyAuthoring?.attemptOrNull;
+        expect(copied?.kind === 'CUSTOM_MONSTER' && copied.statsOrNull).toEqual(edited);
+        h.open('ENM-017::CTA::006');
+        expect(h.view().enemyAuthoring?.monsterStatRoll?.rollOnceStatus).toBe('NOT_ROLLED');
+        if (mode === 'AUTO') {
+          // Merely viewing018 must not make an unchanged, already accepted body require repair.
+          const cached = structuredClone(h.view().enemyAuthoring?.monsterStatRoll);
+          h.nav('ENM-018::CTA::006');
+          expect(h.view().enemyAuthoring?.monsterStatRoll).toEqual(cached);
+          h.patch('VERSION_CONFIGURATION', {
+            operation: 'SET_REASON',
+            reason: 'Полная неизменная копия после возврата без броска',
+          });
+          const state = h.view().enemyAuthoring?.versionAttempt;
+          if (state === undefined) throw new Error('Missing actual version state');
+          const copiedVersion = h
+            .app()
+            .command(h.request('UI-CMD-ENEMY-NEW-VERSION', { reason: state.reason }));
+          const nextIdentity = enemyVersionIdentityValue(
+            copiedVersion.receipt.result.committedVersionOrNull,
+          );
+          expect(nextIdentity.version).toBe(2);
+          chain.push(nextIdentity);
+          expect(
+            f.db
+              .prepare('SELECT * FROM campaign_enemy_version WHERE version_id=?')
+              .get(identity.versionId),
+          ).toEqual(oldRows[0]);
+          const saved = h.versions().find((v) => v.identity.versionId === nextIdentity.versionId);
+          expect(saved?.attempt.kind === 'CUSTOM_MONSTER' && saved.attempt.statsOrNull).toEqual(
+            edited,
+          );
+          expect(randomInt).toHaveBeenCalledTimes(7);
+          oldRows = f.db.prepare('SELECT * FROM campaign_enemy_version ORDER BY rowid').all();
+          h.nav('ENM-020::CTA::002');
+          h.select(nextIdentity);
+          h.nav('ENM-001::CTA::008');
+          h.open('ENM-017::CTA::006');
+        }
+        const validVersionRequest = h.rollRequest(),
+          binding = validVersionRequest.payload.versionBindingOrNull;
+        if (binding == null) throw new Error('Missing actual version binding');
+        if (mode === 'AUTO')
+          for (const changed of [
+            { ...binding, templateId: randomUUID() },
+            { ...binding, expectedCurrentVersion: binding.expectedCurrentVersion - 1 },
+          ]) {
+            const before = f.db.serialize();
+            expect(() =>
+              h.app().command({
+                ...validVersionRequest,
+                payload: { ...validVersionRequest.payload, versionBindingOrNull: changed },
+              }),
+            ).toThrow('INVALID_INPUT');
+            expect(f.db.serialize().equals(before)).toBe(true);
+            expect(randomInt).toHaveBeenCalledTimes(7);
+          }
+        const versionRollRequest = validVersionRequest,
+          versionRoll = h.app().command(versionRollRequest);
         expect(randomInt).toHaveBeenCalledTimes(14);
+        expect(vi.mocked(randomInt).mock.calls).toEqual(Array.from({ length: 14 }, () => [1, 21]));
+        const versionReceipt = monsterStatRollReceiptValue(
+          versionRoll.receipt.result.randomStatsReceipt,
+        );
+        expect(versionReceipt.creationAttemptId).not.toBe(receipt.creationAttemptId);
+        expect(versionReceipt.randomReceiptId).not.toBe(receipt.randomReceiptId);
+        expect(h.view().enemyAuthoring?.monsterStatRoll?.draftOrNull).toMatchObject({
+          massKg: 5.1,
+          ageYears: 17,
+          baseMaxHP: 42,
+        });
+        h.nav('ENM-017::CTA::005');
+        expect(h.view().formId).toBe('ENM-020');
+        expect(f.db.prepare('SELECT * FROM campaign_enemy_version ORDER BY rowid').all()).toEqual(
+          oldRows,
+        );
+        expect(h.versions().map((v) => v.identity)).toEqual(chain);
+        expect(campaignEnemyIdentityInUse(f.db, versionReceipt.randomReceiptId)).toBe(true);
+        f.restartFromDisk();
+        expect(h.app().command(versionRollRequest)).toEqual({
+          replayed: true,
+          receipt: versionRoll.receipt,
+        });
+        expect(h.app().command(rollRequest)).toEqual({ replayed: true, receipt: rolled.receipt });
+        expect(h.app().command(commitRequest)).toEqual({
+          replayed: true,
+          receipt: committed.receipt,
+        });
+        expect(randomInt).toHaveBeenCalledTimes(14);
+        expect(h.view().formId).toBe('ENM-020');
+        if (mode === 'AUTO') {
+          const current = project();
+          expect(current.context.selectedVersionOrNull).toEqual(chain[1]);
+          expect(current.statGeneration?.rollOnceStatus).toBe('NOT_ROLLED');
+          expect(current.statGeneration?.randomReceiptOrNull).toBeNull();
+          expect(current.statGeneration?.candidateStats).toEqual(draft);
+          const view = h.view();
+          h.lib().select({
+            messageType: 'network.enemy-selection.replace',
+            protocolVersion: 3,
+            operationId: randomUUID(),
+            contextId: f.scope.gmLocalContextId,
+            campaignId: f.scope.campaignId,
+            sourceFormId: 'ENM-020',
+            activeTab: 'MONSTERS',
+            expectedRevisions: {
+              stateRevision: view.stateRevision,
+              projectionRevision: view.projectionRevision,
+              actorVisibilityRevision: view.actorVisibilityRevision,
+            },
+            selectionOrNull: null,
+            userSelectionOrNull: identity,
+          });
+          const historical = project();
+          expect(historical.context.selectedVersionOrNull).toEqual(identity);
+          expect(historical.versionHistory?.current).toEqual(chain[1]);
+          expect(historical.statGeneration?.randomReceiptOrNull).toEqual(receipt);
+          expect(historical.statGeneration?.candidateStats).toEqual(draft);
+          expect(randomInt).toHaveBeenCalledTimes(14);
+        }
+        expect(f.db.prepare('SELECT * FROM campaign_enemy_version ORDER BY rowid').all()).toEqual(
+          oldRows,
+        );
+        mark('versionCancelReopenReplayMs');
+      } finally {
+        f.close();
+        mark('cleanupMs');
+        console.info('monster-stat-roll owning phases', {
+          mode,
+          ...phases,
+          totalMs: performance.now() - started,
+        });
       }
-      expect(f.db.prepare('SELECT * FROM campaign_enemy_version ORDER BY rowid').all()).toEqual(
-        oldRows,
-      );
-      mark('versionCancelReopenReplayMs');
-    } finally {
-      f.close();
-      mark('cleanupMs');
-      console.info('monster-stat-roll owning phases', {
-        mode,
-        ...phases,
-        totalMs: performance.now() - started,
-      });
-    }
-  }, 120_000);
+    },
+    mode === 'AUTO' ? 300_000 : 120_000,
+  );
 
 it('refuses stale and foreign AUTO requests before native RNG, rolls back reached ledger/cursor faults, and requires24 for persisted roll history', () => {
   const h = fixture('AUTO'),
@@ -584,14 +590,14 @@ it('refuses stale and foreign AUTO requests before native RNG, rolls back reache
       ] as const
     ).entries()) {
       expect(() => h.app().command(value), 'negative-vector-' + caseIndex).toThrow(code);
-      expect(f.db.serialize()).toEqual(before);
+      expect(f.db.serialize().equals(before)).toBe(true);
       expect(randomInt).not.toHaveBeenCalled();
     }
     h.nav('ENM-018::CTA::003');
     const wrongSource = h.rollRequest(),
       parentBytes = f.db.serialize();
     expect(() => h.app().command(wrongSource)).toThrow('INVALID_INPUT');
-    expect(f.db.serialize()).toEqual(parentBytes);
+    expect(f.db.serialize().equals(parentBytes)).toBe(true);
     expect(randomInt).not.toHaveBeenCalled();
     h.open('ENM-012::CTA::005');
     const command = h.rollRequest();
@@ -642,7 +648,7 @@ it('refuses stale and foreign AUTO requests before native RNG, rolls back reache
       expectedCalls += 7;
       expect(randomInt).toHaveBeenCalledTimes(expectedCalls);
       expect(f.db.inTransaction).toBe(false);
-      expect(f.db.serialize()).toEqual(bytes);
+      expect(f.db.serialize().equals(bytes)).toBe(true);
       expect(rows()).toEqual(logicalBefore);
       expect(schema()).toEqual(schemaBefore);
       expect(h.view()).toEqual(view);
@@ -673,14 +679,14 @@ it('refuses stale and foreign AUTO requests before native RNG, rolls back reache
         },
       }),
     ).toThrow('IDEMPOTENCY_CONFLICT');
-    expect(f.db.serialize()).toEqual(replayBytes);
+    expect(f.db.serialize().equals(replayBytes)).toBe(true);
     expect(randomInt).toHaveBeenCalledTimes(expectedCalls);
     f.db.prepare('DELETE FROM schema_migration WHERE version=24').run();
     expect(readAppliedMigrationVersion(f.db)).toBe(23);
     const missing24 = f.db.serialize();
     expect(() => h.read()).toThrow('network application storage: SOURCE_CHANGED');
     expect(() => h.app().command(command)).toThrow('network application storage: INVALID_INPUT');
-    expect(f.db.serialize()).toEqual(missing24);
+    expect(f.db.serialize().equals(missing24)).toBe(true);
     expect(randomInt).toHaveBeenCalledTimes(expectedCalls);
   } finally {
     f.close();
@@ -816,7 +822,7 @@ it('refuses the channel for a real SENTIENT symbiotic monster and a currently se
     const before = f.db.serialize();
     expect(() => h.app().command(forbidden)).toThrow('network application storage: INVALID_INPUT');
     expect(() => h.open('ENM-012::CTA::005')).toThrow('network application storage: INVALID_INPUT');
-    expect(f.db.serialize()).toEqual(before);
+    expect(f.db.serialize().equals(before)).toBe(true);
     expect(randomInt).not.toHaveBeenCalled();
     for (const action of [
       'ENM-010::CTA::005',
@@ -881,7 +887,7 @@ it('refuses the channel for a real SENTIENT symbiotic monster and a currently se
     expect(() => h.app().command(systemRequest)).toThrow(
       'network application storage: INVALID_INPUT',
     );
-    expect(f.db.serialize()).toEqual(systemBytes);
+    expect(f.db.serialize().equals(systemBytes)).toBe(true);
     expect(randomInt).not.toHaveBeenCalled();
   } finally {
     f.close();
@@ -918,7 +924,7 @@ it('refuses isolated skills and PNG source drift and a real active-GM-context re
             'network application storage: INVALID_INPUT',
           );
           expect(() => h.app().project()).toThrow('network application storage: CORRUPT_STORAGE');
-          expect(f.db.serialize()).toEqual(before);
+          expect(f.db.serialize().equals(before)).toBe(true);
           expect(randomInt).not.toHaveBeenCalled();
         } finally {
           writeFileSync(filename, original);
@@ -961,7 +967,7 @@ it('refuses isolated skills and PNG source drift and a real active-GM-context re
         'network application storage: CORRUPT_STORAGE',
       );
       expect(denied).toBe(1);
-      expect(f.db.serialize()).toEqual(revoked);
+      expect(f.db.serialize().equals(revoked)).toBe(true);
       expect(randomInt).not.toHaveBeenCalled();
     } finally {
       f.close();
@@ -1068,7 +1074,7 @@ it('keeps a real Adviser card and knowledge unchanged while a low rolled version
     expect(() =>
       h.patch('MONSTER_SYMBIONT', { operation: 'PREVIEW', selection: { mode: 'NONE' } }),
     ).toThrow('network application storage: INVALID_INPUT');
-    expect(f.db.serialize()).toEqual(before);
+    expect(f.db.serialize().equals(before)).toBe(true);
     expect(project().context.attemptOrNull?.advisorCards).toEqual(original.advisorCards);
     expect(randomInt).toHaveBeenCalledTimes(7);
     expect(f.db.prepare('SELECT * FROM campaign_enemy_version ORDER BY rowid').all()).toEqual(
