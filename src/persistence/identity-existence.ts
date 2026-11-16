@@ -6,7 +6,7 @@ const MAX_IDENTITY_QUERIES = 64;
 const caches = new WeakMap<
   Database.Database,
   {
-    prepare: Database.Database['prepare'];
+    prepareIdentity: unknown;
     statements: Map<string, WeakRef<Database.Statement>>;
   }
 >();
@@ -19,9 +19,10 @@ export function hasStoredIdentity(
   id: string,
 ): boolean {
   const sql = `SELECT 1 FROM ${table} WHERE ${column}=? LIMIT 1`;
+  const prepareIdentity: unknown = Reflect.get(database, 'prepare');
   let cache = caches.get(database);
-  if (cache?.prepare !== database.prepare) {
-    cache = { prepare: database.prepare, statements: new Map() };
+  if (cache === undefined || cache.prepareIdentity !== prepareIdentity) {
+    cache = { prepareIdentity, statements: new Map() };
     caches.set(database, cache);
   }
   let statement = cache.statements.get(sql)?.deref();
