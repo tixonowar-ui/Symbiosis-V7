@@ -4337,6 +4337,99 @@ export function registerNpcDiseaseReservation() {
           'effectInstances'
         ];
       }
+      it('reuses reservation cause queries only inside the owning read and rechecks SQL after rollback', () => {
+        const { h, version } = restoredTimed();
+        const before = h.db.serialize();
+        let escaped: Parameters<typeof npcGmSourceModule.readNpcGmPrimitiveCause>[3];
+        let postRollback: Buffer | undefined;
+        const read = (session?: typeof escaped) =>
+          npcGmSourceModule.readNpcDiseaseReservationEvidenceInTransaction(
+            h.db,
+            h.scope,
+            version.npcUuid,
+            seed.effectInstanceId,
+            null,
+            session,
+          );
+        try {
+          const rollback = new Error('Rollback deliberate reservation-source corruption');
+          let caught: unknown;
+          try {
+            h.db
+              .transaction(() => {
+                const expected = read();
+                const prepare = vi.spyOn(h.db, 'prepare');
+                try {
+                  npcGmSourceModule.withNpcGmPrimitiveReadSession(h.db, h.scope, (session) => {
+                    escaped = session;
+                    expect(read(session)).toEqual(expected);
+                    const witnesses = () =>
+                      prepare.mock.calls.filter(([sql]) => sql === 'SELECT 1 AS n').length;
+                    const first = witnesses();
+                    expect(first).toBeGreaterThan(0);
+                    expect(read(session)).toEqual(expected);
+                    expect(witnesses()).toBe(first);
+                    expect(h.db.serialize().equals(before)).toBe(true);
+                    h.db.exec('SAVEPOINT changed_reservation_source');
+                    try {
+                      expect(
+                        h.db
+                          .prepare(
+                            'UPDATE npc_attempt_event SET revision=revision+1000000 WHERE operation_id=?',
+                          )
+                          .run(expected.operationId).changes,
+                      ).toBe(1);
+                      const changed = h.db.serialize();
+                      expect(() => read(session)).toThrow(NetworkApplicationStoreError);
+                      expect(h.db.serialize().equals(changed)).toBe(true);
+                    } finally {
+                      h.db.exec(
+                        'ROLLBACK TO changed_reservation_source; RELEASE changed_reservation_source',
+                      );
+                    }
+                    postRollback = h.db.serialize();
+                    expect(read(session)).toEqual(expected);
+                    expect(h.db.serialize().equals(postRollback)).toBe(true);
+                  });
+                  if (escaped === undefined)
+                    throw new Error('Missing issued reservation read session');
+                  const closed = escaped;
+                  expect(() => read(closed)).toThrow(NetworkApplicationStoreError);
+                  npcGmSourceModule.withNpcGmPrimitiveReadSession(
+                    h.db,
+                    { ...h.scope, gmLocalContextId: randomUUID() },
+                    (session) => expect(() => read(session)).toThrow(NetworkApplicationStoreError),
+                  );
+                  const other = new Database(':memory:');
+                  try {
+                    other
+                      .transaction(() => {
+                        npcGmSourceModule.withNpcGmPrimitiveReadSession(other, h.scope, (session) =>
+                          expect(() => read(session)).toThrow(NetworkApplicationStoreError),
+                        );
+                      })
+                      .immediate();
+                  } finally {
+                    other.close();
+                  }
+                  expect(read()).toEqual(expected);
+                  if (postRollback === undefined) throw new Error('Missing rollback byte baseline');
+                  expect(h.db.serialize().equals(postRollback)).toBe(true);
+                } finally {
+                  prepare.mockRestore();
+                }
+                throw rollback;
+              })
+              .immediate();
+          } catch (error) {
+            caught = error;
+          }
+          expect(caught).toBe(rollback);
+          expect(h.db.serialize().equals(before)).toBe(true);
+        } finally {
+          h.db.close();
+        }
+      });
       it('rechecks the same disease snapshot and calendar after SQL changes inside one transaction', () => {
         const { h, closure, version } = restoredTimed(),
           before = h.db.serialize(),

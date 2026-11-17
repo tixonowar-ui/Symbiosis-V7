@@ -1922,3 +1922,13 @@ campaign capacity. Технические primitives перечислены вы
 Пользователь разрешил последовательные merge до закрытия всех issues.
 Перед каждым merge обязательны независимое ревью и свежие verify/E2E
 на окончательном HEAD; фактическое закрытие issue проверяется отдельно.
+
+### Уточнение #260 от 2026-11-17
+
+Для построения одного контекста NPC и вложенного ITEM_RESTORE используется
+существующий invocation-owned SQL reader с прежними freshness/ownership guards.
+64 primitive-проверки, preview V1/N+1 и новая реальная V1 reservation/rollback
+проверка прошли в своих scoped-областях. Исходный replacement на прежнем SHA
+остановлен Job4ГиБ до COMMIT V3; новый полный reproducer, clean5 и CI ещё ожидаются.
+Подробности и ограничения — в docs/status/monster-stat-roll-once-260.md.
+После поставки #260 работа останавливается; #261 не начата, #188/#113 открыты.
