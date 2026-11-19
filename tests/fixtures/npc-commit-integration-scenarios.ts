@@ -7340,6 +7340,7 @@ export function registerNpcRuntimeEffects(
             /\bat initialStateSourceBasis \([^\r\n]*\)\r?\n\s*at (?:Object\.)?read \([^\r\n]*npc-domain-readers\.ts:[^\r\n]*\)\r?\n\s*at read \([^\r\n]*npc-poison-preparation\.ts:/.test(
               trace,
             );
+          // The outer contextAt owns the read session. Its callback re-enters contextAt for the live read.
           const directGraph = (trace: string) => {
             const frames = [...trace.matchAll(/\bat (?:Object\.)?(\w+) \(/g)].map(
               (match) => match[1],
@@ -7348,6 +7349,8 @@ export function registerNpcRuntimeEffects(
               'snapshotPoisonState',
               'pendingInventoryGraph',
               'snapshotChildGraph',
+              'contextAt',
+              'withNpcGmPrimitiveReadSession',
               'contextAt',
               'initialStateSourceBasis',
               'read',
@@ -7368,6 +7371,8 @@ export function registerNpcRuntimeEffects(
               'snapshotPoisonState',
               'pendingInventoryGraph',
               'snapshotChildGraph',
+              'contextAt',
+              'withNpcGmPrimitiveReadSession',
               'contextAt',
               'editorAt',
               'initialStateSourceBasis',
