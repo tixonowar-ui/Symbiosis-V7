@@ -10,7 +10,7 @@ import { readNpcGmPrimitiveCause } from './npc-gm-source.js';
 import {
   campaignParts,
   npcArtBlobValue,
-  npcAttemptEventEnvelopeValue,
+  npcFrozenAttemptEventEnvelopeText,
   npcCheckpointAfter,
   npcLibraryBlockValue,
   npcScopeValue,
@@ -44,12 +44,13 @@ export interface NpcCampaignCheckpointLedger {
   readonly commits: readonly NpcCampaignCheckpointEvent[];
   readonly anchorOrNull: NpcAnchor | null;
 }
-function checked(row: Row): Row {
+function checkedText(row: Row): string {
   const text = s.text(row['record_json']);
   if (s.sha(text) !== s.hash(row['record_sha256'])) return s.fail();
-  const value = s.object(JSON.parse(text) as unknown);
-  if (s.canonical(value) !== text) return s.fail();
-  return value;
+  return text;
+}
+function checked(row: Row): Row {
+  return s.parseCanonicalObject(checkedText(row));
 }
 function schema(db: Database.Database): boolean {
   const version = readAppliedMigrationVersion(db);
@@ -118,7 +119,7 @@ export function readNpcCampaignCheckpointLedgerInTransaction(
   const operationMap = new Map(operations.map((o) => [o.operationId, o]));
   const attempts = rows('npc_attempt_event');
   const children = npcChildIdentities(
-    attempts.map((row) => npcAttemptEventEnvelopeValue(checked(row))),
+    attempts.map((row) => npcFrozenAttemptEventEnvelopeText(checkedText(row))),
     operations,
   );
   verifyNpcChildIndex(db, campaignId, children);
