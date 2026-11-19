@@ -460,9 +460,9 @@ class NpcGmCauseReadSession {
   readonly #db: Database.Database;
   readonly #scope: NpcScope;
   #queries: ReturnType<typeof causeQueries> | undefined;
-  readonly #changes: Database.Statement;
-  readonly #schemaVersion: Database.Statement;
-  readonly #userVersion: Database.Statement;
+  #changes: Database.Statement | undefined;
+  #schemaVersion: Database.Statement | undefined;
+  #userVersion: Database.Statement | undefined;
   readonly #cache = new Map<
     string,
     { hash: string; proof: NpcGmPrimitiveProof; rows: PrimitiveCauseRows }
@@ -490,7 +490,13 @@ class NpcGmCauseReadSession {
     this.#stamp = this.stamp();
   }
   private stamp(): string {
-    if (!this.#db.inTransaction) return s.fail('INVALID_INPUT');
+    if (
+      !this.#db.inTransaction ||
+      this.#changes === undefined ||
+      this.#schemaVersion === undefined ||
+      this.#userVersion === undefined
+    )
+      return s.fail('INVALID_INPUT');
     const changes = this.#changes.get() as Row;
     return (
       String(changes['n']) +
@@ -503,6 +509,11 @@ class NpcGmCauseReadSession {
   close(): void {
     this.#open = false;
     this.#cache.clear();
+    // An escaped closed reader must not retain its private native statements.
+    this.#queries = undefined;
+    this.#changes = undefined;
+    this.#schemaVersion = undefined;
+    this.#userVersion = undefined;
   }
   read(db: Database.Database, scope: NpcScope, cause: NpcSourceCause): NpcGmPrimitiveProof {
     if (!this.#open || db !== this.#db || !db.inTransaction) return s.fail('INVALID_INPUT');
