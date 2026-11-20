@@ -3430,11 +3430,11 @@ describe('APP-004 web protocol vocabulary', () => {
   });
 
   it('recognizes source-declared APP-004 keys without inventing another key', () => {
-    for (let index = 1; index <= 8; index += 1) {
+    for (let index = 1; index <= 10; index += 1) {
       const actionKey = `APP-004::CTA::${String(index).padStart(3, '0')}`;
       expect(WEB_PROTOCOL_VOCABULARY.isFormActionKey('APP-004', actionKey), actionKey).toBe(true);
     }
-    expect(WEB_PROTOCOL_VOCABULARY.isFormActionKey('APP-004', 'APP-004::CTA::009')).toBe(false);
+    expect(WEB_PROTOCOL_VOCABULARY.isFormActionKey('APP-004', 'APP-004::CTA::011')).toBe(false);
   });
 });
 

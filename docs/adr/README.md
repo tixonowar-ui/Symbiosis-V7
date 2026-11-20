@@ -126,6 +126,7 @@
 | [0092](0092-sentient-initial-skill-plan-rebuild.md)                  | Явный полный pre-V1 rebuild плана навыков SENTIENT; Atlas 1.21/B16          | принято владельцем, вариант A #284          |
 | [0093](0093-sentient-attempt-generation-and-skill-plan-proof.md)     | Версия SENTIENT attempt, pending upgrade и owning proof плана/учёта         | техническая реализация #257                 |
 | [0094](0094-enemy-version-configuration-replacement.md)              | Явная полная конфигурация N+1 и own-card choices обоих kinds; Atlas1.22/B17 | принято владельцем, вариант A #288          |
+| [0095](0095-local-owner-binding-for-existing-finals.md)              | Первая привязка сохранённых FINAL к локальному профилю                      | принято владельцем, #249                    |
 
 ## Перенос решений аудита
 

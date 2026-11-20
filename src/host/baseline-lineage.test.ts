@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   baselineFixtureManifest,
@@ -36,7 +37,7 @@ beforeAll(async () => {
 afterAll(() => fixture?.close());
 
 describe('verified baseline lineage', () => {
-  it('accepts only explicit forward pairs among the eighteen reviewed releases', () => {
+  it('accepts only explicit forward pairs among the nineteen reviewed releases', () => {
     const ids = BASELINE_FIXTURE_IDS;
     for (const [from, to] of [
       ['B0', 'B1'],
@@ -192,6 +193,24 @@ describe('verified baseline lineage', () => {
       ['B14', 'B17'],
       ['B15', 'B17'],
       ['B16', 'B17'],
+      ['B0', 'B18'],
+      ['B1', 'B18'],
+      ['B2', 'B18'],
+      ['B3', 'B18'],
+      ['B4', 'B18'],
+      ['B5', 'B18'],
+      ['B6', 'B18'],
+      ['B7', 'B18'],
+      ['B8', 'B18'],
+      ['B9', 'B18'],
+      ['B10', 'B18'],
+      ['B11', 'B18'],
+      ['B12', 'B18'],
+      ['B13', 'B18'],
+      ['B14', 'B18'],
+      ['B15', 'B18'],
+      ['B16', 'B18'],
+      ['B17', 'B18'],
     ] as const) {
       expect(isApprovedBaselineLineagePair(ids[from], ids[to])).toBe(true);
       expect(() =>
@@ -214,6 +233,32 @@ describe('verified baseline lineage', () => {
     }
     expect(isApprovedBaselineLineagePair(ids.B1, 'sha256:future')).toBe(false);
     expect(isApprovedBaselineLineagePair('sha256:unknown', ids.B2)).toBe(false);
+  });
+
+  it('preserves each original release under the B18 owner-binding Atlas and changes only its two mirrors', async () => {
+    const historicalManifest = new URL('./baselines/atlas-v1.22.checksums.sha256', import.meta.url);
+    const original = readFileSync(historicalManifest);
+    expect(original.equals(baselineFixtureManifest('B17'))).toBe(true);
+    const root = fileURLToPath(new URL('../../', import.meta.url));
+    const delivered = readFileSync(join(root, 'artifacts/CHECKSUMS.sha256'));
+    expect(delivered.equals(baselineFixtureManifest('B18'))).toBe(true);
+    const lines = (bytes: Buffer) => bytes.toString('utf8').trimEnd().split('\n');
+    const previous = lines(original);
+    const next = lines(delivered);
+    expect(next.map((line) => line.slice(66))).toEqual(previous.map((line) => line.slice(66)));
+    expect(
+      next.filter((line, index) => line !== previous[index]).map((line) => line.slice(66)),
+    ).toEqual(Object.keys(seals.localOwnerBindingAtlas));
+    const baseline = await loadLocalCharacterExportBaseline(root);
+    expect(baseline.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B18);
+    for (const id of Object.values(BASELINE_FIXTURE_IDS)) {
+      const stored = resolveStoredLocalCharacterExportBaseline(baseline, id);
+      expect(stored.baselineVersion).toBe(id);
+      expect(stored.catalog).toBe(baseline.catalog);
+      expect(Object.isFrozen(stored)).toBe(true);
+    }
+    expect(readFileSync(historicalManifest).equals(original)).toBe(true);
+    expect(readFileSync(join(root, 'artifacts/CHECKSUMS.sha256')).equals(delivered)).toBe(true);
   });
 
   it('registers immutable B0 and B1 views under real B2 bytes without rewriting either manifest', async () => {

@@ -132,11 +132,11 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '6caf5d80dedc0ec96dc45f1f0bf07ee70aa2d202734e3f6ed191bbcfdce680cb',
+    sha256: '112d9088e4909ed884f0df25e4657d8eb3643c788a7587d21827d4c7c7664978',
   },
   {
     key: 'transitions',
-    sha256: '76d2cf3f7b0e93adaffd28e06efc23883ff19863c023c8530ef003a92abf5c6c',
+    sha256: '30f85a6bbbebfeb833050b2c472b44e5872545ca1633e85f30fa4ce36d940248',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [

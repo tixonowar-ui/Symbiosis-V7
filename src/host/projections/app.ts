@@ -165,13 +165,15 @@ const APP_004_REQUIRED_FIELDS = [
   'localCharacterLibraryRevision',
   'draftCharacterIds[]',
   'finalCharacterIds[]',
-  'launchContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE',
+  'launchContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE|DEVICE_LIBRARY_SELECTOR',
   'handoffIdOrNull',
   'handoffReceiptIdOrNull',
-  'returnContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE',
+  'returnContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE|DEVICE_LIBRARY_SELECTOR',
   'campaignAuthority=false when HOST_LOCAL_CANDIDATE',
   'stateRevision',
   'projectionRevision',
+  'DEVICE_LIBRARY_SELECTOR input: current selectorHandoffReceiptId, signed target ID and label, localOwnerIdOrNull=null, selectionRevision. Selection starts empty; continue requires 1..3 exact selectedFinals.',
+  'TARGET_OWNER_LIBRARY input: current target ACK and matching non-null owner. No grant/continuation is required for fresh or previously owned originals; ordinary library retains its own fields.',
 ] as const;
 const APP_001_BOOT_GUARD = 'bootState=BOOTING|READY|ERROR';
 const CHR_001_REQUIRED_FIELDS = [

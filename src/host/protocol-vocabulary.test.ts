@@ -125,7 +125,7 @@ describe('host protocol vocabulary implemented presentation support', () => {
 
   it('accepts the exact APP-004 presentation and all source-declared action keys', () => {
     expect(vocabulary.isPresentedForm('APP-004', 'screen', '/player/characters', [])).toBe(true);
-    for (let index = 1; index <= 8; index += 1) {
+    for (let index = 1; index <= 10; index += 1) {
       const actionKey = `APP-004::CTA::${String(index).padStart(3, '0')}`;
       expect(vocabulary.isFormActionKey('APP-004', actionKey), actionKey).toBe(true);
     }
@@ -177,7 +177,7 @@ describe('host protocol vocabulary implemented presentation support', () => {
       ]),
     ).toBe(false);
     expect(vocabulary.isPresentedForm('APP-003', 'screen', '/player/characters', [])).toBe(false);
-    expect(vocabulary.isFormActionKey('APP-004', 'APP-004::CTA::009')).toBe(false);
+    expect(vocabulary.isFormActionKey('APP-004', 'APP-004::CTA::011')).toBe(false);
   });
 
   it('accepts the fifteen exact inherited character routes and source action vocabularies', () => {

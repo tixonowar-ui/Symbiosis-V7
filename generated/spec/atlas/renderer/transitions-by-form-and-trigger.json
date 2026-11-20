@@ -97,6 +97,13 @@
       "to": "CMP-009",
       "trigger": "Вернуться к управлению клиентами мастера"
     },
+    "Выбрать существующий профиль по идентификатору": {
+      "from": "APP-003",
+      "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; explicit exact targetLocalOwnerId and displayed targetProfileLabel; select locally, zero membership or authority",
+      "kind": "local-draft-command",
+      "to": "APP-003",
+      "trigger": "Выбрать существующий профиль по идентификатору"
+    },
     "Добавить кандидата из локальной библиотеки": {
       "from": "APP-003",
       "guard": "otherwise CTA and target-only data are absent from payload, DOM, accessibility tree, hotkeys and client cache; projectionRole=PLAYER; ownerContext=PLAYER_LOCAL; projectionRole=PLAYER; activeRole=PLAYER; isHostDevice=false OR active local context already equals the acknowledged player/provisional owner with committed handoffReceiptId; no GM projection mounted; selectedCandidateIds count<3; no seat/authority created",
@@ -111,6 +118,13 @@
       "to": "PLY-027",
       "trigger": "Оставить ноль локальных player seats"
     },
+    "Отменить передачу до привязки": {
+      "from": "APP-003",
+      "guard": "NEUTRAL_PROFILE_SETUP or SELECTOR_BIND_CONFIRM; no binding commit; current signedReturnContext; target selection, owner creation and selector ACK are optional for neutral cancel; purge and return to the exact signed GM/neutral boundary, zero write",
+      "kind": "normative",
+      "to": "PLY-030",
+      "trigger": "Отменить передачу до привязки"
+    },
     "Передать host локальному кандидату через privacy curtain": {
       "from": "APP-003",
       "guard": "projectionRole=GM; activeRole=GM; isHostDevice=true; 1<=selectedCandidateIds count<=3; provisional local owner selected; GM projection erased before PLY-030; no player campaign authority",
@@ -118,12 +132,47 @@
       "to": "PLY-030",
       "trigger": "Передать host локальному кандидату через privacy curtain"
     },
+    "Передать устройство для выбора неназначенных листов": {
+      "from": "APP-003",
+      "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; exact profile selected; issue current signed DEVICE_LIBRARY_SELECTOR curtain, no library rows before explicit selector ACK",
+      "kind": "normative",
+      "to": "PLY-030",
+      "trigger": "Передать устройство для выбора неназначенных листов"
+    },
+    "Передать устройство для создания нового персонажа": {
+      "from": "APP-003",
+      "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; exact fresh empty target selected; only signed HOST_LOCAL_CANDIDATE curtain, no selector grant",
+      "kind": "normative",
+      "to": "PLY-030",
+      "trigger": "Передать устройство для создания нового персонажа"
+    },
+    "Привязать выбранных персонажей локальному владельцу": {
+      "from": "APP-003",
+      "guard": "signed selector context and selectorHandoffReceiptId current; exact durable targetLocalOwnerId + targetProfileLabel; 1..3 distinct unassigned immutable FINAL from this installation and device; exact sourceUuid/finalSnapshotVersion/metadataRevision/candidateSnapshotChecksum and selectionRevision; UI-CMD-LOCAL-OWNER-BIND-FINALS commits the whole grant and pending continuation, then purge selector before target curtain",
+      "kind": "workflow-command",
+      "to": "PLY-030",
+      "trigger": "Привязать выбранных персонажей локальному владельцу"
+    },
     "Продолжить на обычном устройстве": {
       "from": "APP-003",
       "guard": "otherwise CTA and target-only data are absent from payload, DOM, accessibility tree, hotkeys and client cache; projectionRole=PLAYER; isHostDevice=false and 1<=selectedCandidateIds count<=3",
       "kind": "normative",
       "to": "NET-003",
       "trigger": "Продолжить на обычном устройстве"
+    },
+    "Продолжить подключение с листами этого профиля": {
+      "from": "APP-003",
+      "guard": "isHostDevice=true; current HOST_LOCAL_CANDIDATE ACK identifies exact target owner; only that owner’s permitted sourceUuid subset, 1..3, current revisions, ordinary #171/#172 admission; no pre-admission seat HOST_LOCAL_CANDIDATE: listing, direct open, NET-003 reselection and NET-004 submit each recheck the current acknowledged targetLocalOwnerId and durable membership for every exact sourceUuid before reading or writing. A foreign UUID or stale grant is rejected.",
+      "kind": "normative",
+      "to": "NET-003",
+      "trigger": "Продолжить подключение с листами этого профиля"
+    },
+    "Создать профиль с указанной меткой": {
+      "from": "APP-003",
+      "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; explicitly entered nonempty targetProfileLabel; UI-CMD-LOCAL-OWNER-PROFILE-CREATE commits only a new durable profile and returns its exact ID",
+      "kind": "workflow-command",
+      "to": "APP-003",
+      "trigger": "Создать профиль с указанной меткой"
     },
     "Убрать кандидата из draft": {
       "from": "APP-003",
@@ -147,6 +196,20 @@
       "kind": "normative",
       "to": "CHR-043",
       "trigger": "Импортировать персонажа"
+    },
+    "Отменить выбор неназначенных листов": {
+      "from": "APP-004",
+      "guard": "signed DEVICE_LIBRARY_SELECTOR receipt current; localOwnerIdOrNull=null; prior GM projection erased; only unassigned immutable FINAL visible; clear selection and private buffers, cancel before binding, zero grant; safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved",
+      "kind": "normative",
+      "to": "PLY-030",
+      "trigger": "Отменить выбор неназначенных листов"
+    },
+    "Проверить выбранные неназначенные листы": {
+      "from": "APP-004",
+      "guard": "signed DEVICE_LIBRARY_SELECTOR receipt current; localOwnerIdOrNull=null; prior GM projection erased; only unassigned immutable FINAL visible; 1..3 distinct currently unassigned sourceUuid/finalSnapshotVersion/metadataRevision/candidateSnapshotChecksum; target and selection revision present; no write",
+      "kind": "normative",
+      "to": "APP-003",
+      "trigger": "Проверить выбранные неназначенные листы"
     }
   },
   "APP-009": {
@@ -2319,12 +2382,26 @@
     }
   },
   "CMP-009": {
+    "Выбрать сохранённых персонажей этого устройства": {
+      "from": "CMP-009",
+      "guard": "isHostDevice=true; active master at safe signed boundary, including GM_ONLY with zero PCs; erase all GM payload, DOM, a11y, hotkeys, cache before neutral profile metadata; no FINAL rows",
+      "kind": "normative",
+      "to": "APP-003",
+      "trigger": "Выбрать сохранённых персонажей этого устройства"
+    },
     "Передать устройство локальному кандидату": {
       "from": "CMP-009",
       "guard": "host provisional candidate selected; prior GM projection erased",
       "kind": "normative",
       "to": "PLY-030",
       "trigger": "Передать устройство локальному кандидату"
+    },
+    "Продолжить передачу: [метка + идентификатор]": {
+      "from": "CMP-009",
+      "guard": "same installation/device; trusted safe current boundary; exact retained pendingContinuationId and targetLocalOwnerId with targetProfileLabel; fresh signed HOST_LOCAL_CANDIDATE target; no target projection before new ACK; erase GM projection before target curtain",
+      "kind": "normative",
+      "to": "PLY-030",
+      "trigger": "Продолжить передачу: [метка + идентификатор]"
     }
   },
   "CMP-012": {
@@ -4672,6 +4749,48 @@
       "kind": "workflow-command",
       "to": "PLY-029",
       "trigger": "Готов открыть следующую проекцию"
+    },
+    "Отменить передачу до подтверждения": {
+      "from": "PLY-030",
+      "guard": "Current signed SELECTOR_CURTAIN before selector ACK or fresh HOST_LOCAL_CANDIDATE TARGET_CURTAIN before target ACK; no committed binding; erase all private buffers and follow exact signed GM/neutral return without selector/target ACK. No binding or access grant.",
+      "kind": "normative",
+      "to": "PLY-030",
+      "trigger": "Отменить передачу до подтверждения"
+    },
+    "Подтвердить возврат устройства мастеру": {
+      "from": "PLY-030",
+      "guard": "safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=RETURN_INITIATOR current signed GM receipt, then GM-only projection",
+      "kind": "workflow-command",
+      "to": "CMP-009",
+      "trigger": "Подтвердить возврат устройства мастеру"
+    },
+    "Подтвердить получение устройства для выбора листов": {
+      "from": "PLY-030",
+      "guard": "neutral curtain; all private projections erased; address exact targetProfileLabel + targetLocalOwnerId; no FINAL/candidate metadata; handoffType=DEVICE_LIBRARY_SELECTOR; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=ACTIVATE_TARGET; explicit cooperative selector ACK, localOwnerIdOrNull=null; selection only",
+      "kind": "workflow-command",
+      "to": "APP-004",
+      "trigger": "Подтвердить получение устройства для выбора листов"
+    },
+    "Подтвердить получение устройства указанным профилем": {
+      "from": "PLY-030",
+      "guard": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=ACTIVATE_TARGET; explicit addressed target ACK, only exact owner library or fresh empty library",
+      "kind": "workflow-command",
+      "to": "APP-004",
+      "trigger": "Подтвердить получение устройства указанным профилем"
+    },
+    "Позже": {
+      "from": "PLY-030",
+      "guard": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority; binding committed, target ACK pending, no new write; retain existing grant and pendingContinuationId; safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved",
+      "kind": "normative",
+      "to": "PLY-030",
+      "trigger": "Позже"
+    },
+    "Продолжить передачу: [метка + идентификатор]": {
+      "from": "PLY-030",
+      "guard": "neutral curtain; all private projections erased; address exact targetProfileLabel + targetLocalOwnerId; no FINAL/candidate metadata; same installation/device; trusted safe current boundary; exact retained pendingContinuationId and targetLocalOwnerId with targetProfileLabel; fresh signed HOST_LOCAL_CANDIDATE target; no target projection before new ACK",
+      "kind": "normative",
+      "to": "PLY-030",
+      "trigger": "Продолжить передачу: [метка + идентификатор]"
     }
   },
   "PLY-031": {

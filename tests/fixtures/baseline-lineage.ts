@@ -39,7 +39,8 @@ export type BaselineFixtureRelease =
   | 'B14'
   | 'B15'
   | 'B16'
-  | 'B17';
+  | 'B17'
+  | 'B18';
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url));
 const patchPath = fileURLToPath(new URL('./atlas-177-lineage.patch', import.meta.url));
 const admissionPatchPath = fileURLToPath(new URL('./atlas-199-lineage.patch', import.meta.url));
@@ -65,6 +66,9 @@ const initialSkillPlanPatchPath = fileURLToPath(
 );
 const enemyVersionConfigurationPatchPath = fileURLToPath(
   new URL('./atlas-288-lineage.patch', import.meta.url),
+);
+const localOwnerBindingPatchPath = fileURLToPath(
+  new URL('./atlas-249-lineage.patch', import.meta.url),
 );
 const historicalManifest = readFileSync(
   new URL('../../src/host/baselines/atlas-v1.5.checksums.sha256', import.meta.url),
@@ -109,6 +113,7 @@ export const BASELINE_FIXTURE_IDS = {
   B15: BASELINE_LINEAGE_SEALS.systemLibraryBaselineVersion,
   B16: BASELINE_LINEAGE_SEALS.initialSkillPlanBaselineVersion,
   B17: BASELINE_LINEAGE_SEALS.enemyVersionConfigurationBaselineVersion,
+  B18: BASELINE_LINEAGE_SEALS.localOwnerBindingBaselineVersion,
 } as const;
 const releaseAtlas = {
   B0: historicalAtlas,
@@ -129,6 +134,7 @@ const releaseAtlas = {
   B15: BASELINE_LINEAGE_SEALS.systemLibraryAtlas,
   B16: BASELINE_LINEAGE_SEALS.initialSkillPlanAtlas,
   B17: BASELINE_LINEAGE_SEALS.enemyVersionConfigurationAtlas,
+  B18: BASELINE_LINEAGE_SEALS.localOwnerBindingAtlas,
 } as const;
 
 export function baselineFixtureManifest(release: BaselineFixtureRelease): Buffer {
@@ -152,7 +158,8 @@ export function baselineFixtureManifest(release: BaselineFixtureRelease): Buffer
     release === 'B14' ||
     release === 'B15' ||
     release === 'B16' ||
-    release === 'B17'
+    release === 'B17' ||
+    release === 'B18'
   ) {
     const entries = text.trimEnd().split('\n');
     entries.push(
@@ -195,6 +202,7 @@ export function applyBaselineFixtureRelease(
     'B15',
     'B16',
     'B17',
+    'B18',
   ] as const;
   // These private bytes cannot change during the synchronous release lookup.
   // Hash each once instead of rehashing the same JSON for every older release.
@@ -224,6 +232,7 @@ export function applyBaselineFixtureRelease(
         readFileSync(systemLibraryPatchPath),
         readFileSync(initialSkillPlanPatchPath),
         readFileSync(enemyVersionConfigurationPatchPath),
+        readFileSync(localOwnerBindingPatchPath),
       ]),
     );
   const patchSha256 = patchSeal();
@@ -297,7 +306,9 @@ export function applyBaselineFixtureRelease(
                                           ? systemLibraryPatchPath
                                           : edge === 15
                                             ? initialSkillPlanPatchPath
-                                            : enemyVersionConfigurationPatchPath,
+                                            : edge === 16
+                                              ? enemyVersionConfigurationPatchPath
+                                              : localOwnerBindingPatchPath,
           ),
           reverse,
         );
@@ -345,7 +356,8 @@ export function applyBaselineFixtureRelease(
       release === 'B14' ||
       release === 'B15' ||
       release === 'B16' ||
-      release === 'B17'
+      release === 'B17' ||
+      release === 'B18'
     ) {
       const supplied = readFileSync(join(sourceRoot, 'artifacts', path));
       assert.equal(sha(supplied), digest, 'supplied GM source bytes differ');
@@ -356,7 +368,7 @@ export function applyBaselineFixtureRelease(
   writeFileSync(join(projectRoot, 'artifacts/CHECKSUMS.sha256'), baselineFixtureManifest(release));
 }
 
-/** Exact B0–B17 sources use seventeen reviewed Atlas patches and the three sealed B5–B17 art paths. */
+/** Exact B0–B18 sources use eighteen reviewed Atlas patches and the three sealed B5–B18 art paths. */
 export function createBaselineLineageFixture(release: BaselineFixtureRelease = 'B0') {
   const directory = mkdtempSync(join(tmpdir(), 'symbiosis-baseline-lineage-'));
   const projectRoot = join(directory, 'project');

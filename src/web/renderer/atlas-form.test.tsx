@@ -353,6 +353,8 @@ describe('atlas implemented-form renderer', () => {
       'Открыть «Создание персонажа: идентичность»',
       'Вернуться в главное меню игрока',
       'Импортировать персонажа',
+      'Проверить выбранные неназначенные листы',
+      'Отменить выбор неназначенных листов',
     ]);
   });
 
@@ -441,9 +443,9 @@ describe('atlas implemented-form renderer', () => {
     const models = appIds.map((id) => getAtlasFormModel(id));
     const actions = models.flatMap((model) => model.actions.items);
 
-    // Measured from requirements.json and the exact (from, trigger) join in issue #33.
-    expect(actions).toHaveLength(42);
-    expect(actions.filter((action) => action.transition !== null)).toHaveLength(32);
+    // Atlas primary actions from requirements.json join transitions on (from, trigger).
+    expect(actions).toHaveLength(51);
+    expect(actions.filter((action) => action.transition !== null)).toHaveLength(41);
     expect(actions.filter((action) => action.transition === null)).toHaveLength(10);
   });
 

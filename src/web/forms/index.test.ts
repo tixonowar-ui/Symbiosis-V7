@@ -6,7 +6,7 @@ describe('APP-004 web form registry', () => {
   it('publishes the exact route and keeps availability as a strict host-provided subset', () => {
     const definition = presentedFormDefinition('APP-004');
     expect(definition?.route).toBe('/player/characters');
-    expect(definition?.actions).toHaveLength(8);
+    expect(definition?.actions).toHaveLength(10);
     expect(availableFormActions('APP-004', ['APP-004::CTA::001', 'APP-004::CTA::007'])).toEqual([
       {
         actionKey: 'APP-004::CTA::001',
@@ -14,10 +14,14 @@ describe('APP-004 web form registry', () => {
       },
       { actionKey: 'APP-004::CTA::007', label: 'Вернуться в главное меню игрока' },
     ]);
+    expect(availableFormActions('APP-004', ['APP-004::CTA::009', 'APP-004::CTA::010'])).toEqual([
+      { actionKey: 'APP-004::CTA::009', label: 'Проверить выбранные неназначенные листы' },
+      { actionKey: 'APP-004::CTA::010', label: 'Отменить выбор неназначенных листов' },
+    ]);
   });
 
   it('refuses unknown, duplicate, and cross-form availability keys', () => {
-    expect(() => availableFormActions('APP-004', ['APP-004::CTA::009' as never])).toThrow(
+    expect(() => availableFormActions('APP-004', ['APP-004::CTA::011' as never])).toThrow(
       'is not declared for APP-004',
     );
     expect(() =>

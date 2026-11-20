@@ -1,10 +1,10 @@
 {
   "$schema": "urn:symbiosis:v7:web-ui-screen-atlas:1.2",
   "schemaVersion": "1.2.0",
-  "atlasVersion": "1.22",
+  "atlasVersion": "1.23",
   "title": "Symbiosis V7 Web UI Screen Atlas",
   "language": "ru-RU",
-  "releaseDate": "2026-11-13",
+  "releaseDate": "2026-11-20",
   "normativeStatus": "APPROVED_BASELINE_DERIVATIVE_NO_OPEN_UX_QUESTIONS",
   "sourceRefs": [
     {
@@ -1502,6 +1502,160 @@
         "samePoolAndOpener": "Keep the current track when the pool is unchanged, except a required new-entry opener; consume an opener also present in its continuation bag.",
         "persistence": "Persist active Track_ID, offset, pool, remaining shuffle bag and RNG state; reconnect resumes the host state without reselecting."
       }
+    },
+    "localOwnerBinding": {
+      "source": "ADR 0095 / #249 / B18",
+      "profile": {
+        "key": [
+          "installationId",
+          "deviceId",
+          "targetLocalOwnerId"
+        ],
+        "label": "targetProfileLabel",
+        "lifetime": "INSTALLATION_LOCAL_CROSS_CAMPAIGN",
+        "selection": "EXPLICIT_EXACT_ID",
+        "createCommandId": "UI-CMD-LOCAL-OWNER-PROFILE-CREATE"
+      },
+      "selector": {
+        "handoffType": "DEVICE_LIBRARY_SELECTOR",
+        "authority": "SELECTION_ONLY",
+        "localOwnerIdOrNull": null,
+        "formId": "APP-004",
+        "visibility": "UNASSIGNED_IMMUTABLE_FINAL_ONLY",
+        "allowedActionKeys": [
+          "APP-004::CTA::009",
+          "APP-004::CTA::010"
+        ]
+      },
+      "binding": {
+        "commandId": "UI-CMD-LOCAL-OWNER-BIND-FINALS",
+        "formId": "APP-003",
+        "minimum": 1,
+        "maximum": 3,
+        "envelopeFields": [
+          "commandId",
+          "installationId",
+          "deviceId",
+          "targetLocalOwnerId",
+          "targetProfileLabel",
+          "selectorHandoffReceiptId",
+          "signedReturnContext",
+          "selectionRevision",
+          "stateRevision",
+          "projectionRevision",
+          "selectedFinals"
+        ],
+        "selectionFields": [
+          "sourceUuid",
+          "finalSnapshotVersion",
+          "metadataRevision",
+          "candidateSnapshotChecksum"
+        ],
+        "receiptFields": [
+          "bindingReceiptId",
+          "grantId",
+          "targetLocalOwnerId",
+          "targetProfileLabel",
+          "selectedFinals",
+          "pendingContinuationId"
+        ],
+        "membershipKey": [
+          "installationId",
+          "deviceId",
+          "sourceUuid"
+        ],
+        "assignment": "UNASSIGNED_TO_EXACT_OWNER_ONCE"
+      },
+      "curtains": {
+        "selector": "DEVICE_LIBRARY_SELECTOR",
+        "target": "HOST_LOCAL_CANDIDATE",
+        "metadataFields": [
+          "targetProfileLabel",
+          "targetLocalOwnerId"
+        ],
+        "requirePriorProjectionErased": true,
+        "explicitCooperativeAcknowledgement": true,
+        "authenticateHuman": false
+      },
+      "continuation": {
+        "identity": "pendingContinuationId",
+        "requiresCurrentSignedHandoff": true,
+        "allowLaterBeforeTargetAck": true,
+        "resumeFormIds": [
+          "CMP-009",
+          "PLY-030"
+        ],
+        "neutralMetadataFields": [
+          "targetProfileLabel",
+          "targetLocalOwnerId",
+          "pendingContinuationId"
+        ],
+        "targetLibrary": "ACTIVE_OWNER_MEMBERSHIPS_ONLY"
+      },
+      "admission": {
+        "workflow": "EXISTING_171_172",
+        "requestFormId": "NET-003",
+        "repeatForEachLocalOwner": true,
+        "maximumAdmittedLocalPlayerTabs": 3,
+        "maximumActiveContexts": 1,
+        "receiptMapping": [
+          "sourceUuid",
+          "targetLocalOwnerId",
+          "proposalChecksum",
+          "proposalRevision",
+          "receiptId",
+          "campaignCharacterId",
+          "localControllerSeatId"
+        ],
+        "candidateChecksumEvidence": "candidateSnapshotChecksum equals immutable descriptor.sourceChecksum; exportBytesSha256 is separate private evidence.",
+        "copyMapping": "Match the accepted proposal by proposalChecksum and proposalRevision. Resolve fullCampaignCopyDiffs[].sourceUuid to campaignCharacterIdOrNull; join receipt.copies[].campaignCharacterId to its controllerBindingOrNull and verify deviceId, localControllerSeatId and inputLaneId. An absent acceptance receipt, missing confirmed copy or null controllerBindingOrNull yields no player tab and preserves the original membership.",
+        "currentMembershipCheck": "HOST_LOCAL_CANDIDATE: listing, direct open, NET-003 reselection and NET-004 submit each recheck the current acknowledged targetLocalOwnerId and durable membership for every exact sourceUuid before reading or writing. A foreign UUID or stale grant is rejected."
+      },
+      "boundaries": {
+        "libraryMembershipIsCampaignAuthority": false,
+        "ackCreatesMembership": false,
+        "bindAllocatesSeat": false,
+        "bindCreatesCampaignCopy": false,
+        "mayReassign": false,
+        "mayUndo": false,
+        "ordinaryDevicePartitioning": false,
+        "ordinaryNullAccessAfterBinding": "UNASSIGNED_ONLY; assigned originals require the exact current acknowledged membership across campaign end and restart"
+      },
+      "modeActions": {
+        "NEUTRAL_PROFILE_SETUP": [
+          "APP-003::CTA::007",
+          "APP-003::CTA::011",
+          "APP-003::CTA::012",
+          "APP-003::CTA::013",
+          "APP-003::CTA::010"
+        ],
+        "DEVICE_LIBRARY_SELECTOR": [
+          "APP-004::CTA::009",
+          "APP-004::CTA::010"
+        ],
+        "SELECTOR_BIND_CONFIRM": [
+          "APP-003::CTA::008",
+          "APP-003::CTA::010"
+        ],
+        "TARGET_OWNER_ADMISSION": [
+          "APP-003::CTA::009"
+        ],
+        "SELECTOR_CURTAIN": [
+          "PLY-030::CTA::003",
+          "PLY-030::CTA::008"
+        ],
+        "TARGET_CURTAIN": [
+          "PLY-030::CTA::004",
+          "PLY-030::CTA::005",
+          "PLY-030::CTA::008"
+        ],
+        "SIGNED_GM_RETURN": [
+          "PLY-030::CTA::006"
+        ],
+        "PENDING_NEUTRAL_RESUME": [
+          "PLY-030::CTA::007"
+        ]
+      }
     }
   },
   "roles": [
@@ -2832,14 +2986,77 @@
           ],
           "guards": "Consent/predicate/reactive prompt адресату; до ответа ресурсов нет; после ответа возврат инициатору.",
           "result": "Pending request resolved."
+        },
+        {
+          "state": "NEUTRAL_PROFILE_SETUP",
+          "formIds": [
+            "CMP-009",
+            "APP-003"
+          ],
+          "guards": "isHostDevice=true; active master at safe signed boundary, including GM_ONLY with zero PCs; erase all GM payload, DOM, a11y, hotkeys, cache before neutral profile metadata; no FINAL rows",
+          "result": "Профиль с явно введённой непустой меткой получает постоянный локальный идентификатор. Профиль, привязка и точная пара метки с идентификатором сохраняются на этой установке и устройстве после закрытия сессии, перезапуска и смены кампании. Одноимённые профили различаются по targetLocalOwnerId. Метку вводит человек; имя персонажа и сама метка не удостоверяют владельца. Сброс installation/device identity не передаёт прежние права."
+        },
+        {
+          "state": "SELECTOR_CURTAIN",
+          "formIds": [
+            "APP-003",
+            "PLY-030",
+            "APP-004"
+          ],
+          "guards": "neutral curtain; all private projections erased; address exact targetProfileLabel + targetLocalOwnerId; no FINAL/candidate metadata",
+          "result": "После очистки GM-проекции человек за доверенным устройством явно подтверждает кооперативную роль DEVICE_LIBRARY_SELECTOR. Только этот контекст с localOwnerIdOrNull=null видит неназначенные неизменяемые FINAL этой установки. Чужие строки, UUID, имена, artwork, счётчики, поисковые результаты и команды отсутствуют в payload, DOM, accessibility tree, hotkeys и cache. Секрет, loopback/listener/origin и подпись удостоверяют устройство и контекст, личность человека не проверяется. Тот же человек вправе подтвердить обе разные завесы последовательно."
+        },
+        {
+          "state": "SELECTOR_BIND_CONFIRM",
+          "formIds": [
+            "APP-004",
+            "APP-003",
+            "PLY-030"
+          ],
+          "guards": "signed selector context and selectorHandoffReceiptId current; exact durable targetLocalOwnerId + targetProfileLabel; 1..3 distinct unassigned immutable FINAL from this installation and device; exact sourceUuid/finalSnapshotVersion/metadataRevision/candidateSnapshotChecksum and selectionRevision",
+          "result": "Одна транзакция повторно проверяет текущий подписанный контекст селектора, прежнюю квитанцию ACK, installationId/deviceId, точный профиль и метку, ревизии и весь набор из 1–3 разных неназначенных immutable FINAL по sourceUuid, finalSnapshotVersion, metadataRevision и candidateSnapshotChecksum (исходный descriptor.sourceChecksum). При успехе для всего набора сохраняются membership, grantId, bindingReceiptId и pendingContinuationId. UUID, байты FINAL и создания, исходные ревизии, device provenance и игровой журнал сохраняются. Конфликт любой строки, иной адресат, другая установка, устаревший контекст, четвертая или повторная строка дают zero write для всего набора. Undo/reassign отсутствуют."
+        },
+        {
+          "state": "TARGET_CURTAIN",
+          "formIds": [
+            "PLY-030",
+            "APP-004"
+          ],
+          "guards": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority",
+          "result": "Владелец устройства выбирает точный профиль либо вводит метку и явно создаёт профиль. Обе адресные завесы показывают targetProfileLabel вместе с targetLocalOwnerId. На подтверждении рядом с этой парой перечислены выбранные листы; передача меняет будущий доступ к библиотеке. Экран GM и нейтральное продолжение показывают только служебные данные назначения."
+        },
+        {
+          "state": "PENDING_NEUTRAL_RESUME",
+          "formIds": [
+            "PLY-030",
+            "CMP-009"
+          ],
+          "guards": "same installation/device; trusted safe current boundary; exact retained pendingContinuationId and targetLocalOwnerId with targetProfileLabel; fresh signed HOST_LOCAL_CANDIDATE target; no target projection before new ACK",
+          "result": "После commit селектор и его буферы стираются до адресной завесы HOST_LOCAL_CANDIDATE. «Позже» сохраняет тот же grant и pendingContinuationId и ведёт через подписанный возврат к GM. В CMP-009 и нейтральной завесе доступны только метка, идентификатор адресата и непрозрачный pendingContinuationId. После restart продолжение требует нового текущего подписанного контекста и отдельного ACK адресата. Replay возвращает прежнюю квитанцию без повторной записи и активации исторического контекста."
+        },
+        {
+          "state": "TARGET_OWNER_ADMISSION",
+          "formIds": [
+            "APP-004",
+            "APP-003",
+            "NET-003",
+            "NET-004",
+            "NET-017"
+          ],
+          "guards": "isHostDevice=true; current HOST_LOCAL_CANDIDATE ACK identifies exact target owner; only that owner’s permitted sourceUuid subset, 1..3, current revisions, ordinary #171/#172 admission; no pre-admission seat HOST_LOCAL_CANDIDATE: listing, direct open, NET-003 reselection and NET-004 submit each recheck the current acknowledged targetLocalOwnerId and durable membership for every exact sourceUuid before reading or writing. A foreign UUID or stale grant is rejected.",
+          "result": "После ACK адресат видит только собственную библиотеку, в том числе точный предоставленный набор. В APP-003 выбирает свои конкретные листы и через NET-003/NET-004 проходит обычный #171/#172 с рассмотрением GM. Реальный ACCEPT receiptId связан с proposalChecksum и proposalRevision. В fullCampaignCopyDiffs запись sourceUuid → campaignCharacterIdOrNull связывает membership владельца с принятой copies[].campaignCharacterId, затем с controllerBindingOrNull.{deviceId,localControllerSeatId,inputLaneId}. Без квитанции, подтверждённой копии или привязки контроллера вкладка не создаётся; membership оригинала сохраняется. Общий максимум три допущенные PC-вкладки и один активный контекст GM или PC. Для другого профиля требуется отдельная передача. Пустой профиль сохраняет создание CHR-001 через обычную APP-004; GM_ONLY с нулём PC, обычный ПК и известный owner-safe batch сохраняют свои ветки."
         }
       ],
       "alternatives": [
         "Четвёртый персонаж запрещён с человеческим объяснением.",
-        "Manual switching blocked во время команды/реакции/серии, кроме предусмотренной безопасной отмены."
+        "Manual switching blocked во время команды/реакции/серии, кроме предусмотренной безопасной отмены.",
+        "Отмена до привязки возвращает через подписанную GM-завесу с нулём grant. «Позже» после привязки сохраняет grant и адресное продолжение.",
+        "Пустой профиль открывает обычную APP-004 через адресный HOST_LOCAL_CANDIDATE ACK; известный owner-safe batch и импортированный claim сохраняют отдельные signed пути.",
+        "До commit из NEUTRAL_PROFILE_SETUP, SELECTOR_BIND_CONFIRM, непринятой SELECTOR_CURTAIN или свежей TARGET_CURTAIN можно отменить без выбора/создания профиля, ACK селектора/адресата или открытия библиотеки. Стереть private buffers и вернуться к точной signedReturnContext через нейтральную завесу. GM-проекция выдаётся только после своего адресного ACK. Отмена не пишет профиль, membership, grant, binding/selector/target receipt, character/copy, seat или reserve; ранее явно созданный пустой профиль сохраняется."
       ],
       "errorOfflineReconnect": [
-        "Reconnect восстанавливает только server-confirmed tabs, active seat, projection и pending command."
+        "Reconnect восстанавливает только server-confirmed tabs, active seat, projection и pending command.",
+        "После commit селектор и его буферы стираются до адресной завесы HOST_LOCAL_CANDIDATE. «Позже» сохраняет тот же grant и pendingContinuationId и ведёт через подписанный возврат к GM. В CMP-009 и нейтральной завесе доступны только метка, идентификатор адресата и непрозрачный pendingContinuationId. После restart продолжение требует нового текущего подписанного контекста и отдельного ACK адресата. Replay возвращает прежнюю квитанцию без повторной записи и активации исторического контекста."
       ],
       "safeBoundaries": "Back/Cancel доступны только до первой необратимой случайности, резерва или commit; refresh/reconnect возвращает подтверждённую state machine.",
       "formIds": [
@@ -2892,7 +3109,9 @@
         "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK",
         "UI-CMD-MASTER-PREDICATE-RESPOND",
         "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
-        "UI-CMD-DEVICE-REQUEST-REJECT"
+        "UI-CMD-DEVICE-REQUEST-REJECT",
+        "UI-CMD-LOCAL-OWNER-PROFILE-CREATE",
+        "UI-CMD-LOCAL-OWNER-BIND-FINALS"
       ],
       "qnaIds": [
         "Q-APP-001",
@@ -12795,7 +13014,9 @@
             "Открыть «Проверка совместимости сохранения»",
             "Открыть «Подтверждение выхода»",
             "Вернуться в главное меню игрока",
-            "Импортировать персонажа"
+            "Импортировать персонажа",
+            "Проверить выбранные неназначенные листы",
+            "Отменить выбор неназначенных листов"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": []
@@ -13243,7 +13464,7 @@
         "gm"
       ],
       "happyPath": "Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Первый GM import доступен из единой GM-001 через GM-002 без selected character. Только прежний signed GM_IMPORT_CANDIDATE origin/return GM-002 и sole current master authority; player local library не открывается. Cancel/error/reconnect/receipt return восстанавливают текущий вариант GM-002 без фиктивного PC/HP/group/marker/seat. Импорт/owner claim не заменяют финальный admission и не выдают преждевременные Ready/authority/reserve.",
-      "errorOfflinePath": "Для CHR-043, CHR-045, NET-028, NET-017, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. Same handoffId/commandId returns the same receipt and active context; reconnect restores the curtain or committed target/initiator projection without exposing the prior owner, admitting a provisional candidate or repeating a nested response. The same signed imported candidate/provisional-owner binding is restored; a remote claim is not a local privacy handoff.",
+      "errorOfflinePath": "Для CHR-043, CHR-045, NET-028, NET-017, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. Same handoffId/commandId returns the same receipt; only the currently authorized active context may be restored; reconnect restores the curtain or committed target/initiator projection without exposing the prior owner, admitting a provisional candidate or repeating a nested response. The same signed imported candidate/provisional-owner binding is restored; a remote claim is not a local privacy handoff.",
       "qa": "QA-REQ-006",
       "workflowCommandIds": [
         "UI-CMD-ADMISSION-PLAYER-DECIDE",
@@ -13365,7 +13586,13 @@
           "formId": "PLY-030",
           "primaryActions": [
             "Готов открыть следующую проекцию",
-            "Вернуть управление инициатору после ответа"
+            "Вернуть управление инициатору после ответа",
+            "Подтвердить получение устройства для выбора листов",
+            "Подтвердить получение устройства указанным профилем",
+            "Позже",
+            "Подтвердить возврат устройства мастеру",
+            "Продолжить передачу: [метка + идентификатор]",
+            "Отменить передачу до подтверждения"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": [
@@ -13890,7 +14117,13 @@
           "formId": "PLY-030",
           "primaryActions": [
             "Готов открыть следующую проекцию",
-            "Вернуть управление инициатору после ответа"
+            "Вернуть управление инициатору после ответа",
+            "Подтвердить получение устройства для выбора листов",
+            "Подтвердить получение устройства указанным профилем",
+            "Позже",
+            "Подтвердить возврат устройства мастеру",
+            "Продолжить передачу: [метка + идентификатор]",
+            "Отменить передачу до подтверждения"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": [
@@ -13954,7 +14187,8 @@
         "APP-004",
         "NET-003",
         "NET-004",
-        "NET-017"
+        "NET-017",
+        "APP-003"
       ],
       "ruleOperationRefs": [
         "AQ2-011",
@@ -13967,14 +14201,16 @@
         "player",
         "gm"
       ],
-      "happyPath": "Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
-      "errorOfflinePath": "Для CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
+      "happyPath": "Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017, APP-003; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT, UI-CMD-LOCAL-OWNER-PROFILE-CREATE, UI-CMD-LOCAL-OWNER-BIND-FINALS; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Владелец устройства выбирает точный профиль либо вводит метку и явно создаёт профиль. Обе адресные завесы показывают targetProfileLabel вместе с targetLocalOwnerId. На подтверждении рядом с этой парой перечислены выбранные листы; передача меняет будущий доступ к библиотеке. Экран GM и нейтральное продолжение показывают только служебные данные назначения. После ACK адресат видит только собственную библиотеку, в том числе точный предоставленный набор. В APP-003 выбирает свои конкретные листы и через NET-003/NET-004 проходит обычный #171/#172 с рассмотрением GM. Реальный ACCEPT receiptId связан с proposalChecksum и proposalRevision. В fullCampaignCopyDiffs запись sourceUuid → campaignCharacterIdOrNull связывает membership владельца с принятой copies[].campaignCharacterId, затем с controllerBindingOrNull.{deviceId,localControllerSeatId,inputLaneId}. Без квитанции, подтверждённой копии или привязки контроллера вкладка не создаётся; membership оригинала сохраняется. Общий максимум три допущенные PC-вкладки и один активный контекст GM или PC. Для другого профиля требуется отдельная передача. Пустой профиль сохраняет создание CHR-001 через обычную APP-004; GM_ONLY с нулём PC, обычный ПК и известный owner-safe batch сохраняют свои ветки.",
+      "errorOfflinePath": "Для CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. Одна транзакция повторно проверяет текущий подписанный контекст селектора, прежнюю квитанцию ACK, installationId/deviceId, точный профиль и метку, ревизии и весь набор из 1–3 разных неназначенных immutable FINAL по sourceUuid, finalSnapshotVersion, metadataRevision и candidateSnapshotChecksum (исходный descriptor.sourceChecksum). При успехе для всего набора сохраняются membership, grantId, bindingReceiptId и pendingContinuationId. UUID, байты FINAL и создания, исходные ревизии, device provenance и игровой журнал сохраняются. Конфликт любой строки, иной адресат, другая установка, устаревший контекст, четвертая или повторная строка дают zero write для всего набора. Undo/reassign отсутствуют.",
       "qa": "QA-REQ-010",
       "workflowCommandIds": [
         "UI-CMD-DEVICE-REQUEST-SUBMIT",
         "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK",
         "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
-        "UI-CMD-DEVICE-REQUEST-REJECT"
+        "UI-CMD-DEVICE-REQUEST-REJECT",
+        "UI-CMD-LOCAL-OWNER-PROFILE-CREATE",
+        "UI-CMD-LOCAL-OWNER-BIND-FINALS"
       ],
       "qnaIds": [
         "Q-APP-001",
@@ -14005,7 +14241,9 @@
             "Вернуться к «Настройки кампании»",
             "Вернуться к «Выбор локального профиля и места»",
             "Открыть «Нейтральная завеса передачи устройства»",
-            "Передать устройство локальному кандидату"
+            "Передать устройство локальному кандидату",
+            "Выбрать сохранённых персонажей этого устройства",
+            "Продолжить передачу: [метка + идентификатор]"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": []
@@ -14014,7 +14252,13 @@
           "formId": "PLY-030",
           "primaryActions": [
             "Готов открыть следующую проекцию",
-            "Вернуть управление инициатору после ответа"
+            "Вернуть управление инициатору после ответа",
+            "Подтвердить получение устройства для выбора листов",
+            "Подтвердить получение устройства указанным профилем",
+            "Позже",
+            "Подтвердить возврат устройства мастеру",
+            "Продолжить передачу: [метка + идентификатор]",
+            "Отменить передачу до подтверждения"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": [
@@ -14029,7 +14273,9 @@
             "Открыть «Проверка совместимости сохранения»",
             "Открыть «Подтверждение выхода»",
             "Вернуться в главное меню игрока",
-            "Импортировать персонажа"
+            "Импортировать персонажа",
+            "Проверить выбранные неназначенные листы",
+            "Отменить выбор неназначенных листов"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": []
@@ -14075,6 +14321,29 @@
             "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
             "UI-CMD-DEVICE-REQUEST-REJECT"
           ]
+        },
+        {
+          "formId": "APP-003",
+          "primaryActions": [
+            "Добавить кандидата из локальной библиотеки",
+            "Убрать кандидата из draft",
+            "Продолжить на обычном устройстве",
+            "Передать host локальному кандидату через privacy curtain",
+            "Оставить ноль локальных player seats",
+            "Вернуться к управлению клиентами мастера",
+            "Передать устройство для выбора неназначенных листов",
+            "Привязать выбранных персонажей локальному владельцу",
+            "Продолжить подключение с листами этого профиля",
+            "Отменить передачу до привязки",
+            "Создать профиль с указанной меткой",
+            "Выбрать существующий профиль по идентификатору",
+            "Передать устройство для создания нового персонажа"
+          ],
+          "executableOperationIds": [],
+          "workflowCommandIds": [
+            "UI-CMD-LOCAL-OWNER-PROFILE-CREATE",
+            "UI-CMD-LOCAL-OWNER-BIND-FINALS"
+          ]
         }
       ],
       "expectedStateDeltas": {
@@ -14085,7 +14354,11 @@
             "WAITING_FOR_LOCAL_OWNER",
             "TARGET_CONTEXT_ACTIVE",
             "RETURN_TO_INITIATOR",
-            "RECONNECT_RESTORED"
+            "RECONNECT_RESTORED",
+            "SELECTOR_CURTAIN",
+            "TARGET_CURTAIN",
+            "SIGNED_GM_RETURN",
+            "PENDING_NEUTRAL_RESUME"
           ],
           "NET-004": [
             "DRAFT_REQUEST",
@@ -14097,6 +14370,11 @@
             "IN_REVIEW",
             "REQUEST_REJECTED",
             "STALE_REQUEST"
+          ],
+          "APP-003": [
+            "NEUTRAL_PROFILE_SETUP",
+            "SELECTOR_BIND_CONFIRM",
+            "TARGET_OWNER_ADMISSION"
           ]
         },
         "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.",
@@ -14107,7 +14385,8 @@
         "Committed command restores by commandId with the same receipt/random result and no duplicate side effect.",
         "Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.",
         "Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.",
-        "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request."
+        "CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.",
+        "После commit селектор и его буферы стираются до адресной завесы HOST_LOCAL_CANDIDATE. «Позже» сохраняет тот же grant и pendingContinuationId и ведёт через подписанный возврат к GM. В CMP-009 и нейтральной завесе доступны только метка, идентификатор адресата и непрозрачный pendingContinuationId. После restart продолжение требует нового текущего подписанного контекста и отдельного ACK адресата. Replay возвращает прежнюю квитанцию без повторной записи и активации исторического контекста."
       ],
       "coverageStatus": "COVERED"
     },
@@ -17301,7 +17580,13 @@
           "formId": "PLY-030",
           "primaryActions": [
             "Готов открыть следующую проекцию",
-            "Вернуть управление инициатору после ответа"
+            "Вернуть управление инициатору после ответа",
+            "Подтвердить получение устройства для выбора листов",
+            "Подтвердить получение устройства указанным профилем",
+            "Позже",
+            "Подтвердить возврат устройства мастеру",
+            "Продолжить передачу: [метка + идентификатор]",
+            "Отменить передачу до подтверждения"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": [
@@ -21078,7 +21363,9 @@
             "Открыть «Проверка совместимости сохранения»",
             "Открыть «Подтверждение выхода»",
             "Вернуться в главное меню игрока",
-            "Импортировать персонажа"
+            "Импортировать персонажа",
+            "Проверить выбранные неназначенные листы",
+            "Отменить выбор неназначенных листов"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": []
@@ -21091,7 +21378,14 @@
             "Продолжить на обычном устройстве",
             "Передать host локальному кандидату через privacy curtain",
             "Оставить ноль локальных player seats",
-            "Вернуться к управлению клиентами мастера"
+            "Вернуться к управлению клиентами мастера",
+            "Передать устройство для выбора неназначенных листов",
+            "Привязать выбранных персонажей локальному владельцу",
+            "Продолжить подключение с листами этого профиля",
+            "Отменить передачу до привязки",
+            "Создать профиль с указанной меткой",
+            "Выбрать существующий профиль по идентификатору",
+            "Передать устройство для создания нового персонажа"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": []
@@ -22407,7 +22701,13 @@
           "formId": "PLY-030",
           "primaryActions": [
             "Готов открыть следующую проекцию",
-            "Вернуть управление инициатору после ответа"
+            "Вернуть управление инициатору после ответа",
+            "Подтвердить получение устройства для выбора листов",
+            "Подтвердить получение устройства указанным профилем",
+            "Позже",
+            "Подтвердить возврат устройства мастеру",
+            "Продолжить передачу: [метка + идентификатор]",
+            "Отменить передачу до подтверждения"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": [
@@ -22934,7 +23234,9 @@
             "Открыть «Проверка совместимости сохранения»",
             "Открыть «Подтверждение выхода»",
             "Вернуться в главное меню игрока",
-            "Импортировать персонажа"
+            "Импортировать персонажа",
+            "Проверить выбранные неназначенные листы",
+            "Отменить выбор неназначенных листов"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": []
@@ -27149,7 +27451,13 @@
           "formId": "PLY-030",
           "primaryActions": [
             "Готов открыть следующую проекцию",
-            "Вернуть управление инициатору после ответа"
+            "Вернуть управление инициатору после ответа",
+            "Подтвердить получение устройства для выбора листов",
+            "Подтвердить получение устройства указанным профилем",
+            "Позже",
+            "Подтвердить возврат устройства мастеру",
+            "Продолжить передачу: [метка + идентификатор]",
+            "Отменить передачу до подтверждения"
           ],
           "executableOperationIds": [],
           "workflowCommandIds": [
@@ -29858,7 +30166,11 @@
       ],
       "guardStates": [
         "stateRevision и projectionRevision актуальны",
-        "нет конфликтующей незавершённой операции"
+        "нет конфликтующей незавершённой операции",
+        "Владелец устройства выбирает точный профиль либо вводит метку и явно создаёт профиль. Обе адресные завесы показывают targetProfileLabel вместе с targetLocalOwnerId. На подтверждении рядом с этой парой перечислены выбранные листы; передача меняет будущий доступ к библиотеке. Экран GM и нейтральное продолжение показывают только служебные данные назначения.",
+        "Одна транзакция повторно проверяет текущий подписанный контекст селектора, прежнюю квитанцию ACK, installationId/deviceId, точный профиль и метку, ревизии и весь набор из 1–3 разных неназначенных immutable FINAL по sourceUuid, finalSnapshotVersion, metadataRevision и candidateSnapshotChecksum (исходный descriptor.sourceChecksum). При успехе для всего набора сохраняются membership, grantId, bindingReceiptId и pendingContinuationId. UUID, байты FINAL и создания, исходные ревизии, device provenance и игровой журнал сохраняются. Конфликт любой строки, иной адресат, другая установка, устаревший контекст, четвертая или повторная строка дают zero write для всего набора. Undo/reassign отсутствуют.",
+        "Для специальных branch учитывается только соответствующий allowlist globalContracts.localOwnerBinding.modeActions. Профили до передачи содержат исключительно метку и точный ID; полный список FINAL отдельного владельца появляется лишь после его действующего ACK.",
+        "На обычном device-null пути перед выбором и передачей в NET-003 повторно проверяется отсутствие persistent membership для каждого sourceUuid. После binding выбор этого оригинала требует его exact acknowledged owner."
       ],
       "dataSources": [
         "Symbiosis_V7_Delivery_Manifest_v1.2.xlsx",
@@ -29873,7 +30185,10 @@
         "seatDraft[]",
         "campaignCapacityOrUnknown",
         "nextContext=ORDINARY_CONNECT|HOST_PROVISIONAL|ZERO_SEATS",
-        "draftRevision"
+        "draftRevision",
+        "NEUTRAL_PROFILE_SETUP input: installationId, deviceId, signedReturnContext. Existing profile selection needs its exact ID and label; create takes the entered targetProfileLabel and returns a new targetLocalOwnerId. Cancel needs neither.",
+        "SELECTOR_BIND_CONFIRM input: binding.envelopeFields and selectedFinals[{sourceUuid,finalSnapshotVersion,metadataRevision,candidateSnapshotChecksum}]. Only on commit: bindingReceiptId, grantId, pendingContinuationId.",
+        "TARGET_OWNER_ADMISSION input: current target ACK and exact owned subset. Existing-membership and fresh paths use their own confirmed owner scope; no prior binding receipt is required."
       ],
       "components": [
         "0–3 selected candidates",
@@ -29881,7 +30196,10 @@
         "Remove from local draft",
         "Ordinary-device continue",
         "Host privacy handoff",
-        "Zero-seat empty state"
+        "Zero-seat empty state",
+        "Выбор существующего профиля по метке и точному ID",
+        "Поле новой метки профиля и отдельное подтверждение создания",
+        "Подтверждение: метка, ID, точный список 1–3 листов и последствия для доступа к библиотеке"
       ],
       "actions": {
         "visible": [
@@ -29890,14 +30208,22 @@
           "Продолжить на обычном устройстве",
           "Передать host локальному кандидату через privacy curtain",
           "Оставить ноль локальных player seats",
-          "Вернуться к управлению клиентами мастера"
+          "Вернуться к управлению клиентами мастера",
+          "Передать устройство для выбора неназначенных листов",
+          "Привязать выбранных персонажей локальному владельцу",
+          "Продолжить подключение с листами этого профиля",
+          "Отменить передачу до привязки",
+          "Создать профиль с указанной меткой",
+          "Выбрать существующий профиль по идентификатору",
+          "Передать устройство для создания нового персонажа"
         ],
         "ctaAvailability": "CTA существует только при выполненных entry/guard conditions и актуальных revisions.",
         "allowed": [
           "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
           "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
-          "Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.",
-          "Разрешённые видимые действия/CTA именно этой формы: Добавить кандидата из локальной библиотеки; Убрать кандидата из draft; Продолжить на обычном устройстве; Передать host локальному кандидату через privacy curtain; Оставить ноль локальных player seats; Вернуться к управлению клиентами мастера."
+          "Разрешённые atlas workflow commands этой формы: UI-CMD-LOCAL-OWNER-PROFILE-CREATE, UI-CMD-LOCAL-OWNER-BIND-FINALS.",
+          "Исполняемых профильных OperationID нет; изменение состояния допускается только через перечисленные atlas workflow commands.",
+          "Разрешённые видимые действия/CTA именно этой формы: Добавить кандидата из локальной библиотеки; Убрать кандидата из draft; Продолжить на обычном устройстве; Передать host локальному кандидату через privacy curtain; Оставить ноль локальных player seats; Вернуться к управлению клиентами мастера; Передать устройство для выбора неназначенных листов; Привязать выбранных персонажей локальному владельцу; Продолжить подключение с листами этого профиля; Отменить передачу до привязки; Создать профиль с указанной меткой; Выбрать существующий профиль по идентификатору; Передать устройство для создания нового персонажа."
         ],
         "prohibited": [
           "Mutation из неверной роли, чужого controllerSeat или устаревшей projectionRevision.",
@@ -29926,10 +30252,13 @@
             "game time/local context"
           ],
           "authoritativeSource": {
-            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "service": "SERVER_AVAILABLE_ACTIONS",
             "ruleIds": [],
             "operationIds": [],
-            "workflowCommandIds": [],
+            "workflowCommandIds": [
+              "UI-CMD-LOCAL-OWNER-PROFILE-CREATE",
+              "UI-CMD-LOCAL-OWNER-BIND-FINALS"
+            ],
             "abilityIds": []
           },
           "recomputeTriggers": [
@@ -30270,10 +30599,338 @@
               ],
               "playerProjection": "ABSENT"
             }
+          },
+          {
+            "label": "Передать устройство для выбора неназначенных листов",
+            "targetFormId": "PLY-030",
+            "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; exact profile selected; issue current signed DEVICE_LIBRARY_SELECTOR curtain, no library rows before explicit selector ACK",
+            "kind": "normative",
+            "actionKey": "APP-003::CTA::007",
+            "availabilityInputs": [
+              "signedReturnContext",
+              "targetLocalOwnerId",
+              "targetProfileLabel",
+              "stateRevision",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Привязать выбранных персонажей локальному владельцу",
+            "targetFormId": "PLY-030",
+            "guard": "signed selector context and selectorHandoffReceiptId current; exact durable targetLocalOwnerId + targetProfileLabel; 1..3 distinct unassigned immutable FINAL from this installation and device; exact sourceUuid/finalSnapshotVersion/metadataRevision/candidateSnapshotChecksum and selectionRevision; UI-CMD-LOCAL-OWNER-BIND-FINALS commits the whole grant and pending continuation, then purge selector before target curtain",
+            "kind": "workflow-command",
+            "actionKey": "APP-003::CTA::008",
+            "availabilityInputs": [
+              "commandId",
+              "installationId",
+              "deviceId",
+              "targetLocalOwnerId",
+              "targetProfileLabel",
+              "selectorHandoffReceiptId",
+              "signedReturnContext",
+              "selectionRevision",
+              "stateRevision",
+              "projectionRevision",
+              "selectedFinals"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_AVAILABLE_ACTIONS",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-LOCAL-OWNER-BIND-FINALS"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision",
+              "eligible selection or pending continuation changed"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Продолжить подключение с листами этого профиля",
+            "targetFormId": "NET-003",
+            "guard": "isHostDevice=true; current HOST_LOCAL_CANDIDATE ACK identifies exact target owner; only that owner’s permitted sourceUuid subset, 1..3, current revisions, ordinary #171/#172 admission; no pre-admission seat HOST_LOCAL_CANDIDATE: listing, direct open, NET-003 reselection and NET-004 submit each recheck the current acknowledged targetLocalOwnerId and durable membership for every exact sourceUuid before reading or writing. A foreign UUID or stale grant is rejected.",
+            "kind": "normative",
+            "actionKey": "APP-003::CTA::009",
+            "availabilityInputs": [
+              "targetLocalOwnerId",
+              "signedReturnContext",
+              "selectedFinals",
+              "stateRevision",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision",
+              "eligible selection or pending continuation changed"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Отменить передачу до привязки",
+            "targetFormId": "PLY-030",
+            "guard": "NEUTRAL_PROFILE_SETUP or SELECTOR_BIND_CONFIRM; no binding commit; current signedReturnContext; target selection, owner creation and selector ACK are optional for neutral cancel; purge and return to the exact signed GM/neutral boundary, zero write",
+            "kind": "normative",
+            "actionKey": "APP-003::CTA::010",
+            "availabilityInputs": [
+              "signedReturnContext",
+              "stateRevision",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Создать профиль с указанной меткой",
+            "targetFormId": "APP-003",
+            "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; explicitly entered nonempty targetProfileLabel; UI-CMD-LOCAL-OWNER-PROFILE-CREATE commits only a new durable profile and returns its exact ID",
+            "kind": "workflow-command",
+            "actionKey": "APP-003::CTA::011",
+            "availabilityInputs": [
+              "signedReturnContext",
+              "targetProfileLabel",
+              "stateRevision",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_AVAILABLE_ACTIONS",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-LOCAL-OWNER-PROFILE-CREATE"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Выбрать существующий профиль по идентификатору",
+            "targetFormId": "APP-003",
+            "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; explicit exact targetLocalOwnerId and displayed targetProfileLabel; select locally, zero membership or authority",
+            "kind": "local-draft-command",
+            "actionKey": "APP-003::CTA::012",
+            "availabilityInputs": [
+              "signedReturnContext",
+              "targetLocalOwnerId",
+              "targetProfileLabel",
+              "stateRevision",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Передать устройство для создания нового персонажа",
+            "targetFormId": "PLY-030",
+            "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; exact fresh empty target selected; only signed HOST_LOCAL_CANDIDATE curtain, no selector grant",
+            "kind": "normative",
+            "actionKey": "APP-003::CTA::013",
+            "availabilityInputs": [
+              "signedReturnContext",
+              "targetLocalOwnerId",
+              "targetProfileLabel",
+              "stateRevision",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision",
+              "eligible selection or pending continuation changed"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
           }
         ],
         "operationAvailability": [],
-        "workflowCommandAvailability": []
+        "workflowCommandAvailability": [
+          {
+            "commandId": "UI-CMD-LOCAL-OWNER-PROFILE-CREATE",
+            "guard": "APP-003: trusted installationId/deviceId, safe signed neutral profile setup after projection purge, current stateRevision/projectionRevision, explicit nonempty targetProfileLabel and fresh commandId. Never infer an owner from a matching label.",
+            "availabilityInputs": [
+              "installationId",
+              "deviceId",
+              "commandId",
+              "targetProfileLabel",
+              "signedReturnContext",
+              "stateRevision",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_AVAILABLE_ACTIONS",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-LOCAL-OWNER-PROFILE-CREATE"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "signed scope or profile changed",
+              "revision, selection or membership changed"
+            ],
+            "hiddenReasonDiagnosticAudience": "GM_QA_ONLY"
+          },
+          {
+            "commandId": "UI-CMD-LOCAL-OWNER-BIND-FINALS",
+            "guard": "Одна транзакция повторно проверяет текущий подписанный контекст селектора, прежнюю квитанцию ACK, installationId/deviceId, точный профиль и метку, ревизии и весь набор из 1–3 разных неназначенных immutable FINAL по sourceUuid, finalSnapshotVersion, metadataRevision и candidateSnapshotChecksum (исходный descriptor.sourceChecksum). При успехе для всего набора сохраняются membership, grantId, bindingReceiptId и pendingContinuationId. UUID, байты FINAL и создания, исходные ревизии, device provenance и игровой журнал сохраняются. Конфликт любой строки, иной адресат, другая установка, устаревший контекст, четвертая или повторная строка дают zero write для всего набора. Undo/reassign отсутствуют.",
+            "availabilityInputs": [
+              "commandId",
+              "installationId",
+              "deviceId",
+              "targetLocalOwnerId",
+              "targetProfileLabel",
+              "selectorHandoffReceiptId",
+              "signedReturnContext",
+              "selectionRevision",
+              "stateRevision",
+              "projectionRevision",
+              "selectedFinals"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_AVAILABLE_ACTIONS",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-LOCAL-OWNER-BIND-FINALS"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "signed scope or profile changed",
+              "revision, selection or membership changed"
+            ],
+            "hiddenReasonDiagnosticAudience": "GM_QA_ONLY"
+          }
+        ]
       },
       "states": {
         "loading": "Данные ещё не готовы; mutation CTA отсутствуют.",
@@ -30289,7 +30946,10 @@
         "ZERO_SEATS": "Valid empty local shell; no character authority or submit CTA.",
         "ORDINARY_1_TO_3_READY": "One to three candidates can continue to NET-003 without GM projection.",
         "HOST_PROVISIONAL_READY": "One to three candidates require privacy handoff and still have no player authority.",
-        "FOURTH_REJECTED": "Fourth candidate is omitted before seat creation."
+        "FOURTH_REJECTED": "Fourth candidate is omitted before seat creation.",
+        "NEUTRAL_PROFILE_SETUP": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions",
+        "SELECTOR_BIND_CONFIRM": "signed selector context and selectorHandoffReceiptId current; exact durable targetLocalOwnerId + targetProfileLabel; 1..3 distinct unassigned immutable FINAL from this installation and device; exact sourceUuid/finalSnapshotVersion/metadataRevision/candidateSnapshotChecksum and selectionRevision",
+        "TARGET_OWNER_ADMISSION": "isHostDevice=true; current HOST_LOCAL_CANDIDATE ACK identifies exact target owner; only that owner’s permitted sourceUuid subset, 1..3, current revisions, ordinary #171/#172 admission; no pre-admission seat"
       },
       "transitionsIn": [
         {
@@ -30321,6 +30981,30 @@
           "trigger": "Убрать кандидата из draft",
           "guard": "candidate belongs to local uncommitted seat draft",
           "kind": "local-draft-command"
+        },
+        {
+          "from": "CMP-009",
+          "trigger": "Выбрать сохранённых персонажей этого устройства",
+          "guard": "isHostDevice=true; active master at safe signed boundary, including GM_ONLY with zero PCs; erase all GM payload, DOM, a11y, hotkeys, cache before neutral profile metadata; no FINAL rows",
+          "kind": "normative"
+        },
+        {
+          "from": "APP-003",
+          "trigger": "Создать профиль с указанной меткой",
+          "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; explicitly entered nonempty targetProfileLabel; UI-CMD-LOCAL-OWNER-PROFILE-CREATE commits only a new durable profile and returns its exact ID",
+          "kind": "workflow-command"
+        },
+        {
+          "from": "APP-003",
+          "trigger": "Выбрать существующий профиль по идентификатору",
+          "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; explicit exact targetLocalOwnerId and displayed targetProfileLabel; select locally, zero membership or authority",
+          "kind": "local-draft-command"
+        },
+        {
+          "from": "APP-004",
+          "trigger": "Проверить выбранные неназначенные листы",
+          "guard": "signed DEVICE_LIBRARY_SELECTOR receipt current; localOwnerIdOrNull=null; prior GM projection erased; only unassigned immutable FINAL visible; 1..3 distinct currently unassigned sourceUuid/finalSnapshotVersion/metadataRevision/candidateSnapshotChecksum; target and selection revision present; no write",
+          "kind": "normative"
         }
       ],
       "transitionsOut": [
@@ -30359,12 +31043,57 @@
           "trigger": "Убрать кандидата из draft",
           "guard": "candidate belongs to local uncommitted seat draft",
           "kind": "local-draft-command"
+        },
+        {
+          "to": "PLY-030",
+          "trigger": "Передать устройство для выбора неназначенных листов",
+          "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; exact profile selected; issue current signed DEVICE_LIBRARY_SELECTOR curtain, no library rows before explicit selector ACK",
+          "kind": "normative"
+        },
+        {
+          "to": "PLY-030",
+          "trigger": "Привязать выбранных персонажей локальному владельцу",
+          "guard": "signed selector context and selectorHandoffReceiptId current; exact durable targetLocalOwnerId + targetProfileLabel; 1..3 distinct unassigned immutable FINAL from this installation and device; exact sourceUuid/finalSnapshotVersion/metadataRevision/candidateSnapshotChecksum and selectionRevision; UI-CMD-LOCAL-OWNER-BIND-FINALS commits the whole grant and pending continuation, then purge selector before target curtain",
+          "kind": "workflow-command"
+        },
+        {
+          "to": "NET-003",
+          "trigger": "Продолжить подключение с листами этого профиля",
+          "guard": "isHostDevice=true; current HOST_LOCAL_CANDIDATE ACK identifies exact target owner; only that owner’s permitted sourceUuid subset, 1..3, current revisions, ordinary #171/#172 admission; no pre-admission seat HOST_LOCAL_CANDIDATE: listing, direct open, NET-003 reselection and NET-004 submit each recheck the current acknowledged targetLocalOwnerId and durable membership for every exact sourceUuid before reading or writing. A foreign UUID or stale grant is rejected.",
+          "kind": "normative"
+        },
+        {
+          "to": "PLY-030",
+          "trigger": "Отменить передачу до привязки",
+          "guard": "NEUTRAL_PROFILE_SETUP or SELECTOR_BIND_CONFIRM; no binding commit; current signedReturnContext; target selection, owner creation and selector ACK are optional for neutral cancel; purge and return to the exact signed GM/neutral boundary, zero write",
+          "kind": "normative"
+        },
+        {
+          "to": "APP-003",
+          "trigger": "Создать профиль с указанной меткой",
+          "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; explicitly entered nonempty targetProfileLabel; UI-CMD-LOCAL-OWNER-PROFILE-CREATE commits only a new durable profile and returns its exact ID",
+          "kind": "workflow-command"
+        },
+        {
+          "to": "APP-003",
+          "trigger": "Выбрать существующий профиль по идентификатору",
+          "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; explicit exact targetLocalOwnerId and displayed targetProfileLabel; select locally, zero membership or authority",
+          "kind": "local-draft-command"
+        },
+        {
+          "to": "PLY-030",
+          "trigger": "Передать устройство для создания нового персонажа",
+          "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; exact fresh empty target selected; only signed HOST_LOCAL_CANDIDATE curtain, no selector grant",
+          "kind": "normative"
         }
       ],
       "references": {
         "ruleIds": [],
         "operationIds": [],
-        "workflowCommandIds": [],
+        "workflowCommandIds": [
+          "UI-CMD-LOCAL-OWNER-PROFILE-CREATE",
+          "UI-CMD-LOCAL-OWNER-BIND-FINALS"
+        ],
         "abilityIds": [],
         "effectTypeIds": [],
         "qnaIds": [],
@@ -30394,7 +31123,7 @@
         "projectedOperationIds": []
       },
       "projection": {
-        "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat.",
+        "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat. NEUTRAL_PROFILE_SETUP показывает только постоянные метки и ID профилей; SELECTOR_BIND_CONFIRM доступен только подтверждённому селектору, показывает его точный выбор, targetProfileLabel + targetLocalOwnerId и последствия для доступа.",
         "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
       },
       "auditAtomicity": {
@@ -30414,11 +31143,17 @@
         "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
         "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
         "Назначение реализовано буквально: Локальный device-shell draft выбирает 0–3 кандидатов/мест без выдачи authority; ordinary device продолжает в NET-003, host provisional player обязательно проходит PLY-030 и обычный admission.",
-        "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+        "Для выбранного режима проверяются только его входные поля до соответствующего действия. Поля результата появляются после успешной команды. Обычные и fresh-пути валидируют собственные поля; неперечисленный OperationID недоступен."
       ],
       "qaScenarioIds": [
         "QA-FORM-APP-003",
-        "QA-CHANGE-APP-003"
+        "QA-CHANGE-APP-003",
+        "QA-LOCAL-OWNER-LIFETIME",
+        "QA-LOCAL-OWNER-TARGET",
+        "QA-LOCAL-OWNER-ATOMICITY",
+        "QA-LOCAL-OWNER-ADMISSION",
+        "QA-WORKFLOW-UI-CMD-LOCAL-OWNER-PROFILE-CREATE",
+        "QA-WORKFLOW-UI-CMD-LOCAL-OWNER-BIND-FINALS"
       ],
       "supersedes": []
     },
@@ -30436,18 +31171,21 @@
       "contexts": [
         "local-app"
       ],
-      "purpose": "Библиотека локальных персонажей: создание, черновик, просмотр, импорт, вариант, экспорт и допустимое удаление. При localOwnerIdOrNull=null библиотека принадлежит устройству (deviceId), доступна игроку до кампании и проверка совпадения владельца не применяется. При localOwnerIdOrNull!=null библиотека принадлежит активному подтверждённому локальному владельцу и значение обязано совпадать с ним. На host-компьютере ветка localOwnerIdOrNull!=null сериализуется только после committed HOST_LOCAL_CANDIDATE handoffReceiptId как PLAYER-проекция без campaign authority; GM_IMPORT_CANDIDATE и GM shell сюда не маршрутизируются.",
+      "purpose": "Библиотека локальных персонажей: создание, черновик, просмотр, импорт, вариант, экспорт и допустимое удаление. При localOwnerIdOrNull=null библиотека принадлежит устройству (deviceId), доступна игроку до кампании и проверка совпадения владельца не применяется. При localOwnerIdOrNull!=null библиотека принадлежит активному подтверждённому локальному владельцу и значение обязано совпадать с ним. На host-компьютере ветка localOwnerIdOrNull!=null сериализуется только после committed HOST_LOCAL_CANDIDATE handoffReceiptId как PLAYER-проекция без campaign authority; GM_IMPORT_CANDIDATE и GM shell сюда не маршрутизируются. В активном host при localOwnerIdOrNull=null отдельный DEVICE_LIBRARY_SELECTOR показывает лишь неназначенные immutable FINAL после текущего selector ACK. В обычной ветви localOwnerIdOrNull=null проверка deviceId сохраняет прежний путь для неназначенных FINAL. С момента binding назначенный sourceUuid отсутствует в обычных null/device list, open, export, draft selection и admission, в том числе после окончания кампании, disconnect и restart. Доступ проверяется до сериализации и при прямом запросе. Только подтверждённый владелец получает свой оригинал; прежние неназначенные листы остаются на обычном пути без автоматического назначения.",
       "inputOwner": "local player shell user for the deviceId-owned library when localOwnerIdOrNull=null; active acknowledged local player owner matching localOwnerIdOrNull when localOwnerIdOrNull!=null, with committed HOST_LOCAL_CANDIDATE handoffReceiptId additionally required on the host computer",
       "entryConditions": [
-        "projectionRole=PLAYER и activeRole=PLAYER.",
-        "При localOwnerIdOrNull=null обычный player shell использует библиотеку deviceId без проверки совпадения владельца; при localOwnerIdOrNull!=null значение совпадает с active acknowledged local owner, а на host-компьютере присутствует committed HOST_LOCAL_CANDIDATE handoffReceiptId.",
+        "В обычной и адресной библиотеке projectionRole=PLAYER и activeRole=PLAYER. Отдельная неигровая проекция DEVICE_LIBRARY_SELECTOR требует текущий signed selector ACK, localOwnerIdOrNull=null, trusted host и полностью очищенную предыдущую проекцию.",
+        "При localOwnerIdOrNull=null обычный player shell использует библиотеку deviceId без проверки совпадения владельца; при localOwnerIdOrNull!=null значение совпадает с active acknowledged local owner, а на host-компьютере присутствует committed HOST_LOCAL_CANDIDATE handoffReceiptId. На обычном устройстве проверяется отсутствие устойчивого membership у каждого запрошенного device-null FINAL.",
         "GM projection и GM_IMPORT_CANDIDATE payload отсутствуют из DOM, a11y tree, hotkeys и client cache."
       ],
       "guardStates": [
-        "when localOwnerIdOrNull=null, library is deviceId-owned and owner-match check does not apply; when localOwnerIdOrNull!=null, it matches active acknowledged local owner and host computer requires committed HOST_LOCAL_CANDIDATE handoffReceiptId",
+        "when localOwnerIdOrNull=null, library is deviceId-owned and owner-match check does not apply; when localOwnerIdOrNull!=null, it matches active acknowledged local owner and host computer requires committed HOST_LOCAL_CANDIDATE handoffReceiptId; on an active host the null branch requires DEVICE_LIBRARY_SELECTOR ACK and filters to UNASSIGNED immutable FINAL only; ordinary null/device reads and admissions require current absence of durable membership for every FINAL",
         "stateRevision and projectionRevision current",
         "host provisional context grants no player campaign authority",
-        "no conflicting uncommitted local operation"
+        "no conflicting uncommitted local operation",
+        "После очистки GM-проекции человек за доверенным устройством явно подтверждает кооперативную роль DEVICE_LIBRARY_SELECTOR. Только этот контекст с localOwnerIdOrNull=null видит неназначенные неизменяемые FINAL этой установки. Чужие строки, UUID, имена, artwork, счётчики, поисковые результаты и команды отсутствуют в payload, DOM, accessibility tree, hotkeys и cache. Секрет, loopback/listener/origin и подпись удостоверяют устройство и контекст, личность человека не проверяется. Тот же человек вправе подтвердить обе разные завесы последовательно.",
+        "Получатель после адресного ACK видит лишь FINAL своего targetLocalOwnerId. Для fresh empty owner доступны прежние создание, финализация и обычный admission. Режим селектора разрешает только APP-004::CTA::009 и APP-004::CTA::010; прежние операции библиотеки отсутствуют во всех каналах этого режима.",
+        "Drafts, ordinary-library commands and unrelated rows are omitted in DEVICE_LIBRARY_SELECTOR. A HOST_LOCAL_CANDIDATE target must match the acknowledged non-null owner and never receives the selector projection."
       ],
       "dataSources": [
         "Symbiosis_V7_Delivery_Manifest_v1.2.xlsx",
@@ -30459,20 +31197,24 @@
         "localCharacterLibraryRevision",
         "draftCharacterIds[]",
         "finalCharacterIds[]",
-        "launchContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE",
+        "launchContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE|DEVICE_LIBRARY_SELECTOR",
         "handoffIdOrNull",
         "handoffReceiptIdOrNull",
-        "returnContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE",
+        "returnContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE|DEVICE_LIBRARY_SELECTOR",
         "campaignAuthority=false when HOST_LOCAL_CANDIDATE",
         "stateRevision",
-        "projectionRevision"
+        "projectionRevision",
+        "DEVICE_LIBRARY_SELECTOR input: current selectorHandoffReceiptId, signed target ID and label, localOwnerIdOrNull=null, selectionRevision. Selection starts empty; continue requires 1..3 exact selectedFinals.",
+        "TARGET_OWNER_LIBRARY input: current target ACK and matching non-null owner. No grant/continuation is required for fresh or previously owned originals; ordinary library retains its own fields."
       ],
       "components": [
         "Заголовок и текущий контекст",
         "Содержательная область: Библиотека локальных персонажей: создание, черновик, просмотр, импорт, вариант, экспорт и допустимое удаление. При localOwnerIdOrNull=null библиотека принадлежит устройству (deviceId), доступна игроку до кампании и проверка совпадения владельца не применяется. При localOwnerIdOrNull!=null библиотека принадлежит активному подтверждённому локальному владельцу и значение обязано совпадать с ним. На host-компьютере ветка localOwnerIdOrNull!=null сериализуется только после committed HOST_LOCAL_CANDIDATE handoffReceiptId как PLAYER-проекция без campaign authority; GM_IMPORT_CANDIDATE и GM shell сюда не маршрутизируются.",
         "Основной CTA",
         "Back/Cancel/Retry только на безопасной границе",
-        "Индикатор связи и ревизии"
+        "Индикатор связи и ревизии",
+        "Выбор 1–3 неназначенных immutable FINAL с проверкой точного источника",
+        "Библиотека подтверждённого адресата"
       ],
       "actions": {
         "visible": [
@@ -30481,14 +31223,16 @@
           "Открыть «Проверка совместимости сохранения»",
           "Открыть «Подтверждение выхода»",
           "Вернуться в главное меню игрока",
-          "Импортировать персонажа"
+          "Импортировать персонажа",
+          "Проверить выбранные неназначенные листы",
+          "Отменить выбор неназначенных листов"
         ],
         "ctaAvailability": "CTA существует только при выполненных entry/guard conditions и актуальных revisions.",
         "allowed": [
           "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
           "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
           "Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.",
-          "Разрешённые видимые действия/CTA именно этой формы: Открыть «Создание персонажа: идентичность»; Открыть «Выбор локального профиля и места»; Открыть «Проверка совместимости сохранения»; Открыть «Подтверждение выхода»; Вернуться в главное меню игрока; Импортировать персонажа."
+          "Разрешённые видимые действия/CTA именно этой формы: Открыть «Создание персонажа: идентичность»; Открыть «Выбор локального профиля и места»; Открыть «Проверка совместимости сохранения»; Открыть «Подтверждение выхода»; Вернуться в главное меню игрока; Импортировать персонажа; Проверить выбранные неназначенные листы; Отменить выбор неназначенных листов."
         ],
         "prohibited": [
           "Mutation из неверной роли, чужого controllerSeat или устаревшей projectionRevision.",
@@ -30987,6 +31731,82 @@
               ],
               "playerProjection": "ABSENT"
             }
+          },
+          {
+            "label": "Проверить выбранные неназначенные листы",
+            "targetFormId": "APP-003",
+            "guard": "signed DEVICE_LIBRARY_SELECTOR receipt current; localOwnerIdOrNull=null; prior GM projection erased; only unassigned immutable FINAL visible; 1..3 distinct currently unassigned sourceUuid/finalSnapshotVersion/metadataRevision/candidateSnapshotChecksum; target and selection revision present; no write",
+            "kind": "normative",
+            "actionKey": "APP-004::CTA::009",
+            "availabilityInputs": [
+              "localOwnerIdOrNull",
+              "selectorHandoffReceiptId",
+              "selectionRevision",
+              "selectedFinals"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [
+                "OP-CHAR-CREATE"
+              ],
+              "workflowCommandIds": [],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision",
+              "eligible selection or pending continuation changed"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Отменить выбор неназначенных листов",
+            "targetFormId": "PLY-030",
+            "guard": "signed DEVICE_LIBRARY_SELECTOR receipt current; localOwnerIdOrNull=null; prior GM projection erased; only unassigned immutable FINAL visible; clear selection and private buffers, cancel before binding, zero grant; safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved",
+            "kind": "normative",
+            "actionKey": "APP-004::CTA::010",
+            "availabilityInputs": [
+              "localOwnerIdOrNull",
+              "selectorHandoffReceiptId",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [
+                "OP-CHAR-CREATE"
+              ],
+              "workflowCommandIds": [],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
           }
         ],
         "operationAvailability": [],
@@ -31002,7 +31822,9 @@
         "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
         "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
         "reconnecting": "Восстанавливаются server-authoritative seat, projection и pending command.",
-        "restored": "Показана серверная подтверждённая ревизия без повторного броска или расхода."
+        "restored": "Показана серверная подтверждённая ревизия без повторного броска или расхода.",
+        "DEVICE_LIBRARY_SELECTOR": "signed DEVICE_LIBRARY_SELECTOR receipt current; localOwnerIdOrNull=null; prior GM projection erased; only unassigned immutable FINAL visible",
+        "TARGET_OWNER_LIBRARY": "Получатель после адресного ACK видит лишь FINAL своего targetLocalOwnerId. Для fresh empty owner доступны прежние создание, финализация и обычный admission. Режим селектора разрешает только APP-004::CTA::009 и APP-004::CTA::010; прежние операции библиотеки отсутствуют во всех каналах этого режима."
       },
       "transitionsIn": [
         {
@@ -31076,6 +31898,18 @@
           "trigger": "Вернуться в библиотеку персонажей",
           "guard": "final sheet remains immutable",
           "kind": "safe-return"
+        },
+        {
+          "from": "PLY-030",
+          "trigger": "Подтвердить получение устройства для выбора листов",
+          "guard": "neutral curtain; all private projections erased; address exact targetProfileLabel + targetLocalOwnerId; no FINAL/candidate metadata; handoffType=DEVICE_LIBRARY_SELECTOR; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=ACTIVATE_TARGET; explicit cooperative selector ACK, localOwnerIdOrNull=null; selection only",
+          "kind": "workflow-command"
+        },
+        {
+          "from": "PLY-030",
+          "trigger": "Подтвердить получение устройства указанным профилем",
+          "guard": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=ACTIVATE_TARGET; explicit addressed target ACK, only exact owner library or fresh empty library",
+          "kind": "workflow-command"
         }
       ],
       "transitionsOut": [
@@ -31132,6 +31966,18 @@
           "trigger": "Импортировать персонажа",
           "guard": "projectionRole=PLAYER; ownerContext=PLAYER_LOCAL; originFormId(server-signed)=APP-004; returnFormId(server-signed)=APP-004; activeLocalOwnerId matches library owner; GM_IMPORT_CANDIDATE payload absent",
           "kind": "normative"
+        },
+        {
+          "to": "APP-003",
+          "trigger": "Проверить выбранные неназначенные листы",
+          "guard": "signed DEVICE_LIBRARY_SELECTOR receipt current; localOwnerIdOrNull=null; prior GM projection erased; only unassigned immutable FINAL visible; 1..3 distinct currently unassigned sourceUuid/finalSnapshotVersion/metadataRevision/candidateSnapshotChecksum; target and selection revision present; no write",
+          "kind": "normative"
+        },
+        {
+          "to": "PLY-030",
+          "trigger": "Отменить выбор неназначенных листов",
+          "guard": "signed DEVICE_LIBRARY_SELECTOR receipt current; localOwnerIdOrNull=null; prior GM projection erased; only unassigned immutable FINAL visible; clear selection and private buffers, cancel before binding, zero grant; safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved",
+          "kind": "normative"
         }
       ],
       "references": {
@@ -31174,7 +32020,7 @@
         ]
       },
       "projection": {
-        "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat.",
+        "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat. Получатель после адресного ACK видит лишь FINAL своего targetLocalOwnerId. Для fresh empty owner доступны прежние создание, финализация и обычный admission. Режим селектора разрешает только APP-004::CTA::009 и APP-004::CTA::010; прежние операции библиотеки отсутствуют во всех каналах этого режима. В обычной ветви localOwnerIdOrNull=null проверка deviceId сохраняет прежний путь для неназначенных FINAL. С момента binding назначенный sourceUuid отсутствует в обычных null/device list, open, export, draft selection и admission, в том числе после окончания кампании, disconnect и restart. Доступ проверяется до сериализации и при прямом запросе. Только подтверждённый владелец получает свой оригинал; прежние неназначенные листы остаются на обычном пути без автоматического назначения.",
         "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
       },
       "auditAtomicity": {
@@ -31193,12 +32039,15 @@
         "Loading/empty/error/conflict/connection-lost/reconnect не приводят к частичному commit.",
         "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
         "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
-        "Назначение реализовано буквально: Библиотека локальных персонажей: создание, черновик, просмотр, импорт, вариант, экспорт и допустимое удаление. При localOwnerIdOrNull=null библиотека принадлежит устройству (deviceId), доступна игроку до кампании и проверка совпадения владельца не применяется. При localOwnerIdOrNull!=null библиотека принадлежит активному подтверждённому локальному владельцу и значение обязано совпадать с ним. На host-компьютере ветка localOwnerIdOrNull!=null сериализуется только после committed HOST_LOCAL_CANDIDATE handoffReceiptId как PLAYER-проекция без campaign authority; GM_IMPORT_CANDIDATE и GM shell сюда не маршрутизируются.",
-        "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+        "Назначение реализовано буквально: Библиотека локальных персонажей: создание, черновик, просмотр, импорт, вариант, экспорт и допустимое удаление. При localOwnerIdOrNull=null библиотека принадлежит устройству (deviceId), доступна игроку до кампании и проверка совпадения владельца не применяется. При localOwnerIdOrNull!=null библиотека принадлежит активному подтверждённому локальному владельцу и значение обязано совпадать с ним. На host-компьютере ветка localOwnerIdOrNull!=null сериализуется только после committed HOST_LOCAL_CANDIDATE handoffReceiptId как PLAYER-проекция без campaign authority; GM_IMPORT_CANDIDATE и GM shell сюда не маршрутизируются. В активном host при localOwnerIdOrNull=null отдельный DEVICE_LIBRARY_SELECTOR показывает лишь неназначенные immutable FINAL после текущего selector ACK. В обычной ветви localOwnerIdOrNull=null проверка deviceId сохраняет прежний путь для неназначенных FINAL. С момента binding назначенный sourceUuid отсутствует в обычных null/device list, open, export, draft selection и admission, в том числе после окончания кампании, disconnect и restart. Доступ проверяется до сериализации и при прямом запросе. Только подтверждённый владелец получает свой оригинал; прежние неназначенные листы остаются на обычном пути без автоматического назначения.",
+        "Для выбранного режима проверяются только его входные поля до соответствующего действия. Поля результата появляются после успешной команды. Обычные и fresh-пути валидируют собственные поля; неперечисленный OperationID недоступен."
       ],
       "qaScenarioIds": [
         "QA-FORM-APP-004",
-        "QA-CHANGE-APP-004"
+        "QA-CHANGE-APP-004",
+        "QA-LOCAL-OWNER-PRIVACY",
+        "QA-LOCAL-OWNER-ATOMICITY",
+        "QA-LOCAL-OWNER-ADMISSION"
       ],
       "supersedes": []
     },
@@ -37996,6 +38845,12 @@
           "trigger": "Выбрать персонажей заново",
           "guard": "admissionOrigin=DEVICE_REQUEST; Own GM_REJECTED or PLAYER_DECLINED result; same live technical session; no conflicting pending admission; original source and receipts preserved.",
           "kind": "subflow"
+        },
+        {
+          "from": "APP-003",
+          "trigger": "Продолжить подключение с листами этого профиля",
+          "guard": "isHostDevice=true; current HOST_LOCAL_CANDIDATE ACK identifies exact target owner; only that owner’s permitted sourceUuid subset, 1..3, current revisions, ordinary #171/#172 admission; no pre-admission seat HOST_LOCAL_CANDIDATE: listing, direct open, NET-003 reselection and NET-004 submit each recheck the current acknowledged targetLocalOwnerId and durable membership for every exact sourceUuid before reading or writing. A foreign UUID or stale grant is rejected.",
+          "kind": "normative"
         }
       ],
       "transitionsOut": [
@@ -54260,7 +55115,9 @@
       "guardStates": [
         "stateRevision и projectionRevision актуальны",
         "нет конфликтующей незавершённой операции",
-        "подтверждён единственный активный master authority"
+        "подтверждён единственный активный master authority",
+        "isHostDevice=true; active master at safe signed boundary, including GM_ONLY with zero PCs; erase all GM payload, DOM, a11y, hotkeys, cache before neutral profile metadata; no FINAL rows",
+        "После commit селектор и его буферы стираются до адресной завесы HOST_LOCAL_CANDIDATE. «Позже» сохраняет тот же grant и pendingContinuationId и ведёт через подписанный возврат к GM. В CMP-009 и нейтральной завесе доступны только метка, идентификатор адресата и непрозрачный pendingContinuationId. После restart продолжение требует нового текущего подписанного контекста и отдельного ACK адресата. Replay возвращает прежнюю квитанцию без повторной записи и активации исторического контекста."
       ],
       "dataSources": [
         "Symbiosis_V7_Executable_Rules_Registry_v1.7.xlsx",
@@ -54276,28 +55133,33 @@
         "controllerSeat",
         "connectionState",
         "campaignId",
-        "campaignStatus"
+        "campaignStatus",
+        "Signed entry/return uses the current trusted GM boundary. Resumption alone has ownerBindingResumeOrNull{targetProfileLabel,targetLocalOwnerId,pendingContinuationId}; before any committed binding it is absent."
       ],
       "components": [
         "Заголовок и текущий контекст",
         "Содержательная область: Несколько персонажей на устройстве в пределах мест кампании; макет показывает двух, отдельно видны Ready и controller.",
         "Основной CTA",
         "Back/Cancel/Retry только на безопасной границе",
-        "Индикатор связи и ревизии"
+        "Индикатор связи и ревизии",
+        "Выбор сохранённых персонажей устройства",
+        "Продолжение передачи по метке и точному ID профиля"
       ],
       "actions": {
         "visible": [
           "Вернуться к «Настройки кампании»",
           "Вернуться к «Выбор локального профиля и места»",
           "Открыть «Нейтральная завеса передачи устройства»",
-          "Передать устройство локальному кандидату"
+          "Передать устройство локальному кандидату",
+          "Выбрать сохранённых персонажей этого устройства",
+          "Продолжить передачу: [метка + идентификатор]"
         ],
         "ctaAvailability": "CTA существует только при выполненных entry/guard conditions и актуальных revisions.",
         "allowed": [
           "Только операции, перечисленные в references.operationIds либо соответствующей journey.",
           "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
           "Самостоятельные mutation OperationID отсутствуют; допустимы только перечисленные переходы, read-only проекция либо rule/system handler без свободной команды.",
-          "Разрешённые видимые действия/CTA именно этой формы: Вернуться к «Настройки кампании»; Вернуться к «Выбор локального профиля и места»; Открыть «Нейтральная завеса передачи устройства»; Передать устройство локальному кандидату."
+          "Разрешённые видимые действия/CTA именно этой формы: Вернуться к «Настройки кампании»; Вернуться к «Выбор локального профиля и места»; Открыть «Нейтральная завеса передачи устройства»; Передать устройство локальному кандидату; Выбрать сохранённых персонажей этого устройства; Продолжить передачу: [метка + идентификатор]."
         ],
         "prohibited": [
           "Mutation из неверной роли, чужого controllerSeat или устаревшей projectionRevision.",
@@ -54562,6 +55424,77 @@
               ],
               "playerProjection": "ABSENT"
             }
+          },
+          {
+            "label": "Выбрать сохранённых персонажей этого устройства",
+            "targetFormId": "APP-003",
+            "guard": "isHostDevice=true; active master at safe signed boundary, including GM_ONLY with zero PCs; erase all GM payload, DOM, a11y, hotkeys, cache before neutral profile metadata; no FINAL rows",
+            "kind": "normative",
+            "actionKey": "CMP-009::CTA::005",
+            "availabilityInputs": [
+              "isHostDevice",
+              "signedReturnContext",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Продолжить передачу: [метка + идентификатор]",
+            "targetFormId": "PLY-030",
+            "guard": "same installation/device; trusted safe current boundary; exact retained pendingContinuationId and targetLocalOwnerId with targetProfileLabel; fresh signed HOST_LOCAL_CANDIDATE target; no target projection before new ACK; erase GM projection before target curtain",
+            "kind": "normative",
+            "actionKey": "CMP-009::CTA::006",
+            "availabilityInputs": [
+              "signedReturnContext",
+              "pendingContinuationId",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+              "ruleIds": [],
+              "operationIds": [],
+              "workflowCommandIds": [],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision",
+              "eligible selection or pending continuation changed"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
           }
         ],
         "operationAvailability": [],
@@ -54577,7 +55510,8 @@
         "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
         "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
         "reconnecting": "Восстанавливаются server-authoritative seat, projection и pending command.",
-        "restored": "Показана серверная подтверждённая ревизия без повторного броска или расхода."
+        "restored": "Показана серверная подтверждённая ревизия без повторного броска или расхода.",
+        "OWNER_BINDING_RESUMABLE": "same installation/device; trusted safe current boundary; exact retained pendingContinuationId and targetLocalOwnerId with targetProfileLabel; fresh signed HOST_LOCAL_CANDIDATE target; no target projection before new ACK"
       },
       "transitionsIn": [
         {
@@ -54603,6 +55537,12 @@
           "trigger": "Вернуться к управлению клиентами мастера",
           "guard": "otherwise CTA and target-only data are absent from payload, DOM, accessibility tree, hotkeys and client cache; projectionRole=GM; activeRole=GM; isHostDevice=true; confirmed master authority; no player library projection mounted",
           "kind": "normative"
+        },
+        {
+          "from": "PLY-030",
+          "trigger": "Подтвердить возврат устройства мастеру",
+          "guard": "safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=RETURN_INITIATOR current signed GM receipt, then GM-only projection",
+          "kind": "workflow-command"
         }
       ],
       "transitionsOut": [
@@ -54628,6 +55568,18 @@
           "to": "PLY-030",
           "trigger": "Передать устройство локальному кандидату",
           "guard": "host provisional candidate selected; prior GM projection erased",
+          "kind": "normative"
+        },
+        {
+          "to": "APP-003",
+          "trigger": "Выбрать сохранённых персонажей этого устройства",
+          "guard": "isHostDevice=true; active master at safe signed boundary, including GM_ONLY with zero PCs; erase all GM payload, DOM, a11y, hotkeys, cache before neutral profile metadata; no FINAL rows",
+          "kind": "normative"
+        },
+        {
+          "to": "PLY-030",
+          "trigger": "Продолжить передачу: [метка + идентификатор]",
+          "guard": "same installation/device; trusted safe current boundary; exact retained pendingContinuationId and targetLocalOwnerId with targetProfileLabel; fresh signed HOST_LOCAL_CANDIDATE target; no target projection before new ACK; erase GM projection before target curtain",
           "kind": "normative"
         }
       ],
@@ -54664,7 +55616,7 @@
         "projectedOperationIds": []
       },
       "projection": {
-        "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat.",
+        "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat. На GM-проекции отсутствуют данные неназначенных и чужих FINAL. Возобновление содержит только targetProfileLabel, targetLocalOwnerId, pendingContinuationId.",
         "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
       },
       "auditAtomicity": {
@@ -54684,11 +55636,14 @@
         "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
         "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
         "Назначение реализовано буквально: Несколько персонажей на устройстве в пределах мест кампании; макет показывает двух, отдельно видны Ready и controller.",
-        "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен."
+        "Для выбранного режима проверяются только его входные поля до соответствующего действия. Поля результата появляются после успешной команды. Обычные и fresh-пути валидируют собственные поля; неперечисленный OperationID недоступен."
       ],
       "qaScenarioIds": [
         "QA-FORM-CMP-009",
-        "QA-CHANGE-CMP-009"
+        "QA-CHANGE-CMP-009",
+        "QA-LOCAL-OWNER-PRIVACY",
+        "QA-LOCAL-OWNER-RESUME",
+        "QA-LOCAL-OWNER-ADMISSION"
       ],
       "supersedes": []
     },
@@ -94987,19 +95942,23 @@
         "forced-handoff",
         "control-lease"
       ],
-      "purpose": "Полноэкранная privacy curtain очищает предыдущую проекцию до player↔player, GM↔player, provisional HOST_LOCAL_CANDIDATE, IMPORTED_OWNER_CLAIM и forced handoff; следующая проекция выдаётся только после явного «Готов открыть» её локального владельца. Обычный target уже admitted/authorized, но host provisional candidate и imported owner claimant подтверждают только владение подписанным кандидатом и не получают campaign authority; вложенный prompt затем возвращает инициатора без раннего резерва.",
+      "purpose": "Полноэкранная privacy curtain очищает предыдущую проекцию до player↔player, GM↔player, provisional HOST_LOCAL_CANDIDATE, IMPORTED_OWNER_CLAIM и forced handoff; следующая проекция выдаётся только после явного «Готов открыть» её локального владельца. Обычный target уже admitted/authorized, но host provisional candidate и imported owner claimant подтверждают только владение подписанным кандидатом и не получают campaign authority; вложенный prompt затем возвращает инициатора без раннего резерва. Для существующих FINAL раздельные текущие подписи и явные ACK адресуют сначала DEVICE_LIBRARY_SELECTOR, затем HOST_LOCAL_CANDIDATE. При адресной завесе до ACK видны только служебные метка и точный ID.",
       "inputOwner": "active controllerSeat/GM context according to roles",
       "entryConditions": [
-        "Существует подписанный TAB_SWITCH, FORCED_INPUT, CONSENT, MASTER_PREDICATE, HOST_LOCAL_CANDIDATE, IMPORTED_OWNER_CLAIM или CONTROL_LEASE handoff envelope.",
+        "Существует подписанный TAB_SWITCH, FORCED_INPUT, CONSENT, MASTER_PREDICATE, HOST_LOCAL_CANDIDATE, IMPORTED_OWNER_CLAIM, DEVICE_LIBRARY_SELECTOR или CONTROL_LEASE handoff envelope. Восстановленная нейтральная точка на доверенном устройстве допускает PENDING_NEUTRAL_RESUME по непрозрачному идентификатору; переход создаёт текущую подписанную адресную завесу.",
         "Исходная проекция уже удалена из DOM, a11y tree и client cache.",
         "Для HOST_LOCAL_CANDIDATE или IMPORTED_OWNER_CLAIM выбранный provisional local owner совпадает с envelope, остаётся not admitted и не имеет campaign authority."
       ],
       "guardStates": [
         "target owner explicitly acknowledges",
-        "ordinary target is admitted/authorized OR HOST_LOCAL_CANDIDATE|IMPORTED_OWNER_CLAIM matches signed provisional owner without campaign authority",
+        "ordinary target is admitted/authorized OR HOST_LOCAL_CANDIDATE|IMPORTED_OWNER_CLAIM matches signed provisional owner without campaign authority OR DEVICE_LIBRARY_SELECTOR matches a signed cooperative selection-only envelope with localOwnerIdOrNull=null and no campaign authority",
         "no unsafe mid-command manual switch",
         "nested prompt reserves no action/OE/item/dose",
-        "returnContext and returnFormId are server-signed and preserved"
+        "returnContext and returnFormId are server-signed and preserved",
+        "После очистки GM-проекции человек за доверенным устройством явно подтверждает кооперативную роль DEVICE_LIBRARY_SELECTOR. Только этот контекст с localOwnerIdOrNull=null видит неназначенные неизменяемые FINAL этой установки. Чужие строки, UUID, имена, artwork, счётчики, поисковые результаты и команды отсутствуют в payload, DOM, accessibility tree, hotkeys и cache. Секрет, loopback/listener/origin и подпись удостоверяют устройство и контекст, личность человека не проверяется. Тот же человек вправе подтвердить обе разные завесы последовательно.",
+        "После commit селектор и его буферы стираются до адресной завесы HOST_LOCAL_CANDIDATE. «Позже» сохраняет тот же grant и pendingContinuationId и ведёт через подписанный возврат к GM. В CMP-009 и нейтральной завесе доступны только метка, идентификатор адресата и непрозрачный pendingContinuationId. После restart продолжение требует нового текущего подписанного контекста и отдельного ACK адресата. Replay возвращает прежнюю квитанцию без повторной записи и активации исторического контекста.",
+        "В режимах SELECTOR_CURTAIN, TARGET_CURTAIN, SIGNED_GM_RETURN и PENDING_NEUTRAL_RESUME доступны только адресные действия globalContracts.localOwnerBinding.modeActions. Прежние общие ACK ведут в PLY-029 только в своих обычных контекстах.",
+        "До commit из NEUTRAL_PROFILE_SETUP, SELECTOR_BIND_CONFIRM, непринятой SELECTOR_CURTAIN или свежей TARGET_CURTAIN можно отменить без выбора/создания профиля, ACK селектора/адресата или открытия библиотеки. Стереть private buffers и вернуться к точной signedReturnContext через нейтральную завесу. GM-проекция выдаётся только после своего адресного ACK. Отмена не пишет профиль, membership, grant, binding/selector/target receipt, character/copy, seat или reserve; ранее явно созданный пустой профиль сохраняется."
       ],
       "dataSources": [
         "Symbiosis_V7_Executable_Rules_Registry_v1.7.xlsx",
@@ -95010,7 +95969,7 @@
       ],
       "requiredFields": [
         "handoffId",
-        "handoffType=TAB_SWITCH|FORCED_INPUT|CONSENT|MASTER_PREDICATE|HOST_LOCAL_CANDIDATE|IMPORTED_OWNER_CLAIM|CONTROL_LEASE",
+        "handoffType=TAB_SWITCH|FORCED_INPUT|CONSENT|MASTER_PREDICATE|HOST_LOCAL_CANDIDATE|IMPORTED_OWNER_CLAIM|CONTROL_LEASE|DEVICE_LIBRARY_SELECTOR",
         "sourceSeatOrGm",
         "targetSeatOrGm",
         "targetOwnerAcknowledged",
@@ -95023,19 +95982,32 @@
         "stateRevision",
         "projectionRevision",
         "commandId",
-        "handoffReceiptId"
+        "handoffReceiptId",
+        "SELECTOR_CURTAIN input: current signedReturnContext, exact targetLocalOwnerId + targetProfileLabel, priorProjectionErased and localOwnerIdOrNull=null. selectorHandoffReceiptId is returned only by explicit selector ACK.",
+        "TARGET_CURTAIN input: current signed addressed profile after purge. Only a committed grant handoff has pendingContinuationId; fresh empty owner has none. Target ACK yields its own receipt; cancel before bind or Later before target ACK never yields a target receipt.",
+        "PENDING_NEUTRAL_RESUME input: retained pendingContinuationId plus target label/ID. SIGNED_GM_RETURN uses the current signed return only; ordinary tab switch, forced prompt and imported claim keep their original inputs."
       ],
       "components": [
         "Full-screen neutral curtain",
         "Previous projection erased indicator",
         "Target owner acknowledgement",
         "CTA «Готов открыть»",
-        "Nested request/return context"
+        "Nested request/return context",
+        "Кооперативная завеса выбора неназначенных FINAL",
+        "Адресная завеса профиля: постоянная метка и точный идентификатор",
+        "Позже и подтверждение подписанного возврата мастеру",
+        "Нейтральное продолжение по метке и точному идентификатору"
       ],
       "actions": {
         "visible": [
           "Готов открыть следующую проекцию",
-          "Вернуть управление инициатору после ответа"
+          "Вернуть управление инициатору после ответа",
+          "Подтвердить получение устройства для выбора листов",
+          "Подтвердить получение устройства указанным профилем",
+          "Позже",
+          "Подтвердить возврат устройства мастеру",
+          "Продолжить передачу: [метка + идентификатор]",
+          "Отменить передачу до подтверждения"
         ],
         "ctaAvailability": "CTA существует только при выполненных entry/guard conditions и актуальных revisions.",
         "allowed": [
@@ -95043,7 +96015,7 @@
           "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
           "Разрешённые atlas workflow commands этой формы: UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK.",
           "Исполняемых профильных OperationID нет; изменение состояния допускается только через перечисленные atlas workflow commands.",
-          "Разрешённые видимые действия/CTA именно этой формы: Готов открыть следующую проекцию; Вернуть управление инициатору после ответа."
+          "Разрешённые видимые действия/CTA именно этой формы: Готов открыть следующую проекцию; Вернуть управление инициатору после ответа; Подтвердить получение устройства для выбора листов; Подтвердить получение устройства указанным профилем; Позже; Подтвердить возврат устройства мастеру; Продолжить передачу: [метка + идентификатор]; Отменить передачу до подтверждения."
         ],
         "prohibited": [
           "Mutation из неверной роли, чужого controllerSeat или устаревшей projectionRevision.",
@@ -95218,13 +96190,263 @@
               ],
               "playerProjection": "ABSENT"
             }
+          },
+          {
+            "label": "Подтвердить получение устройства для выбора листов",
+            "targetFormId": "APP-004",
+            "guard": "neutral curtain; all private projections erased; address exact targetProfileLabel + targetLocalOwnerId; no FINAL/candidate metadata; handoffType=DEVICE_LIBRARY_SELECTOR; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=ACTIVATE_TARGET; explicit cooperative selector ACK, localOwnerIdOrNull=null; selection only",
+            "kind": "workflow-command",
+            "actionKey": "PLY-030::CTA::003",
+            "availabilityInputs": [
+              "handoffType",
+              "signedReturnContext",
+              "priorProjectionErased",
+              "targetLocalOwnerId",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_AVAILABLE_ACTIONS",
+              "ruleIds": [
+                "AQ2-011",
+                "AQA-040",
+                "CQA-004"
+              ],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Подтвердить получение устройства указанным профилем",
+            "targetFormId": "APP-004",
+            "guard": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=ACTIVATE_TARGET; explicit addressed target ACK, only exact owner library or fresh empty library",
+            "kind": "workflow-command",
+            "actionKey": "PLY-030::CTA::004",
+            "availabilityInputs": [
+              "handoffType",
+              "signedReturnContext",
+              "priorProjectionErased",
+              "targetLocalOwnerId",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_AVAILABLE_ACTIONS",
+              "ruleIds": [
+                "AQ2-011",
+                "AQA-040",
+                "CQA-004"
+              ],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision",
+              "eligible selection or pending continuation changed"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Позже",
+            "targetFormId": "PLY-030",
+            "guard": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority; binding committed, target ACK pending, no new write; retain existing grant and pendingContinuationId; safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved",
+            "kind": "normative",
+            "actionKey": "PLY-030::CTA::005",
+            "availabilityInputs": [
+              "signedReturnContext",
+              "priorProjectionErased",
+              "pendingContinuationId",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_AVAILABLE_ACTIONS",
+              "ruleIds": [
+                "AQ2-011",
+                "AQA-040",
+                "CQA-004"
+              ],
+              "operationIds": [],
+              "workflowCommandIds": [],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision",
+              "eligible selection or pending continuation changed"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Подтвердить возврат устройства мастеру",
+            "targetFormId": "CMP-009",
+            "guard": "safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=RETURN_INITIATOR current signed GM receipt, then GM-only projection",
+            "kind": "workflow-command",
+            "actionKey": "PLY-030::CTA::006",
+            "availabilityInputs": [
+              "signedReturnContext",
+              "priorProjectionErased",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_AVAILABLE_ACTIONS",
+              "ruleIds": [
+                "AQ2-011",
+                "AQA-040",
+                "CQA-004"
+              ],
+              "operationIds": [],
+              "workflowCommandIds": [
+                "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK"
+              ],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Продолжить передачу: [метка + идентификатор]",
+            "targetFormId": "PLY-030",
+            "guard": "neutral curtain; all private projections erased; address exact targetProfileLabel + targetLocalOwnerId; no FINAL/candidate metadata; same installation/device; trusted safe current boundary; exact retained pendingContinuationId and targetLocalOwnerId with targetProfileLabel; fresh signed HOST_LOCAL_CANDIDATE target; no target projection before new ACK",
+            "kind": "normative",
+            "actionKey": "PLY-030::CTA::007",
+            "availabilityInputs": [
+              "signedReturnContext",
+              "priorProjectionErased",
+              "pendingContinuationId",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_AVAILABLE_ACTIONS",
+              "ruleIds": [
+                "AQ2-011",
+                "AQA-040",
+                "CQA-004"
+              ],
+              "operationIds": [],
+              "workflowCommandIds": [],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision",
+              "eligible selection or pending continuation changed"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
+          },
+          {
+            "label": "Отменить передачу до подтверждения",
+            "targetFormId": "PLY-030",
+            "guard": "Current signed SELECTOR_CURTAIN before selector ACK or fresh HOST_LOCAL_CANDIDATE TARGET_CURTAIN before target ACK; no committed binding; erase all private buffers and follow exact signed GM/neutral return without selector/target ACK. No binding or access grant.",
+            "kind": "normative",
+            "actionKey": "PLY-030::CTA::008",
+            "availabilityInputs": [
+              "handoffType",
+              "signedReturnContext",
+              "priorProjectionErased",
+              "projectionRevision"
+            ],
+            "authoritativeSource": {
+              "service": "SERVER_AVAILABLE_ACTIONS",
+              "ruleIds": [
+                "AQ2-011",
+                "AQA-040",
+                "CQA-004"
+              ],
+              "operationIds": [],
+              "workflowCommandIds": [],
+              "abilityIds": []
+            },
+            "recomputeTriggers": [
+              "current signed context or owner changed",
+              "stateRevision/projectionRevision"
+            ],
+            "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE",
+            "hiddenReasonDiagnostic": {
+              "audience": "GM_QA_ONLY",
+              "channel": "actionAvailabilityTrace",
+              "fields": [
+                "actionKey",
+                "failedPredicate",
+                "sourceRuleOrGuard",
+                "evaluatedRevision"
+              ],
+              "playerProjection": "ABSENT"
+            }
           }
         ],
         "operationAvailability": [],
         "workflowCommandAvailability": [
           {
             "commandId": "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK",
-            "guard": "Target local owner explicitly acknowledged; prior projection is erased; state/projection revisions current; boundary is safe or handoff is the addressed forced nested prompt; returnContext and pending-command owner match the signed handoff envelope. For handoffType outside HOST_LOCAL_CANDIDATE and IMPORTED_OWNER_CLAIM, target GM/seat is admitted and authorized. For HOST_LOCAL_CANDIDATE, isHostDevice=true, the selected provisional local owner matches the signed handoff target, remains not admitted, and has no player campaign authority. For IMPORTED_OWNER_CLAIM, isHostDevice=true, the selected provisional local owner matches the signed imported candidate owner-claim envelope, remains not admitted, and has no player campaign authority.",
+            "guard": "Target local owner explicitly acknowledged; prior projection is erased; state/projection revisions current; boundary is safe or handoff is the addressed forced nested prompt; returnContext and pending-command owner match the signed handoff envelope. For handoffType outside DEVICE_LIBRARY_SELECTOR, HOST_LOCAL_CANDIDATE and IMPORTED_OWNER_CLAIM, target GM/seat is admitted and authorized. For HOST_LOCAL_CANDIDATE, isHostDevice=true, the selected provisional local owner matches the signed handoff target, remains not admitted, and has no player campaign authority. For IMPORTED_OWNER_CLAIM, isHostDevice=true, the selected provisional local owner matches the signed imported candidate owner-claim envelope, remains not admitted, and has no player campaign authority. For DEVICE_LIBRARY_SELECTOR, trusted host installation/device, safe signed boundary, erased prior projection, localOwnerIdOrNull=null, explicitly acknowledged cooperative selector and exact designated profile ID + label are required. HOST_LOCAL_CANDIDATE after binding also requires the erased selector, exact durable grant target, current signed pendingContinuationId and independent explicit target ACK.",
             "availabilityInputs": [
               "actorId",
               "effectiveController",
@@ -95287,7 +96509,11 @@
         "WAITING_FOR_LOCAL_OWNER": "Ожидается явное подтверждение целевого владельца; тайм-аут не считается согласием.",
         "TARGET_CONTEXT_ACTIVE": "Только целевая проекция и вложенный prompt доступны для ввода.",
         "RETURN_TO_INITIATOR": "После ответа та же curtain очищает target projection и возвращает сохранённый контекст инициатора.",
-        "RECONNECT_RESTORED": "Незавершённый handoff восстановлен без выдачи чужой проекции."
+        "RECONNECT_RESTORED": "Незавершённый handoff восстановлен без выдачи чужой проекции.",
+        "SELECTOR_CURTAIN": "neutral curtain; all private projections erased; address exact targetProfileLabel + targetLocalOwnerId; no FINAL/candidate metadata",
+        "TARGET_CURTAIN": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority",
+        "SIGNED_GM_RETURN": "safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved",
+        "PENDING_NEUTRAL_RESUME": "same installation/device; trusted safe current boundary; exact retained pendingContinuationId and targetLocalOwnerId with targetProfileLabel; fresh signed HOST_LOCAL_CANDIDATE target; no target projection before new ACK"
       },
       "transitionsIn": [
         {
@@ -95451,6 +96677,60 @@
           "trigger": "Вернуться через экран приватности",
           "guard": "MASTER_IMPORT terminal result; committed NET-028 owner claim retains signed returnMode=LOCAL_HANDOFF, returnFormId=PLY-030, handoffId and initiating GM context; no pending command; receipt-gated return only, never expose GM data in the player projection.",
           "kind": "safe-return"
+        },
+        {
+          "from": "CMP-009",
+          "trigger": "Продолжить передачу: [метка + идентификатор]",
+          "guard": "same installation/device; trusted safe current boundary; exact retained pendingContinuationId and targetLocalOwnerId with targetProfileLabel; fresh signed HOST_LOCAL_CANDIDATE target; no target projection before new ACK; erase GM projection before target curtain",
+          "kind": "normative"
+        },
+        {
+          "from": "APP-003",
+          "trigger": "Передать устройство для выбора неназначенных листов",
+          "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; exact profile selected; issue current signed DEVICE_LIBRARY_SELECTOR curtain, no library rows before explicit selector ACK",
+          "kind": "normative"
+        },
+        {
+          "from": "APP-003",
+          "trigger": "Привязать выбранных персонажей локальному владельцу",
+          "guard": "signed selector context and selectorHandoffReceiptId current; exact durable targetLocalOwnerId + targetProfileLabel; 1..3 distinct unassigned immutable FINAL from this installation and device; exact sourceUuid/finalSnapshotVersion/metadataRevision/candidateSnapshotChecksum and selectionRevision; UI-CMD-LOCAL-OWNER-BIND-FINALS commits the whole grant and pending continuation, then purge selector before target curtain",
+          "kind": "workflow-command"
+        },
+        {
+          "from": "APP-003",
+          "trigger": "Отменить передачу до привязки",
+          "guard": "NEUTRAL_PROFILE_SETUP or SELECTOR_BIND_CONFIRM; no binding commit; current signedReturnContext; target selection, owner creation and selector ACK are optional for neutral cancel; purge and return to the exact signed GM/neutral boundary, zero write",
+          "kind": "normative"
+        },
+        {
+          "from": "APP-003",
+          "trigger": "Передать устройство для создания нового персонажа",
+          "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; exact fresh empty target selected; only signed HOST_LOCAL_CANDIDATE curtain, no selector grant",
+          "kind": "normative"
+        },
+        {
+          "from": "APP-004",
+          "trigger": "Отменить выбор неназначенных листов",
+          "guard": "signed DEVICE_LIBRARY_SELECTOR receipt current; localOwnerIdOrNull=null; prior GM projection erased; only unassigned immutable FINAL visible; clear selection and private buffers, cancel before binding, zero grant; safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved",
+          "kind": "normative"
+        },
+        {
+          "from": "PLY-030",
+          "trigger": "Позже",
+          "guard": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority; binding committed, target ACK pending, no new write; retain existing grant and pendingContinuationId; safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved",
+          "kind": "normative"
+        },
+        {
+          "from": "PLY-030",
+          "trigger": "Продолжить передачу: [метка + идентификатор]",
+          "guard": "neutral curtain; all private projections erased; address exact targetProfileLabel + targetLocalOwnerId; no FINAL/candidate metadata; same installation/device; trusted safe current boundary; exact retained pendingContinuationId and targetLocalOwnerId with targetProfileLabel; fresh signed HOST_LOCAL_CANDIDATE target; no target projection before new ACK",
+          "kind": "normative"
+        },
+        {
+          "from": "PLY-030",
+          "trigger": "Отменить передачу до подтверждения",
+          "guard": "Current signed SELECTOR_CURTAIN before selector ACK or fresh HOST_LOCAL_CANDIDATE TARGET_CURTAIN before target ACK; no committed binding; erase all private buffers and follow exact signed GM/neutral return without selector/target ACK. No binding or access grant.",
+          "kind": "normative"
         }
       ],
       "transitionsOut": [
@@ -95465,6 +96745,42 @@
           "trigger": "Вернуть управление инициатору после ответа",
           "guard": "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=RETURN_INITIATOR guards; nested response persisted and return receipt committed before initiator-only projection opens",
           "kind": "workflow-command"
+        },
+        {
+          "to": "APP-004",
+          "trigger": "Подтвердить получение устройства для выбора листов",
+          "guard": "neutral curtain; all private projections erased; address exact targetProfileLabel + targetLocalOwnerId; no FINAL/candidate metadata; handoffType=DEVICE_LIBRARY_SELECTOR; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=ACTIVATE_TARGET; explicit cooperative selector ACK, localOwnerIdOrNull=null; selection only",
+          "kind": "workflow-command"
+        },
+        {
+          "to": "APP-004",
+          "trigger": "Подтвердить получение устройства указанным профилем",
+          "guard": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=ACTIVATE_TARGET; explicit addressed target ACK, only exact owner library or fresh empty library",
+          "kind": "workflow-command"
+        },
+        {
+          "to": "PLY-030",
+          "trigger": "Позже",
+          "guard": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority; binding committed, target ACK pending, no new write; retain existing grant and pendingContinuationId; safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved",
+          "kind": "normative"
+        },
+        {
+          "to": "CMP-009",
+          "trigger": "Подтвердить возврат устройства мастеру",
+          "guard": "safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=RETURN_INITIATOR current signed GM receipt, then GM-only projection",
+          "kind": "workflow-command"
+        },
+        {
+          "to": "PLY-030",
+          "trigger": "Продолжить передачу: [метка + идентификатор]",
+          "guard": "neutral curtain; all private projections erased; address exact targetProfileLabel + targetLocalOwnerId; no FINAL/candidate metadata; same installation/device; trusted safe current boundary; exact retained pendingContinuationId and targetLocalOwnerId with targetProfileLabel; fresh signed HOST_LOCAL_CANDIDATE target; no target projection before new ACK",
+          "kind": "normative"
+        },
+        {
+          "to": "PLY-030",
+          "trigger": "Отменить передачу до подтверждения",
+          "guard": "Current signed SELECTOR_CURTAIN before selector ACK or fresh HOST_LOCAL_CANDIDATE TARGET_CURTAIN before target ACK; no committed binding; erase all private buffers and follow exact signed GM/neutral return without selector/target ACK. No binding or access grant.",
+          "kind": "normative"
         }
       ],
       "references": {
@@ -95514,7 +96830,7 @@
         "projectedOperationIds": []
       },
       "projection": {
-        "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat.",
+        "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat. В обеих адресных завесах доступны только targetProfileLabel и targetLocalOwnerId адресата; служебный pendingContinuationId используется для продолжения. Имена персонажей, их UUID, арты, GM и прежняя проекция исключены.",
         "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
       },
       "auditAtomicity": {
@@ -95533,14 +96849,17 @@
         "Loading/empty/error/conflict/connection-lost/reconnect не приводят к частичному commit.",
         "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
         "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
-        "Назначение реализовано буквально: Полноэкранная privacy curtain очищает предыдущую проекцию до player↔player, GM↔player, provisional HOST_LOCAL_CANDIDATE, IMPORTED_OWNER_CLAIM и forced handoff; следующая проекция выдаётся только после явного «Готов открыть» её локального владельца. Обычный target уже admitted/authorized, но host provisional candidate и imported owner claimant подтверждают только владение подписанным кандидатом и не получают campaign authority; вложенный prompt затем возвращает инициатора без раннего резерва.",
-        "Все перечисленные requiredFields валидируются до первой записи; неперечисленный OperationID недоступен.",
+        "Назначение реализовано буквально: Полноэкранная privacy curtain очищает предыдущую проекцию до player↔player, GM↔player, provisional HOST_LOCAL_CANDIDATE, IMPORTED_OWNER_CLAIM и forced handoff; следующая проекция выдаётся только после явного «Готов открыть» её локального владельца. Обычный target уже admitted/authorized, но host provisional candidate и imported owner claimant подтверждают только владение подписанным кандидатом и не получают campaign authority; вложенный prompt затем возвращает инициатора без раннего резерва. Для существующих FINAL раздельные текущие подписи и явные ACK адресуют сначала DEVICE_LIBRARY_SELECTOR, затем HOST_LOCAL_CANDIDATE. При адресной завесе до ACK видны только служебные метка и точный ID.",
+        "Для выбранного режима проверяются только его входные поля до соответствующего действия. Поля результата появляются после успешной команды. Обычные и fresh-пути валидируют собственные поля; неперечисленный OperationID недоступен.",
         "For ACTIVATE_TARGET or RETURN_INITIATOR, persist exactly one active local context and publish only its projection while keeping pending-command ownership unchanged; HOST_LOCAL_CANDIDATE opens only the local candidate/library bootstrap projection and grants no campaign authority; no action, OE, item, dose, roll or unrelated authority mutates. IMPORTED_OWNER_CLAIM opens only the addressed NET-028 claim context; ACK itself never claims/admit the candidate, allocates a seat/reserve or grants campaign authority. No prior GM payload is published.",
-        "Same handoffId/commandId returns the same receipt and active context; reconnect restores the curtain or committed target/initiator projection without exposing the prior owner, admitting a provisional candidate or repeating a nested response. The same signed imported candidate/provisional-owner binding is restored; a remote claim is not a local privacy handoff."
+        "Same handoffId/commandId returns the same receipt; only the currently authorized active context may be restored; reconnect restores the curtain or committed target/initiator projection without exposing the prior owner, admitting a provisional candidate or repeating a nested response. The same signed imported candidate/provisional-owner binding is restored; a remote claim is not a local privacy handoff."
       ],
       "qaScenarioIds": [
         "QA-FORM-PLY-030",
-        "QA-CHANGE-PLY-030"
+        "QA-CHANGE-PLY-030",
+        "QA-LOCAL-OWNER-TARGET",
+        "QA-LOCAL-OWNER-PRIVACY",
+        "QA-LOCAL-OWNER-RESUME"
       ],
       "supersedes": []
     },
@@ -232697,6 +234016,125 @@
       "trigger": "Проверенное уведомление о передаче host identity",
       "guard": "Committed transfer receipt and verified authority continuity; player/device-specific proof without GM secrets.",
       "kind": "system-event"
+    },
+    {
+      "from": "CMP-009",
+      "to": "APP-003",
+      "trigger": "Выбрать сохранённых персонажей этого устройства",
+      "guard": "isHostDevice=true; active master at safe signed boundary, including GM_ONLY with zero PCs; erase all GM payload, DOM, a11y, hotkeys, cache before neutral profile metadata; no FINAL rows",
+      "kind": "normative"
+    },
+    {
+      "from": "CMP-009",
+      "to": "PLY-030",
+      "trigger": "Продолжить передачу: [метка + идентификатор]",
+      "guard": "same installation/device; trusted safe current boundary; exact retained pendingContinuationId and targetLocalOwnerId with targetProfileLabel; fresh signed HOST_LOCAL_CANDIDATE target; no target projection before new ACK; erase GM projection before target curtain",
+      "kind": "normative"
+    },
+    {
+      "from": "APP-003",
+      "to": "PLY-030",
+      "trigger": "Передать устройство для выбора неназначенных листов",
+      "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; exact profile selected; issue current signed DEVICE_LIBRARY_SELECTOR curtain, no library rows before explicit selector ACK",
+      "kind": "normative"
+    },
+    {
+      "from": "APP-003",
+      "to": "PLY-030",
+      "trigger": "Привязать выбранных персонажей локальному владельцу",
+      "guard": "signed selector context and selectorHandoffReceiptId current; exact durable targetLocalOwnerId + targetProfileLabel; 1..3 distinct unassigned immutable FINAL from this installation and device; exact sourceUuid/finalSnapshotVersion/metadataRevision/candidateSnapshotChecksum and selectionRevision; UI-CMD-LOCAL-OWNER-BIND-FINALS commits the whole grant and pending continuation, then purge selector before target curtain",
+      "kind": "workflow-command"
+    },
+    {
+      "from": "APP-003",
+      "to": "NET-003",
+      "trigger": "Продолжить подключение с листами этого профиля",
+      "guard": "isHostDevice=true; current HOST_LOCAL_CANDIDATE ACK identifies exact target owner; only that owner’s permitted sourceUuid subset, 1..3, current revisions, ordinary #171/#172 admission; no pre-admission seat HOST_LOCAL_CANDIDATE: listing, direct open, NET-003 reselection and NET-004 submit each recheck the current acknowledged targetLocalOwnerId and durable membership for every exact sourceUuid before reading or writing. A foreign UUID or stale grant is rejected.",
+      "kind": "normative"
+    },
+    {
+      "from": "APP-003",
+      "to": "PLY-030",
+      "trigger": "Отменить передачу до привязки",
+      "guard": "NEUTRAL_PROFILE_SETUP or SELECTOR_BIND_CONFIRM; no binding commit; current signedReturnContext; target selection, owner creation and selector ACK are optional for neutral cancel; purge and return to the exact signed GM/neutral boundary, zero write",
+      "kind": "normative"
+    },
+    {
+      "from": "APP-003",
+      "to": "APP-003",
+      "trigger": "Создать профиль с указанной меткой",
+      "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; explicitly entered nonempty targetProfileLabel; UI-CMD-LOCAL-OWNER-PROFILE-CREATE commits only a new durable profile and returns its exact ID",
+      "kind": "workflow-command"
+    },
+    {
+      "from": "APP-003",
+      "to": "APP-003",
+      "trigger": "Выбрать существующий профиль по идентификатору",
+      "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; explicit exact targetLocalOwnerId and displayed targetProfileLabel; select locally, zero membership or authority",
+      "kind": "local-draft-command"
+    },
+    {
+      "from": "APP-003",
+      "to": "PLY-030",
+      "trigger": "Передать устройство для создания нового персонажа",
+      "guard": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions; exact fresh empty target selected; only signed HOST_LOCAL_CANDIDATE curtain, no selector grant",
+      "kind": "normative"
+    },
+    {
+      "from": "APP-004",
+      "to": "APP-003",
+      "trigger": "Проверить выбранные неназначенные листы",
+      "guard": "signed DEVICE_LIBRARY_SELECTOR receipt current; localOwnerIdOrNull=null; prior GM projection erased; only unassigned immutable FINAL visible; 1..3 distinct currently unassigned sourceUuid/finalSnapshotVersion/metadataRevision/candidateSnapshotChecksum; target and selection revision present; no write",
+      "kind": "normative"
+    },
+    {
+      "from": "APP-004",
+      "to": "PLY-030",
+      "trigger": "Отменить выбор неназначенных листов",
+      "guard": "signed DEVICE_LIBRARY_SELECTOR receipt current; localOwnerIdOrNull=null; prior GM projection erased; only unassigned immutable FINAL visible; clear selection and private buffers, cancel before binding, zero grant; safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved",
+      "kind": "normative"
+    },
+    {
+      "from": "PLY-030",
+      "to": "APP-004",
+      "trigger": "Подтвердить получение устройства для выбора листов",
+      "guard": "neutral curtain; all private projections erased; address exact targetProfileLabel + targetLocalOwnerId; no FINAL/candidate metadata; handoffType=DEVICE_LIBRARY_SELECTOR; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=ACTIVATE_TARGET; explicit cooperative selector ACK, localOwnerIdOrNull=null; selection only",
+      "kind": "workflow-command"
+    },
+    {
+      "from": "PLY-030",
+      "to": "APP-004",
+      "trigger": "Подтвердить получение устройства указанным профилем",
+      "guard": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=ACTIVATE_TARGET; explicit addressed target ACK, only exact owner library or fresh empty library",
+      "kind": "workflow-command"
+    },
+    {
+      "from": "PLY-030",
+      "to": "PLY-030",
+      "trigger": "Позже",
+      "guard": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority; binding committed, target ACK pending, no new write; retain existing grant and pendingContinuationId; safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved",
+      "kind": "normative"
+    },
+    {
+      "from": "PLY-030",
+      "to": "CMP-009",
+      "trigger": "Подтвердить возврат устройства мастеру",
+      "guard": "safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=RETURN_INITIATOR current signed GM receipt, then GM-only projection",
+      "kind": "workflow-command"
+    },
+    {
+      "from": "PLY-030",
+      "to": "PLY-030",
+      "trigger": "Продолжить передачу: [метка + идентификатор]",
+      "guard": "neutral curtain; all private projections erased; address exact targetProfileLabel + targetLocalOwnerId; no FINAL/candidate metadata; same installation/device; trusted safe current boundary; exact retained pendingContinuationId and targetLocalOwnerId with targetProfileLabel; fresh signed HOST_LOCAL_CANDIDATE target; no target projection before new ACK",
+      "kind": "normative"
+    },
+    {
+      "from": "PLY-030",
+      "to": "PLY-030",
+      "trigger": "Отменить передачу до подтверждения",
+      "guard": "Current signed SELECTOR_CURTAIN before selector ACK or fresh HOST_LOCAL_CANDIDATE TARGET_CURTAIN before target ACK; no committed binding; erase all private buffers and follow exact signed GM/neutral return without selector/target ACK. No binding or access grant.",
+      "kind": "normative"
     }
   ],
   "qaScenarios": [
@@ -232961,7 +234399,7 @@
     {
       "qaId": "QA-FORM-APP-003",
       "scope": "APP-003",
-      "scenario": "Проверить буквальное назначение APP-003: Локальный device-shell draft выбирает 0–3 кандидатов/мест без выдачи authority; ordinary device продолжает в NET-003, host provisional player обязательно проходит PLY-030 и обычный admission. Поля: deviceId, isHostDevice, localCandidateIds[], selectedCandidateIds[0..3], seatDraft[], campaignCapacityOrUnknown, nextContext=ORDINARY_CONNECT|HOST_PROVISIONAL|ZERO_SEATS, draftRevision. CTA: Добавить кандидата из локальной библиотеки, Убрать кандидата из draft, Продолжить на обычном устройстве, Передать host локальному кандидату через privacy curtain, Оставить ноль локальных player seats, Вернуться к управлению клиентами мастера.",
+      "scenario": "Проверить буквальное назначение APP-003: Локальный device-shell draft выбирает 0–3 кандидатов/мест без выдачи authority; ordinary device продолжает в NET-003, host provisional player обязательно проходит PLY-030 и обычный admission. Поля: deviceId, isHostDevice, localCandidateIds[], selectedCandidateIds[0..3], seatDraft[], campaignCapacityOrUnknown, nextContext=ORDINARY_CONNECT|HOST_PROVISIONAL|ZERO_SEATS, draftRevision, NEUTRAL_PROFILE_SETUP input: installationId, deviceId, signedReturnContext. Existing profile selection needs its exact ID and label; create takes the entered targetProfileLabel and returns a new targetLocalOwnerId. Cancel needs neither., SELECTOR_BIND_CONFIRM input: binding.envelopeFields and selectedFinals[{sourceUuid,finalSnapshotVersion,metadataRevision,candidateSnapshotChecksum}]. Only on commit: bindingReceiptId, grantId, pendingContinuationId., TARGET_OWNER_ADMISSION input: current target ACK and exact owned subset. Existing-membership and fresh paths use their own confirmed owner scope; no prior binding receipt is required.. CTA: Добавить кандидата из локальной библиотеки, Убрать кандидата из draft, Продолжить на обычном устройстве, Передать host локальному кандидату через privacy curtain, Оставить ноль локальных player seats, Вернуться к управлению клиентами мастера, Передать устройство для выбора неназначенных листов, Привязать выбранных персонажей локальному владельцу, Продолжить подключение с листами этого профиля, Отменить передачу до привязки, Создать профиль с указанной меткой, Выбрать существующий профиль по идентификатору, Передать устройство для создания нового персонажа.",
       "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна."
     },
     {
@@ -232973,7 +234411,7 @@
     {
       "qaId": "QA-FORM-APP-004",
       "scope": "APP-004",
-      "scenario": "Проверить буквальное назначение APP-004: Библиотека локальных персонажей: создание, черновик, просмотр, импорт, вариант, экспорт и допустимое удаление. При localOwnerIdOrNull=null библиотека принадлежит устройству (deviceId), доступна игроку до кампании и проверка совпадения владельца не применяется. При localOwnerIdOrNull!=null библиотека принадлежит активному подтверждённому локальному владельцу и значение обязано совпадать с ним. На host-компьютере ветка localOwnerIdOrNull!=null сериализуется только после committed HOST_LOCAL_CANDIDATE handoffReceiptId как PLAYER-проекция без campaign authority; GM_IMPORT_CANDIDATE и GM shell сюда не маршрутизируются. Поля: localOwnerIdOrNull, localCharacterLibraryRevision, draftCharacterIds[], finalCharacterIds[], launchContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE, handoffIdOrNull, handoffReceiptIdOrNull, returnContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE, campaignAuthority=false when HOST_LOCAL_CANDIDATE, stateRevision, projectionRevision. CTA: Открыть «Создание персонажа: идентичность», Открыть «Выбор локального профиля и места», Открыть «Проверка совместимости сохранения», Открыть «Подтверждение выхода», Вернуться в главное меню игрока, Импортировать персонажа.",
+      "scenario": "Проверить буквальное назначение APP-004: Библиотека локальных персонажей: создание, черновик, просмотр, импорт, вариант, экспорт и допустимое удаление. При localOwnerIdOrNull=null библиотека принадлежит устройству (deviceId), доступна игроку до кампании и проверка совпадения владельца не применяется. При localOwnerIdOrNull!=null библиотека принадлежит активному подтверждённому локальному владельцу и значение обязано совпадать с ним. На host-компьютере ветка localOwnerIdOrNull!=null сериализуется только после committed HOST_LOCAL_CANDIDATE handoffReceiptId как PLAYER-проекция без campaign authority; GM_IMPORT_CANDIDATE и GM shell сюда не маршрутизируются. В активном host при localOwnerIdOrNull=null отдельный DEVICE_LIBRARY_SELECTOR показывает лишь неназначенные immutable FINAL после текущего selector ACK. В обычной ветви localOwnerIdOrNull=null проверка deviceId сохраняет прежний путь для неназначенных FINAL. С момента binding назначенный sourceUuid отсутствует в обычных null/device list, open, export, draft selection и admission, в том числе после окончания кампании, disconnect и restart. Доступ проверяется до сериализации и при прямом запросе. Только подтверждённый владелец получает свой оригинал; прежние неназначенные листы остаются на обычном пути без автоматического назначения. Поля: localOwnerIdOrNull, localCharacterLibraryRevision, draftCharacterIds[], finalCharacterIds[], launchContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE|DEVICE_LIBRARY_SELECTOR, handoffIdOrNull, handoffReceiptIdOrNull, returnContext=PLAYER_MENU|HOST_LOCAL_CANDIDATE|DEVICE_LIBRARY_SELECTOR, campaignAuthority=false when HOST_LOCAL_CANDIDATE, stateRevision, projectionRevision, DEVICE_LIBRARY_SELECTOR input: current selectorHandoffReceiptId, signed target ID and label, localOwnerIdOrNull=null, selectionRevision. Selection starts empty; continue requires 1..3 exact selectedFinals., TARGET_OWNER_LIBRARY input: current target ACK and matching non-null owner. No grant/continuation is required for fresh or previously owned originals; ordinary library retains its own fields.. CTA: Открыть «Создание персонажа: идентичность», Открыть «Выбор локального профиля и места», Открыть «Проверка совместимости сохранения», Открыть «Подтверждение выхода», Вернуться в главное меню игрока, Импортировать персонажа, Проверить выбранные неназначенные листы, Отменить выбор неназначенных листов. Отдельный fresh-сценарий на пустом профиле: пройти HOST_LOCAL_CANDIDATE ACK, APP-004 → CHR-001, финализацию и обычный admission без binding существующих FINAL.",
       "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна."
     },
     {
@@ -233495,7 +234933,7 @@
     {
       "qaId": "QA-FORM-CMP-009",
       "scope": "CMP-009",
-      "scenario": "Проверить буквальное назначение CMP-009: Несколько персонажей на устройстве в пределах мест кампании; макет показывает двух, отдельно видны Ready и controller. Поля: contextId, stateRevision, projectionRevision, deviceId, controllerSeat, connectionState, campaignId, campaignStatus. CTA: Вернуться к «Настройки кампании», Вернуться к «Выбор локального профиля и места», Открыть «Нейтральная завеса передачи устройства», Передать устройство локальному кандидату.",
+      "scenario": "Проверить буквальное назначение CMP-009: Несколько персонажей на устройстве в пределах мест кампании; макет показывает двух, отдельно видны Ready и controller. Поля: contextId, stateRevision, projectionRevision, deviceId, controllerSeat, connectionState, campaignId, campaignStatus, Signed entry/return uses the current trusted GM boundary. Resumption alone has ownerBindingResumeOrNull{targetProfileLabel,targetLocalOwnerId,pendingContinuationId}; before any committed binding it is absent.. CTA: Вернуться к «Настройки кампании», Вернуться к «Выбор локального профиля и места», Открыть «Нейтральная завеса передачи устройства», Передать устройство локальному кандидату, Выбрать сохранённых персонажей этого устройства, Продолжить передачу: [метка + идентификатор].",
       "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна."
     },
     {
@@ -234377,8 +235815,8 @@
     {
       "qaId": "QA-FORM-PLY-030",
       "scope": "PLY-030",
-      "scenario": "Проверить буквальное назначение PLY-030: Полноэкранная privacy curtain очищает предыдущую проекцию до player↔player, GM↔player, provisional HOST_LOCAL_CANDIDATE, IMPORTED_OWNER_CLAIM и forced handoff; следующая проекция выдаётся только после явного «Готов открыть» её локального владельца. Обычный target уже admitted/authorized, но host provisional candidate и imported owner claimant подтверждают только владение подписанным кандидатом и не получают campaign authority; вложенный prompt затем возвращает инициатора без раннего резерва. Поля: handoffId, handoffType=TAB_SWITCH|FORCED_INPUT|CONSENT|MASTER_PREDICATE|HOST_LOCAL_CANDIDATE|IMPORTED_OWNER_CLAIM|CONTROL_LEASE, sourceSeatOrGm, targetSeatOrGm, targetOwnerAcknowledged, nestedRequestId, returnContext, returnFormId(server-signed), priorProjectionErased=true, pendingCommandOwner, decision=ACTIVATE_TARGET|RETURN_INITIATOR, stateRevision, projectionRevision, commandId, handoffReceiptId. CTA: Готов открыть следующую проекцию, Вернуть управление инициатору после ответа.",
-      "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. For ACTIVATE_TARGET or RETURN_INITIATOR, persist exactly one active local context and publish only its projection while keeping pending-command ownership unchanged; HOST_LOCAL_CANDIDATE opens only the local candidate/library bootstrap projection and grants no campaign authority; no action, OE, item, dose, roll or unrelated authority mutates. IMPORTED_OWNER_CLAIM opens only the addressed NET-028 claim context; ACK itself never claims/admit the candidate, allocates a seat/reserve or grants campaign authority. No prior GM payload is published. Same handoffId/commandId returns the same receipt and active context; reconnect restores the curtain or committed target/initiator projection without exposing the prior owner, admitting a provisional candidate or repeating a nested response. The same signed imported candidate/provisional-owner binding is restored; a remote claim is not a local privacy handoff."
+      "scenario": "Проверить буквальное назначение PLY-030: Полноэкранная privacy curtain очищает предыдущую проекцию до player↔player, GM↔player, provisional HOST_LOCAL_CANDIDATE, IMPORTED_OWNER_CLAIM и forced handoff; следующая проекция выдаётся только после явного «Готов открыть» её локального владельца. Обычный target уже admitted/authorized, но host provisional candidate и imported owner claimant подтверждают только владение подписанным кандидатом и не получают campaign authority; вложенный prompt затем возвращает инициатора без раннего резерва. Для существующих FINAL раздельные текущие подписи и явные ACK адресуют сначала DEVICE_LIBRARY_SELECTOR, затем HOST_LOCAL_CANDIDATE. При адресной завесе до ACK видны только служебные метка и точный ID. Поля: handoffId, handoffType=TAB_SWITCH|FORCED_INPUT|CONSENT|MASTER_PREDICATE|HOST_LOCAL_CANDIDATE|IMPORTED_OWNER_CLAIM|CONTROL_LEASE|DEVICE_LIBRARY_SELECTOR, sourceSeatOrGm, targetSeatOrGm, targetOwnerAcknowledged, nestedRequestId, returnContext, returnFormId(server-signed), priorProjectionErased=true, pendingCommandOwner, decision=ACTIVATE_TARGET|RETURN_INITIATOR, stateRevision, projectionRevision, commandId, handoffReceiptId, SELECTOR_CURTAIN input: current signedReturnContext, exact targetLocalOwnerId + targetProfileLabel, priorProjectionErased and localOwnerIdOrNull=null. selectorHandoffReceiptId is returned only by explicit selector ACK., TARGET_CURTAIN input: current signed addressed profile after purge. Only a committed grant handoff has pendingContinuationId; fresh empty owner has none. Target ACK yields its own receipt; cancel before bind or Later before target ACK never yields a target receipt., PENDING_NEUTRAL_RESUME input: retained pendingContinuationId plus target label/ID. SIGNED_GM_RETURN uses the current signed return only; ordinary tab switch, forced prompt and imported claim keep their original inputs.. CTA: Готов открыть следующую проекцию, Вернуть управление инициатору после ответа, Подтвердить получение устройства для выбора листов, Подтвердить получение устройства указанным профилем, Позже, Подтвердить возврат устройства мастеру, Продолжить передачу: [метка + идентификатор], Отменить передачу до подтверждения.",
+      "expected": "Все form-specific поля/CTA/guards и loading/empty/validation/stale/connection/reconnect состояния совпадают с записью; mutation атомарна и идемпотентна. For ACTIVATE_TARGET or RETURN_INITIATOR, persist exactly one active local context and publish only its projection while keeping pending-command ownership unchanged; HOST_LOCAL_CANDIDATE opens only the local candidate/library bootstrap projection and grants no campaign authority; no action, OE, item, dose, roll or unrelated authority mutates. IMPORTED_OWNER_CLAIM opens only the addressed NET-028 claim context; ACK itself never claims/admit the candidate, allocates a seat/reserve or grants campaign authority. No prior GM payload is published. Same handoffId/commandId returns the same receipt; only the currently authorized active context may be restored; reconnect restores the curtain or committed target/initiator projection without exposing the prior owner, admitting a provisional candidate or repeating a nested response. The same signed imported candidate/provisional-owner binding is restored; a remote claim is not a local privacy handoff."
     },
     {
       "qaId": "QA-CHANGE-PLY-030",
@@ -237059,7 +238497,7 @@
     {
       "qaId": "QA-REQ-006",
       "scope": "REQ-006",
-      "scenario": "Требование «Master-import требует owner/device/seat link». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true.; GM-002 имеет закрытые characterPanelVariant=EMPTY_NO_CHARACTER|SELECTED_CHARACTER. EMPTY_NO_CHARACTER допустим при отсутствии выбранного campaignCharacterId, включая кампанию с нулём PC; selectedCampaignCharacterIdOrNull и selectedCharacterOrNull равны null, character-bound HP/OE/group/location/marker/device/seat/connection поля ABSENT, без нулевых/фиктивных значений. SELECTED_CHARACTER сохраняет прежние поля/проверки настоящего выбранного персонажа. Пустой variant показывает существующие импорт и безопасный возврат; он не открывает инспектор, source sheet или admission editor без их собственного действительного request/copy context. Happy: Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Первый GM import доступен из единой GM-001 через GM-002 без selected character. Только прежний signed GM_IMPORT_CANDIDATE origin/return GM-002 и sole current master authority; player local library не открывается. Cancel/error/reconnect/receipt return восстанавливают текущий вариант GM-002 без фиктивного PC/HP/group/marker/seat. Импорт/owner claim не заменяют финальный admission и не выдают преждевременные Ready/authority/reserve. Error/offline: Для CHR-043, CHR-045, NET-028, NET-017, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. Same handoffId/commandId returns the same receipt and active context; reconnect restores the curtain or committed target/initiator projection without exposing the prior owner, admitting a provisional candidate or repeating a nested response. The same signed imported candidate/provisional-owner binding is restored; a remote claim is not a local privacy handoff.",
+      "scenario": "Требование «Master-import требует owner/device/seat link». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true.; GM-002 имеет закрытые characterPanelVariant=EMPTY_NO_CHARACTER|SELECTED_CHARACTER. EMPTY_NO_CHARACTER допустим при отсутствии выбранного campaignCharacterId, включая кампанию с нулём PC; selectedCampaignCharacterIdOrNull и selectedCharacterOrNull равны null, character-bound HP/OE/group/location/marker/device/seat/connection поля ABSENT, без нулевых/фиктивных значений. SELECTED_CHARACTER сохраняет прежние поля/проверки настоящего выбранного персонажа. Пустой variant показывает существующие импорт и безопасный возврат; он не открывает инспектор, source sheet или admission editor без их собственного действительного request/copy context. Happy: Выполнить J-GM-IMPORT-ADMISSION через формы CHR-043, CHR-045, NET-028, NET-017, NET-027; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-ADMISSION-PLAYER-DECIDE, UI-CMD-CHAR-IMPORT-COMMIT, UI-CMD-IMPORTED-OWNER-CLAIM, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Первый GM import доступен из единой GM-001 через GM-002 без selected character. Только прежний signed GM_IMPORT_CANDIDATE origin/return GM-002 и sole current master authority; player local library не открывается. Cancel/error/reconnect/receipt return восстанавливают текущий вариант GM-002 без фиктивного PC/HP/group/marker/seat. Импорт/owner claim не заменяют финальный admission и не выдают преждевременные Ready/authority/reserve. Error/offline: Для CHR-043, CHR-045, NET-028, NET-017, NET-027 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. Same handoffId/commandId returns the same receipt; only the currently authorized active context may be restored; reconnect restores the curtain or committed target/initiator projection without exposing the prior owner, admitting a provisional candidate or repeating a nested response. The same signed imported candidate/provisional-owner binding is restored; a remote claim is not a local privacy handoff.",
       "expected": "Terminal states/deltas: {\"terminalStatesByForm\":{\"CHR-043\":[\"NO_FILE\",\"FILE_SELECTED\",\"PICKER_CANCELLED\"],\"CHR-045\":[\"IMPORTED_LOCAL_COPY\",\"PENDING_OWNER_LINK\",\"INCOMPATIBLE_REPORT\",\"NO_PARTIAL_COMMIT\"],\"NET-028\":[\"PENDING_OWNER_LINK\",\"CLAIM_ACCEPTED\",\"CLAIM_DECLINED\",\"ADMISSION_REQUIRED\"],\"NET-027\":[\"DIFF_LOADING\",\"READY_FOR_WHOLE_BATCH_DECISION\",\"ACCEPTED\",\"DECLINED\"],\"NET-017\":[\"QUEUE_EMPTY\",\"REQUEST_PENDING\",\"IN_REVIEW\",\"REQUEST_REJECTED\",\"STALE_REQUEST\"],\"GM-002\":[\"EMPTY_NO_CHARACTER\",\"SELECTED_CHARACTER\"]},\"mutationBoundary\":\"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\",\"audit\":\"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\"} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation.; CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request.; For ACTIVATE_TARGET or RETURN_INITIATOR, persist exactly one active local context and publish only its projection while keeping pending-command ownership unchanged; HOST_LOCAL_CANDIDATE opens only the local candidate/library bootstrap projection and grants no campaign authority; no action, OE, item, dose, roll or unrelated authority mutates. IMPORTED_OWNER_CLAIM opens only the addressed NET-028 claim context; ACK itself never claims/admit the candidate, allocates a seat/reserve or grants campaign authority. No prior GM payload is published."
     },
     {
@@ -237083,8 +238521,8 @@
     {
       "qaId": "QA-REQ-010",
       "scope": "REQ-010",
-      "scenario": "Требование «Первоначальное заявление local player на host до player tab». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
-      "expected": "Terminal states/deltas: {\"terminalStatesByForm\":{\"PLY-030\":[\"inactive\",\"PRIVACY_HANDOFF\",\"WAITING_FOR_LOCAL_OWNER\",\"TARGET_CONTEXT_ACTIVE\",\"RETURN_TO_INITIATOR\",\"RECONNECT_RESTORED\"],\"NET-004\":[\"DRAFT_REQUEST\",\"SUBMITTED\"],\"NET-017\":[\"QUEUE_EMPTY\",\"REQUEST_PENDING\",\"IN_REVIEW\",\"REQUEST_REJECTED\",\"STALE_REQUEST\"]},\"mutationBoundary\":\"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\",\"audit\":\"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\"} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request."
+      "scenario": "Требование «Первоначальное заявление local player на host до player tab». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. Владелец устройства выбирает точный профиль либо вводит метку и явно создаёт профиль. Обе адресные завесы показывают targetProfileLabel вместе с targetLocalOwnerId. На подтверждении рядом с этой парой перечислены выбранные листы; передача меняет будущий доступ к библиотеке. Экран GM и нейтральное продолжение показывают только служебные данные назначения. После очистки GM-проекции человек за доверенным устройством явно подтверждает кооперативную роль DEVICE_LIBRARY_SELECTOR. Только этот контекст с localOwnerIdOrNull=null видит неназначенные неизменяемые FINAL этой установки. Чужие строки, UUID, имена, artwork, счётчики, поисковые результаты и команды отсутствуют в payload, DOM, accessibility tree, hotkeys и cache. Секрет, loopback/listener/origin и подпись удостоверяют устройство и контекст, личность человека не проверяется. Тот же человек вправе подтвердить обе разные завесы последовательно.",
+      "expected": "Terminal states/deltas: {\"terminalStatesByForm\":{\"PLY-030\":[\"inactive\",\"PRIVACY_HANDOFF\",\"WAITING_FOR_LOCAL_OWNER\",\"TARGET_CONTEXT_ACTIVE\",\"RETURN_TO_INITIATOR\",\"RECONNECT_RESTORED\"],\"NET-004\":[\"DRAFT_REQUEST\",\"SUBMITTED\"],\"NET-017\":[\"QUEUE_EMPTY\",\"REQUEST_PENDING\",\"IN_REVIEW\",\"REQUEST_REJECTED\",\"STALE_REQUEST\"]},\"mutationBoundary\":\"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.\",\"audit\":\"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.\"} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. Одна транзакция повторно проверяет текущий подписанный контекст селектора, прежнюю квитанцию ACK, installationId/deviceId, точный профиль и метку, ревизии и весь набор из 1–3 разных неназначенных immutable FINAL по sourceUuid, finalSnapshotVersion, metadataRevision и candidateSnapshotChecksum (исходный descriptor.sourceChecksum). При успехе для всего набора сохраняются membership, grantId, bindingReceiptId и pendingContinuationId. UUID, байты FINAL и создания, исходные ревизии, device provenance и игровой журнал сохраняются. Конфликт любой строки, иной адресат, другая установка, устаревший контекст, четвертая или повторная строка дают zero write для всего набора. Undo/reassign отсутствуют. После commit селектор и его буферы стираются до адресной завесы HOST_LOCAL_CANDIDATE. «Позже» сохраняет тот же grant и pendingContinuationId и ведёт через подписанный возврат к GM. В CMP-009 и нейтральной завесе доступны только метка, идентификатор адресата и непрозрачный pendingContinuationId. После restart продолжение требует нового текущего подписанного контекста и отдельного ACK адресата. Replay возвращает прежнюю квитанцию без повторной записи и активации исторического контекста. После ACK адресат видит только собственную библиотеку, в том числе точный предоставленный набор. В APP-003 выбирает свои конкретные листы и через NET-003/NET-004 проходит обычный #171/#172 с рассмотрением GM. Реальный ACCEPT receiptId связан с proposalChecksum и proposalRevision. В fullCampaignCopyDiffs запись sourceUuid → campaignCharacterIdOrNull связывает membership владельца с принятой copies[].campaignCharacterId, затем с controllerBindingOrNull.{deviceId,localControllerSeatId,inputLaneId}. Без квитанции, подтверждённой копии или привязки контроллера вкладка не создаётся; membership оригинала сохраняется. Общий максимум три допущенные PC-вкладки и один активный контекст GM или PC. Для другого профиля требуется отдельная передача. Пустой профиль сохраняет создание CHR-001 через обычную APP-004; GM_ONLY с нулём PC, обычный ПК и известный owner-safe batch сохраняют свои ветки."
     },
     {
       "qaId": "QA-REQ-011",
@@ -242891,8 +244329,8 @@
     {
       "qaId": "QA-WORKFLOW-UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK",
       "scope": "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK",
-      "scenario": "Выполнить UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK через PLY-030, затем replay, stale, reconnect и противоположный повторный ответ. Source #221: Target local owner explicitly acknowledged; prior projection is erased; state/projection revisions current; boundary is safe or handoff is the addressed forced nested prompt; returnContext and pending-command owner match the signed handoff envelope. For handoffType outside HOST_LOCAL_CANDIDATE and IMPORTED_OWNER_CLAIM, target GM/seat is admitted and authorized. For HOST_LOCAL_CANDIDATE, isHostDevice=true, the selected provisional local owner matches the signed handoff target, remains not admitted, and has no player campaign authority. For IMPORTED_OWNER_CLAIM, isHostDevice=true, the selected provisional local owner matches the signed imported candidate owner-claim envelope, remains not admitted, and has no player campaign authority.",
-      "expected": "For ACTIVATE_TARGET or RETURN_INITIATOR, persist exactly one active local context and publish only its projection while keeping pending-command ownership unchanged; HOST_LOCAL_CANDIDATE opens only the local candidate/library bootstrap projection and grants no campaign authority; no action, OE, item, dose, roll or unrelated authority mutates. IMPORTED_OWNER_CLAIM opens only the addressed NET-028 claim context; ACK itself never claims/admit the candidate, allocates a seat/reserve or grants campaign authority. No prior GM payload is published. Same handoffId/commandId returns the same receipt and active context; reconnect restores the curtain or committed target/initiator projection without exposing the prior owner, admitting a provisional candidate or repeating a nested response. The same signed imported candidate/provisional-owner binding is restored; a remote claim is not a local privacy handoff."
+      "scenario": "Выполнить UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK через PLY-030, затем replay, stale, reconnect и противоположный повторный ответ. Source #221: Target local owner explicitly acknowledged; prior projection is erased; state/projection revisions current; boundary is safe or handoff is the addressed forced nested prompt; returnContext and pending-command owner match the signed handoff envelope. For handoffType outside DEVICE_LIBRARY_SELECTOR, HOST_LOCAL_CANDIDATE and IMPORTED_OWNER_CLAIM, target GM/seat is admitted and authorized. For HOST_LOCAL_CANDIDATE, isHostDevice=true, the selected provisional local owner matches the signed handoff target, remains not admitted, and has no player campaign authority. For IMPORTED_OWNER_CLAIM, isHostDevice=true, the selected provisional local owner matches the signed imported candidate owner-claim envelope, remains not admitted, and has no player campaign authority. For DEVICE_LIBRARY_SELECTOR, trusted host installation/device, safe signed boundary, erased prior projection, localOwnerIdOrNull=null, explicitly acknowledged cooperative selector and exact designated profile ID + label are required. HOST_LOCAL_CANDIDATE after binding also requires the erased selector, exact durable grant target, current signed pendingContinuationId and independent explicit target ACK. Проверить оба адресных кооперативных ACK, подписанный возврат и replay в другом активном контексте.",
+      "expected": "For ACTIVATE_TARGET or RETURN_INITIATOR, persist exactly one active local context and publish only its projection while keeping pending-command ownership unchanged; HOST_LOCAL_CANDIDATE opens only the local candidate/library bootstrap projection and grants no campaign authority; no action, OE, item, dose, roll or unrelated authority mutates. IMPORTED_OWNER_CLAIM opens only the addressed NET-028 claim context; ACK itself never claims/admit the candidate, allocates a seat/reserve or grants campaign authority. No prior GM payload is published. DEVICE_LIBRARY_SELECTOR activates only the selection-only APP-004 view. Both bootstrap ACKs preserve membership, admission, copies, seats, reserve and pending-command ownership; the target ACK exposes only that current owner’s library. GM return requires a current signed addressed GM context and an empty private projection. Same handoffId/commandId returns the same receipt; only the currently authorized active context may be restored; reconnect restores the curtain or committed target/initiator projection without exposing the prior owner, admitting a provisional candidate or repeating a nested response. The same signed imported candidate/provisional-owner binding is restored; a remote claim is not a local privacy handoff. A historical ACK or binding receipt never activates an obsolete selector, target or GM. Resume requires a fresh signed context for the retained pendingContinuationId."
     },
     {
       "qaId": "QA-WORKFLOW-UI-CMD-PEACE-DEPENDENCY-REQUEST-CREATE",
@@ -247411,6 +248849,54 @@
       "scope": "UI-CMD-MASTER-TRANSFER-RECONNECT",
       "scenario": "Выполнить UI-CMD-MASTER-TRANSFER-RECONNECT через NET-009: Explicit local device confirmation of verified common transfer receipt/checkpoint and authority continuity from its pinned campaign to the successor installation identity; authenticate that exact successor endpoint. Incomplete/conflicting proof or partition cannot replace the pin. Ordinary reconnect still requires the previous pinned identity. Проверить exact replay, changed/stale/foreign refusal, cancel/decline, restart до/после ACK и общего commit.",
       "expected": "Record one proved local trust transition and resume the same campaign/device bindings through NET-010 reconciliation. No new admission, copy, PC, gameplay receipt or old private key transfer. Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices. Interrupted transfer reconnect restores its exact intent and proved identity transition; a changed endpoint never authorizes a different host identity."
+    },
+    {
+      "qaId": "QA-WORKFLOW-UI-CMD-LOCAL-OWNER-PROFILE-CREATE",
+      "scope": "UI-CMD-LOCAL-OWNER-PROFILE-CREATE",
+      "scenario": "Ввести одну метку для двух отдельных профилей, повторить первую команду, сменить кампанию и перезапустить установку.",
+      "expected": "Единственная локальная запись профиля получает новый стабильный targetLocalOwnerId и сохраняет targetProfileLabel отдельно от кампании. До binding профиль может оставаться пустым. Никаких membership, grant, campaign copy, admission, seat, controller, reserve или player authority. Exact commandId/payload replay returns the original targetLocalOwnerId, label and receipt; conflicting payload or stale/foreign context writes nothing. Restart lists the same profile by exact ID; a separate explicit creation may reuse its label."
+    },
+    {
+      "qaId": "QA-WORKFLOW-UI-CMD-LOCAL-OWNER-BIND-FINALS",
+      "scope": "UI-CMD-LOCAL-OWNER-BIND-FINALS",
+      "scenario": "Выбрать отдельно 1, 2 и 3 актуальных FINAL, проверить четвёртый, повтор UUID, изменённый hash, чужой идентификатор профиля, гонку двух селекторов и сбой до/после commit.",
+      "expected": "Один подтверждённый grant всему выбранному набору для targetLocalOwnerId. Выбранные листы исчезают из UNASSIGNED, доступны только этому профилю. Ни admission, ни campaign copy, tab, seat, controller, reserve, карта, очередь или полномочия кампании при binding не создаются. После commit стирается селектор. Exact commandId + identical payload returns the same receipt, grant and pendingContinuationId. Changed payload or newly claimed row rejects the whole request. Before commit cancel/disconnect yields zero grant; after commit restart preserves the exact membership and pending target. Historical replay has no activation or repeated effect."
+    },
+    {
+      "qaId": "QA-LOCAL-OWNER-LIFETIME",
+      "scope": "J-LOCAL-SEATS",
+      "scenario": "Создать одноимённые профили и открыть библиотеку после смены кампании и перезапуска. Завершить кампанию и повторить обычное null/device перечисление, прямое открытие и admission ранее назначенного и неназначенного листа.",
+      "expected": "Профиль с явно введённой непустой меткой получает постоянный локальный идентификатор. Профиль, привязка и точная пара метки с идентификатором сохраняются на этой установке и устройстве после закрытия сессии, перезапуска и смены кампании. Одноимённые профили различаются по targetLocalOwnerId. Метку вводит человек; имя персонажа и сама метка не удостоверяют владельца. Сброс installation/device identity не передаёт прежние права. В обычной ветви localOwnerIdOrNull=null проверка deviceId сохраняет прежний путь для неназначенных FINAL. С момента binding назначенный sourceUuid отсутствует в обычных null/device list, open, export, draft selection и admission, в том числе после окончания кампании, disconnect и restart. Доступ проверяется до сериализации и при прямом запросе. Только подтверждённый владелец получает свой оригинал; прежние неназначенные листы остаются на обычном пути без автоматического назначения."
+    },
+    {
+      "qaId": "QA-LOCAL-OWNER-TARGET",
+      "scope": "J-LOCAL-SEATS",
+      "scenario": "Пройти обе завесы, выбор существующего профиля, явное создание и подтверждение назначения.",
+      "expected": "Владелец устройства выбирает точный профиль либо вводит метку и явно создаёт профиль. Обе адресные завесы показывают targetProfileLabel вместе с targetLocalOwnerId. На подтверждении рядом с этой парой перечислены выбранные листы; передача меняет будущий доступ к библиотеке. Экран GM и нейтральное продолжение показывают только служебные данные назначения."
+    },
+    {
+      "qaId": "QA-LOCAL-OWNER-PRIVACY",
+      "scope": "J-LOCAL-SEATS",
+      "scenario": "Проверить в отдельных реальных browser contexts raw WebSocket payload, DOM, a11y, hotkeys и cache для GM, нейтральной завесы, селектора и двух разных владельцев.",
+      "expected": "После очистки GM-проекции человек за доверенным устройством явно подтверждает кооперативную роль DEVICE_LIBRARY_SELECTOR. Только этот контекст с localOwnerIdOrNull=null видит неназначенные неизменяемые FINAL этой установки. Чужие строки, UUID, имена, artwork, счётчики, поисковые результаты и команды отсутствуют в payload, DOM, accessibility tree, hotkeys и cache. Секрет, loopback/listener/origin и подпись удостоверяют устройство и контекст, личность человека не проверяется. Тот же человек вправе подтвердить обе разные завесы последовательно. В обычной ветви localOwnerIdOrNull=null проверка deviceId сохраняет прежний путь для неназначенных FINAL. С момента binding назначенный sourceUuid отсутствует в обычных null/device list, open, export, draft selection и admission, в том числе после окончания кампании, disconnect и restart. Доступ проверяется до сериализации и при прямом запросе. Только подтверждённый владелец получает свой оригинал; прежние неназначенные листы остаются на обычном пути без автоматического назначения."
+    },
+    {
+      "qaId": "QA-LOCAL-OWNER-ATOMICITY",
+      "scope": "J-LOCAL-SEATS",
+      "scenario": "Отменить выбор до commit; повторить точную команду после commit, изменить payload и попытаться забрать уже присвоенный лист. Отменить пустой и уже созданный профиль в setup, отказаться до первого ACK и на fresh-завесе до target ACK.",
+      "expected": "Одна транзакция повторно проверяет текущий подписанный контекст селектора, прежнюю квитанцию ACK, installationId/deviceId, точный профиль и метку, ревизии и весь набор из 1–3 разных неназначенных immutable FINAL по sourceUuid, finalSnapshotVersion, metadataRevision и candidateSnapshotChecksum (исходный descriptor.sourceChecksum). При успехе для всего набора сохраняются membership, grantId, bindingReceiptId и pendingContinuationId. UUID, байты FINAL и создания, исходные ревизии, device provenance и игровой журнал сохраняются. Конфликт любой строки, иной адресат, другая установка, устаревший контекст, четвертая или повторная строка дают zero write для всего набора. Undo/reassign отсутствуют. До commit из NEUTRAL_PROFILE_SETUP, SELECTOR_BIND_CONFIRM, непринятой SELECTOR_CURTAIN или свежей TARGET_CURTAIN можно отменить без выбора/создания профиля, ACK селектора/адресата или открытия библиотеки. Стереть private buffers и вернуться к точной signedReturnContext через нейтральную завесу. GM-проекция выдаётся только после своего адресного ACK. Отмена не пишет профиль, membership, grant, binding/selector/target receipt, character/copy, seat или reserve; ранее явно созданный пустой профиль сохраняется."
+    },
+    {
+      "qaId": "QA-LOCAL-OWNER-RESUME",
+      "scope": "J-LOCAL-SEATS",
+      "scenario": "Нажать «Позже» до ACK адресата, перезапустить, продолжить через CMP-009 или нейтральную завесу и повторить исторический receipt.",
+      "expected": "После commit селектор и его буферы стираются до адресной завесы HOST_LOCAL_CANDIDATE. «Позже» сохраняет тот же grant и pendingContinuationId и ведёт через подписанный возврат к GM. В CMP-009 и нейтральной завесе доступны только метка, идентификатор адресата и непрозрачный pendingContinuationId. После restart продолжение требует нового текущего подписанного контекста и отдельного ACK адресата. Replay возвращает прежнюю квитанцию без повторной записи и активации исторического контекста."
+    },
+    {
+      "qaId": "QA-LOCAL-OWNER-ADMISSION",
+      "scope": "J-LOCAL-SEATS",
+      "scenario": "Допустить разные листы двух владельцев отдельными передачами и сверить соответствие реальных квитанций, копий и вкладок; пройти пустой профиль и GM_ONLY.",
+      "expected": "После ACK адресат видит только собственную библиотеку, в том числе точный предоставленный набор. В APP-003 выбирает свои конкретные листы и через NET-003/NET-004 проходит обычный #171/#172 с рассмотрением GM. Реальный ACCEPT receiptId связан с proposalChecksum и proposalRevision. В fullCampaignCopyDiffs запись sourceUuid → campaignCharacterIdOrNull связывает membership владельца с принятой copies[].campaignCharacterId, затем с controllerBindingOrNull.{deviceId,localControllerSeatId,inputLaneId}. Без квитанции, подтверждённой копии или привязки контроллера вкладка не создаётся; membership оригинала сохраняется. Общий максимум три допущенные PC-вкладки и один активный контекст GM или PC. Для другого профиля требуется отдельная передача. Пустой профиль сохраняет создание CHR-001 через обычную APP-004; GM_ONLY с нулём PC, обычный ПК и известный owner-safe batch сохраняют свои ветки. HOST_LOCAL_CANDIDATE: listing, direct open, NET-003 reselection and NET-004 submit each recheck the current acknowledged targetLocalOwnerId and durable membership for every exact sourceUuid before reading or writing. A foreign UUID or stale grant is rejected."
     }
   ],
   "registryCoverage": {
@@ -263684,9 +265170,9 @@
         "formIds": [
           "PLY-030"
         ],
-        "guards": "Target local owner explicitly acknowledged; prior projection is erased; state/projection revisions current; boundary is safe or handoff is the addressed forced nested prompt; returnContext and pending-command owner match the signed handoff envelope. For handoffType outside HOST_LOCAL_CANDIDATE and IMPORTED_OWNER_CLAIM, target GM/seat is admitted and authorized. For HOST_LOCAL_CANDIDATE, isHostDevice=true, the selected provisional local owner matches the signed handoff target, remains not admitted, and has no player campaign authority. For IMPORTED_OWNER_CLAIM, isHostDevice=true, the selected provisional local owner matches the signed imported candidate owner-claim envelope, remains not admitted, and has no player campaign authority.",
-        "atomicity": "For ACTIVATE_TARGET or RETURN_INITIATOR, persist exactly one active local context and publish only its projection while keeping pending-command ownership unchanged; HOST_LOCAL_CANDIDATE opens only the local candidate/library bootstrap projection and grants no campaign authority; no action, OE, item, dose, roll or unrelated authority mutates. IMPORTED_OWNER_CLAIM opens only the addressed NET-028 claim context; ACK itself never claims/admit the candidate, allocates a seat/reserve or grants campaign authority. No prior GM payload is published.",
-        "reconnect": "Same handoffId/commandId returns the same receipt and active context; reconnect restores the curtain or committed target/initiator projection without exposing the prior owner, admitting a provisional candidate or repeating a nested response. The same signed imported candidate/provisional-owner binding is restored; a remote claim is not a local privacy handoff.",
+        "guards": "Target local owner explicitly acknowledged; prior projection is erased; state/projection revisions current; boundary is safe or handoff is the addressed forced nested prompt; returnContext and pending-command owner match the signed handoff envelope. For handoffType outside DEVICE_LIBRARY_SELECTOR, HOST_LOCAL_CANDIDATE and IMPORTED_OWNER_CLAIM, target GM/seat is admitted and authorized. For HOST_LOCAL_CANDIDATE, isHostDevice=true, the selected provisional local owner matches the signed handoff target, remains not admitted, and has no player campaign authority. For IMPORTED_OWNER_CLAIM, isHostDevice=true, the selected provisional local owner matches the signed imported candidate owner-claim envelope, remains not admitted, and has no player campaign authority. For DEVICE_LIBRARY_SELECTOR, trusted host installation/device, safe signed boundary, erased prior projection, localOwnerIdOrNull=null, explicitly acknowledged cooperative selector and exact designated profile ID + label are required. HOST_LOCAL_CANDIDATE after binding also requires the erased selector, exact durable grant target, current signed pendingContinuationId and independent explicit target ACK.",
+        "atomicity": "For ACTIVATE_TARGET or RETURN_INITIATOR, persist exactly one active local context and publish only its projection while keeping pending-command ownership unchanged; HOST_LOCAL_CANDIDATE opens only the local candidate/library bootstrap projection and grants no campaign authority; no action, OE, item, dose, roll or unrelated authority mutates. IMPORTED_OWNER_CLAIM opens only the addressed NET-028 claim context; ACK itself never claims/admit the candidate, allocates a seat/reserve or grants campaign authority. No prior GM payload is published. DEVICE_LIBRARY_SELECTOR activates only the selection-only APP-004 view. Both bootstrap ACKs preserve membership, admission, copies, seats, reserve and pending-command ownership; the target ACK exposes only that current owner’s library. GM return requires a current signed addressed GM context and an empty private projection.",
+        "reconnect": "Same handoffId/commandId returns the same receipt; only the currently authorized active context may be restored; reconnect restores the curtain or committed target/initiator projection without exposing the prior owner, admitting a provisional candidate or repeating a nested response. The same signed imported candidate/provisional-owner binding is restored; a remote claim is not a local privacy handoff. A historical ACK or binding receipt never activates an obsolete selector, target or GM. Resume requires a fresh signed context for the retained pendingContinuationId.",
         "qa": "QA-WORKFLOW-UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK"
       },
       {
@@ -264130,6 +265616,28 @@
         "atomicity": "Record one proved local trust transition and resume the same campaign/device bindings through NET-010 reconciliation. No new admission, copy, PC, gameplay receipt or old private key transfer.",
         "reconnect": "Exact authenticated request replay returns the same receipt; reused commandId with changed payload, stale revisions, foreign device or invalid proof writes nothing. Secrets and private keys are absent from receipts, audit and other devices. Interrupted transfer reconnect restores its exact intent and proved identity transition; a changed endpoint never authorizes a different host identity.",
         "qa": "QA-WORKFLOW-UI-CMD-MASTER-TRANSFER-RECONNECT"
+      },
+      {
+        "commandId": "UI-CMD-LOCAL-OWNER-PROFILE-CREATE",
+        "title": "Создать локальный профиль с явной меткой",
+        "formIds": [
+          "APP-003"
+        ],
+        "guards": "APP-003: trusted installationId/deviceId, safe signed neutral profile setup after projection purge, current stateRevision/projectionRevision, explicit nonempty targetProfileLabel and fresh commandId. Never infer an owner from a matching label.",
+        "atomicity": "Единственная локальная запись профиля получает новый стабильный targetLocalOwnerId и сохраняет targetProfileLabel отдельно от кампании. До binding профиль может оставаться пустым. Никаких membership, grant, campaign copy, admission, seat, controller, reserve или player authority.",
+        "reconnect": "Exact commandId/payload replay returns the original targetLocalOwnerId, label and receipt; conflicting payload or stale/foreign context writes nothing. Restart lists the same profile by exact ID; a separate explicit creation may reuse its label.",
+        "qa": "QA-WORKFLOW-UI-CMD-LOCAL-OWNER-PROFILE-CREATE"
+      },
+      {
+        "commandId": "UI-CMD-LOCAL-OWNER-BIND-FINALS",
+        "title": "Привязать выбранные финальные листы к локальному профилю",
+        "formIds": [
+          "APP-003"
+        ],
+        "guards": "Одна транзакция повторно проверяет текущий подписанный контекст селектора, прежнюю квитанцию ACK, installationId/deviceId, точный профиль и метку, ревизии и весь набор из 1–3 разных неназначенных immutable FINAL по sourceUuid, finalSnapshotVersion, metadataRevision и candidateSnapshotChecksum (исходный descriptor.sourceChecksum). При успехе для всего набора сохраняются membership, grantId, bindingReceiptId и pendingContinuationId. UUID, байты FINAL и создания, исходные ревизии, device provenance и игровой журнал сохраняются. Конфликт любой строки, иной адресат, другая установка, устаревший контекст, четвертая или повторная строка дают zero write для всего набора. Undo/reassign отсутствуют.",
+        "atomicity": "Один подтверждённый grant всему выбранному набору для targetLocalOwnerId. Выбранные листы исчезают из UNASSIGNED, доступны только этому профилю. Ни admission, ни campaign copy, tab, seat, controller, reserve, карта, очередь или полномочия кампании при binding не создаются. После commit стирается селектор.",
+        "reconnect": "Exact commandId + identical payload returns the same receipt, grant and pendingContinuationId. Changed payload or newly claimed row rejects the whole request. Before commit cancel/disconnect yields zero grant; after commit restart preserves the exact membership and pending target. Historical replay has no activation or repeated effect.",
+        "qa": "QA-WORKFLOW-UI-CMD-LOCAL-OWNER-BIND-FINALS"
       }
     ],
     "qna": [
@@ -280604,14 +282112,14 @@
     "forms": 376,
     "legacyFormsPreserved": 355,
     "newForms": 21,
-    "transitions": 1721,
+    "transitions": 1738,
     "journeys": 66,
     "requirements": 91,
-    "qaScenarios": 2452,
+    "qaScenarios": 2460,
     "activeRules": 699,
     "tombstoneRules": 40,
     "operations": 70,
-    "workflowCommands": 115,
+    "workflowCommands": 117,
     "qnaRows": 444,
     "qnaUniqueIds": 410,
     "automatedAbilities": 167,
@@ -280689,7 +282197,7 @@
       "unmapped": []
     },
     "workflowCommands": {
-      "mapped": 115,
+      "mapped": 117,
       "unmapped": []
     },
     "qna": {

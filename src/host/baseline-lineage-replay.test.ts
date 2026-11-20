@@ -36,6 +36,7 @@ it.each([
   ['B14', 'B15'],
   ['B15', 'B16'],
   ['B16', 'B17'],
+  ['B17', 'B18'],
 ] as const)(
   'reopens actual %s FINAL/DRAFT, archive and export/candidate bytes under %s in a fresh Node process',
   async (sourceRelease, targetRelease) => {

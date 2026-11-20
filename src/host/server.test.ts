@@ -909,6 +909,8 @@ describe('configured Fastify and ws host shell', () => {
           'APP-004::CTA::005',
           'APP-004::CTA::006',
           'APP-004::CTA::008',
+          'APP-004::CTA::009',
+          'APP-004::CTA::010',
         ] as const
       ).entries()) {
         response = receiveFrames(socket, 1);

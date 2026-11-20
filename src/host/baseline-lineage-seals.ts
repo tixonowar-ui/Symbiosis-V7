@@ -153,6 +153,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       '45cb6075b313a1c2277f99e8e99fd29344f6a7f919a0e97faca4366e0f244da8',
   },
+  // ADR 0095 / #249: first local owner binding for existing FINAL originals.
+  localOwnerBindingBaselineVersion:
+    'sha256:3b0e6d79e840c56183910a6b41bbe07d2ff625b90f3c96349bdf0236f7dd53f5',
+  localOwnerBindingAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      '405fc50ec872f34fb61d35031eb39f626f816bda39a0c1e40f20f6db4d38d519',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      'cfc0fcb8828783a29516dc263e63dc103e22ebf521561bf10ba5de0d6688ffa0',
+  },
   gmSourceAddedArtifacts: {
     'gm-entity-portraits/manifest.json':
       '30b4df3f3bc7ffeff017fc28538dcf09f98c1e032ff94cd1e9cfc141c4714554',
