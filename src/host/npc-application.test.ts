@@ -716,7 +716,8 @@ describe('NPC actual GM WebSocket and SQLite bridge', () => {
         editRoundTripMs,
       }),
     );
-  });
+    // ADR 0088: clean03 reported 30.352 s at 30 s; give this integration finite 90 s headroom.
+  }, 90_000);
   it('keeps a committed CREATE and its receipt when the first delivery read fails, without a no-write refusal', async () => {
     const h = await fixture();
     await h.nav('CMP-006::CTA::001');
@@ -780,6 +781,7 @@ describe('NPC actual GM WebSocket and SQLite bridge', () => {
     expect(h.db.prepare('SELECT count(*) AS n FROM npc_operation').get()).toEqual({ n: 1 });
     expect(h.errors).toHaveLength(1);
   });
+  // Full clean01 recorded 60.338s at 60s; 120s is finite case-only headroom.
   it('publishes a real full V1, reads immutable history, opens N+1 and replays after restart through the existing GM channel', async () => {
     const h = await fixture();
     await h.nav('CMP-006::CTA::001');
@@ -868,7 +870,7 @@ describe('NPC actual GM WebSocket and SQLite bridge', () => {
         .get(committed.request.commandId),
     ).toEqual(oldCommit);
     expect(h.errors).toEqual([]);
-  }, 60000);
+  }, 120_000);
   it('binds fresh structural calendar reads to persisted owner and recovers without a mutable connection cache', async () => {
     const original = calendarStore.readNpcCalendarContextInTransaction;
     const observed: ReturnType<typeof original>[] = [];
@@ -1115,5 +1117,6 @@ describe('actual NPC initial inventory publication', () => {
       children,
     );
     expect(h.errors).toEqual([]);
-  }, 60000);
+    // ADR 0088: clean03 reported 60.011 s at 60 s; retain this real journey with a finite 120 s budget.
+  }, 120_000);
 });

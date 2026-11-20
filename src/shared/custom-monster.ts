@@ -67,7 +67,8 @@ export function customMonsterStatsValue(value: unknown): CustomMonsterStatsInput
     'statMode baseStats massKg ageYears baseMaxHP rollReceiptOrNull',
     '$.monster.stats',
   );
-  // #260 owns the future once-right and receipt. An unavailable choice cannot be a silent MANUAL alias.
+  // Once-roll evidence belongs to the owning attempt ledger. The accepted body stores
+  // editable mechanical input as MANUAL/null without copying or renewing that attempt's right.
   w.literal(row['statMode'], 'MANUAL', '$.monster.stats.statMode');
   w.literal(row['rollReceiptOrNull'], null, '$.monster.stats.rollReceiptOrNull');
   const stats = r.exact(row['baseStats'], CUSTOM_MONSTER_STATS.join(' '), '$.monster.baseStats');

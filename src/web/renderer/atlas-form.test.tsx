@@ -38,6 +38,8 @@ const TEST_IMPLEMENTED_FORM_IDS = [
   'ENM-015',
   'ENM-016',
   'ENM-017',
+  'ENM-018',
+  'ENM-019',
   'ENM-020',
   'NPC-001',
   'NPC-002',
@@ -286,7 +288,8 @@ describe('atlas implemented-form renderer', () => {
     // #256 adds seven source-defined sentient V1 screens; no dialog is added.
     // #258 adds ENM-011..016; ENM-020 was already counted by #256.
     // #259 adds the delivered ENM-017 version editor screen; no dialog is added.
-    expect(screens).toBe(101);
+    // #260 adds the delivered ENM-018/019 screens; no dialog is added.
+    expect(screens).toBe(103);
     expect(dialogs).toBe(10);
   });
 

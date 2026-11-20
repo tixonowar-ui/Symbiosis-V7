@@ -343,7 +343,8 @@ function requireSchema(db: Database.Database): void {
     row?.version !== 20 &&
     row?.version !== 21 &&
     row?.version !== 22 &&
-    row?.version !== 23
+    row?.version !== 23 &&
+    row?.version !== 24
   )
     return fail();
   for (const table of LOCAL_NETWORK_TAB_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
@@ -361,7 +362,8 @@ function requireSchema(db: Database.Database): void {
     row.version === 20 ||
     row.version === 21 ||
     row.version === 22 ||
-    row.version === 23
+    row.version === 23 ||
+    row.version === 24
   )
     for (const table of NETWORK_APPLICATION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
@@ -378,7 +380,8 @@ function requireSchema(db: Database.Database): void {
     row.version === 20 ||
     row.version === 21 ||
     row.version === 22 ||
-    row.version === 23
+    row.version === 23 ||
+    row.version === 24
   )
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
@@ -394,7 +397,8 @@ function requireSchema(db: Database.Database): void {
     row.version === 20 ||
     row.version === 21 ||
     row.version === 22 ||
-    row.version === 23
+    row.version === 23 ||
+    row.version === 24
   )
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
@@ -409,7 +413,8 @@ function requireSchema(db: Database.Database): void {
     row.version === 20 ||
     row.version === 21 ||
     row.version === 22 ||
-    row.version === 23
+    row.version === 23 ||
+    row.version === 24
   )
     for (const table of CAMPAIGN_LOBBY_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   if (db.prepare('SELECT 1 FROM schema_migration WHERE version=14').get() !== undefined)
@@ -424,7 +429,8 @@ function requireSchema(db: Database.Database): void {
     row.version === 20 ||
     row.version === 21 ||
     row.version === 22 ||
-    row.version === 23
+    row.version === 23 ||
+    row.version === 24
   )
     for (const table of NPC_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
 }
@@ -470,14 +476,14 @@ function journal(
   const request = input(JSON.parse(requestJson) as unknown, 'CORRUPT_STORAGE');
   if (
     request.admissionEntry !== undefined &&
-    !([12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23] as readonly unknown[]).includes(
+    !([12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24] as readonly unknown[]).includes(
       (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'],
     )
   )
     return fail();
   if (
     request.applicationEntry !== undefined &&
-    !([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23] as readonly unknown[]).includes(
+    !([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24] as readonly unknown[]).includes(
       (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'],
     )
   )
@@ -656,7 +662,7 @@ function closeJournal(
   const request = closeInput(JSON.parse(requestJson) as unknown, 'CORRUPT_STORAGE');
   if (
     request.applicationExit !== undefined &&
-    !([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23] as readonly unknown[]).includes(
+    !([10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24] as readonly unknown[]).includes(
       (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)['version'],
     )
   )
@@ -715,7 +721,8 @@ function tabState(
         version === 20 ||
         version === 21 ||
         version === 22 ||
-        version === 23) &&
+        version === 23 ||
+        version === 24) &&
       validateApplication
     )
       validateNetworkTabApplicationState(db, record.tab);
@@ -731,7 +738,8 @@ function tabState(
         version === 20 ||
         version === 21 ||
         version === 22 ||
-        version === 23) &&
+        version === 23 ||
+        version === 24) &&
       validateApplication
     ) {
       const saved = journal(db, device, record.tab.entryCommandId) ?? fail();
@@ -951,7 +959,8 @@ function assertUnused(db: Database.Database, id: string): void {
     version === 20 ||
     version === 21 ||
     version === 22 ||
-    version === 23
+    version === 23 ||
+    version === 24
   )
     for (const [table, columns] of [
       ['local_network_application_event', ['event_id', 'receipt_id']],
@@ -973,7 +982,8 @@ function assertUnused(db: Database.Database, id: string): void {
     version === 20 ||
     version === 21 ||
     version === 22 ||
-    version === 23
+    version === 23 ||
+    version === 24
   )
     for (const [table, columns] of [
       ['gm_request_queue_event', ['event_id']],
@@ -995,7 +1005,8 @@ function assertUnused(db: Database.Database, id: string): void {
     version === 20 ||
     version === 21 ||
     version === 22 ||
-    version === 23
+    version === 23 ||
+    version === 24
   )
     for (const [table, columns] of [
       ...CAMPAIGN_LOBBY_IDENTITIES,
@@ -1018,7 +1029,8 @@ function assertUnused(db: Database.Database, id: string): void {
     version === 20 ||
     version === 21 ||
     version === 22 ||
-    version === 23
+    version === 23 ||
+    version === 24
   )
     for (const [table, columns] of CAMPAIGN_ADMISSION_IDENTITIES)
       for (const column of columns)
@@ -1071,7 +1083,7 @@ function writeApplicationState(
     const input = object(proof['input']),
       mutation = object(input['mutation']);
     if (
-      ![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23].some(
+      ![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24].some(
         (version) =>
           (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
             'version'
@@ -1162,7 +1174,7 @@ export function commitLocalNetworkTabEntry(
         if (
           request.applicationEntry !== undefined &&
           !(
-            [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23] as readonly unknown[]
+            [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24] as readonly unknown[]
           ).includes(
             (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
               'version'
@@ -1286,7 +1298,8 @@ export function commitLocalNetworkTabClose(
           schemaVersion !== 20 &&
           schemaVersion !== 21 &&
           schemaVersion !== 22 &&
-          schemaVersion !== 23
+          schemaVersion !== 23 &&
+          schemaVersion !== 24
         )
           return fail('INVALID_INPUT');
         if (
@@ -1303,7 +1316,8 @@ export function commitLocalNetworkTabClose(
           schemaVersion === 20 ||
           schemaVersion === 21 ||
           schemaVersion === 22 ||
-          schemaVersion === 23
+          schemaVersion === 23 ||
+          schemaVersion === 24
         ) {
           try {
             assertNetworkTabApplicationCanClose(db, current);
@@ -1497,7 +1511,7 @@ export const localAdmissionTabStorage = {
     if (request.admissionEntry === undefined) return fail('INVALID_INPUT');
     requireSchema(db);
     if (
-      ![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23].some(
+      ![12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24].some(
         (version) =>
           (db.prepare('SELECT MAX(version) AS version FROM schema_migration').get() as Row)[
             'version'

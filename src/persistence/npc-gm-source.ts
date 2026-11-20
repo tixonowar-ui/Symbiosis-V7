@@ -460,9 +460,9 @@ class NpcGmCauseReadSession {
   readonly #db: Database.Database;
   readonly #scope: NpcScope;
   #queries: ReturnType<typeof causeQueries> | undefined;
-  readonly #changes: Database.Statement;
-  readonly #schemaVersion: Database.Statement;
-  readonly #userVersion: Database.Statement;
+  #changes: Database.Statement | undefined;
+  #schemaVersion: Database.Statement | undefined;
+  #userVersion: Database.Statement | undefined;
   readonly #cache = new Map<
     string,
     { hash: string; proof: NpcGmPrimitiveProof; rows: PrimitiveCauseRows }
@@ -490,7 +490,13 @@ class NpcGmCauseReadSession {
     this.#stamp = this.stamp();
   }
   private stamp(): string {
-    if (!this.#db.inTransaction) return s.fail('INVALID_INPUT');
+    if (
+      !this.#db.inTransaction ||
+      this.#changes === undefined ||
+      this.#schemaVersion === undefined ||
+      this.#userVersion === undefined
+    )
+      return s.fail('INVALID_INPUT');
     const changes = this.#changes.get() as Row;
     return (
       String(changes['n']) +
@@ -503,6 +509,11 @@ class NpcGmCauseReadSession {
   close(): void {
     this.#open = false;
     this.#cache.clear();
+    // An escaped closed reader must not retain its private native statements.
+    this.#queries = undefined;
+    this.#changes = undefined;
+    this.#schemaVersion = undefined;
+    this.#userVersion = undefined;
   }
   read(db: Database.Database, scope: NpcScope, cause: NpcSourceCause): NpcGmPrimitiveProof {
     if (!this.#open || db !== this.#db || !db.inTransaction) return s.fail('INVALID_INPUT');
@@ -1983,6 +1994,7 @@ export function readNpcDiseaseReservationEvidenceInTransaction(
   npcUuid: string,
   effectInstanceId: string,
   pending: NpcPendingCommitEvidence | null = null,
+  session?: NpcGmPrimitiveReadSession,
 ): NpcDiseaseReservationEvidence {
   if (!db.inTransaction) return s.fail('INVALID_INPUT');
   const own = npcScopeValue(scope),
@@ -2014,10 +2026,15 @@ export function readNpcDiseaseReservationEvidenceInTransaction(
   const reservationId = s.uuid(row['origin_operation_id']),
     draftId = s.uuid(row['origin_draft_id']);
   const operationRow = operationHashStatement(db).get(reservationId) as Row | undefined;
-  const reservation = readNpcGmPrimitiveCause(db, own, {
-    operationId: reservationId,
-    recordSha256: s.hash(operationRow?.['record_sha256']),
-  });
+  const reservation = readNpcGmPrimitiveCause(
+    db,
+    own,
+    {
+      operationId: reservationId,
+      recordSha256: s.hash(operationRow?.['record_sha256']),
+    },
+    session,
+  );
   const fact = reservation.event.childAllocations[0],
     request = draftMutation(reservation.operation.request);
   if (
@@ -2068,10 +2085,15 @@ export function readNpcDiseaseReservationEvidenceInTransaction(
   let originTarget: NpcDerivationTarget;
   if (head.status === 'COMMITTED') {
     const finalRow = operationHashStatement(db).get(head.operationId) as Row | undefined;
-    const final = readNpcGmPrimitiveCause(db, own, {
-      operationId: head.operationId,
-      recordSha256: s.hash(finalRow?.['record_sha256']),
-    });
+    const final = readNpcGmPrimitiveCause(
+      db,
+      own,
+      {
+        operationId: head.operationId,
+        recordSha256: s.hash(finalRow?.['record_sha256']),
+      },
+      session,
+    );
     equal(final.event, head);
     if (final.operation.kind !== 'COMMIT' && final.operation.kind !== 'COMMIT_V1') return s.fail();
     const version = final.operation.versionOrNull ?? s.fail();
@@ -2102,7 +2124,7 @@ export function readNpcDiseaseReservationEvidenceInTransaction(
     };
   } else return s.fail();
   // The full metadata prefix proves the head/root/COMMIT relation without calling any domain reader.
-  const origin = readNpcVersionDerivationEvidenceInTransaction(db, originTarget);
+  const origin = readNpcVersionDerivationEvidenceInTransaction(db, originTarget, session);
   return {
     effectInstanceId: id,
     diseaseId: fact.diseaseId,
@@ -2139,6 +2161,7 @@ function readNpcReservedChildOrigin(
     | 'EFFECT_INSTANCE'
     | 'COATING_INSTANCE',
   pending: NpcPendingCommitEvidence | null = null,
+  session?: NpcGmPrimitiveReadSession,
 ) {
   if (!db.inTransaction) return s.fail('INVALID_INPUT');
   const own = npcScopeValue(scope),
@@ -2178,10 +2201,15 @@ function readNpcReservedChildOrigin(
   const reservationId = s.uuid(row['origin_operation_id']),
     draftId = s.uuid(row['origin_draft_id']);
   const operationRow = operationHashStatement(db).get(reservationId) as Row | undefined;
-  const reservation = readNpcGmPrimitiveCause(db, own, {
-    operationId: reservationId,
-    recordSha256: s.hash(operationRow?.['record_sha256']),
-  });
+  const reservation = readNpcGmPrimitiveCause(
+    db,
+    own,
+    {
+      operationId: reservationId,
+      recordSha256: s.hash(operationRow?.['record_sha256']),
+    },
+    session,
+  );
   const fact = reservation.event.childAllocations[0],
     request = draftMutation(reservation.operation.request);
   if (
@@ -2263,10 +2291,15 @@ function readNpcReservedChildOrigin(
   let originTarget: NpcDerivationTarget;
   if (head.status === 'COMMITTED') {
     const finalRow = operationHashStatement(db).get(head.operationId) as Row | undefined;
-    const final = readNpcGmPrimitiveCause(db, own, {
-      operationId: head.operationId,
-      recordSha256: s.hash(finalRow?.['record_sha256']),
-    });
+    const final = readNpcGmPrimitiveCause(
+      db,
+      own,
+      {
+        operationId: head.operationId,
+        recordSha256: s.hash(finalRow?.['record_sha256']),
+      },
+      session,
+    );
     equal(final.event, head);
     if (final.operation.kind !== 'COMMIT' && final.operation.kind !== 'COMMIT_V1') return s.fail();
     const version = final.operation.versionOrNull ?? s.fail();
@@ -2297,7 +2330,7 @@ function readNpcReservedChildOrigin(
     };
   } else return s.fail();
   // The full metadata prefix proves the head/root/COMMIT relation without calling any domain reader.
-  const origin = readNpcVersionDerivationEvidenceInTransaction(db, originTarget);
+  const origin = readNpcVersionDerivationEvidenceInTransaction(db, originTarget, session);
   return {
     childId: id,
     operationId: reservationId,
@@ -2314,6 +2347,7 @@ export function readNpcTraumaReservationEvidenceInTransaction(
   npcUuid: string,
   traumaInstanceId: string,
   pending: NpcPendingCommitEvidence | null = null,
+  session?: NpcGmPrimitiveReadSession,
 ): NpcTraumaReservationEvidence {
   const { childId, ...evidence } = readNpcReservedChildOrigin(
     db,
@@ -2322,6 +2356,7 @@ export function readNpcTraumaReservationEvidenceInTransaction(
     traumaInstanceId,
     'TRAUMA_INSTANCE',
     pending,
+    session,
   );
   return { traumaInstanceId: childId, ...evidence };
 }
@@ -2331,6 +2366,7 @@ export function readNpcSymbiontReservationEvidenceInTransaction(
   npcUuid: string,
   symbiontInstanceId: string,
   pending: NpcPendingCommitEvidence | null = null,
+  session?: NpcGmPrimitiveReadSession,
 ) {
   const { childId, ...evidence } = readNpcReservedChildOrigin(
     db,
@@ -2339,6 +2375,7 @@ export function readNpcSymbiontReservationEvidenceInTransaction(
     symbiontInstanceId,
     'SYMBIONT_INSTANCE',
     pending,
+    session,
   );
   return { symbiontInstanceId: childId, ...evidence };
 }
@@ -2348,6 +2385,7 @@ export function readNpcWoundReservationEvidenceInTransaction(
   npcUuid: string,
   woundInstanceId: string,
   pending: NpcPendingCommitEvidence | null = null,
+  session?: NpcGmPrimitiveReadSession,
 ) {
   const { childId, ...evidence } = readNpcReservedChildOrigin(
     db,
@@ -2356,6 +2394,7 @@ export function readNpcWoundReservationEvidenceInTransaction(
     woundInstanceId,
     'WOUND_INSTANCE',
     pending,
+    session,
   );
   return { woundInstanceId: childId, ...evidence };
 }
@@ -2365,6 +2404,7 @@ export function readNpcRuntimeEffectReservationEvidenceInTransaction(
   npcUuid: string,
   effectInstanceId: string,
   pending: NpcPendingCommitEvidence | null = null,
+  session?: NpcGmPrimitiveReadSession,
 ) {
   const { childId, ...evidence } = readNpcReservedChildOrigin(
     db,
@@ -2373,6 +2413,7 @@ export function readNpcRuntimeEffectReservationEvidenceInTransaction(
     effectInstanceId,
     'EFFECT_INSTANCE',
     pending,
+    session,
   );
   const fact =
     evidence.origin.current.runtimeEffectReservations.find(
@@ -2390,6 +2431,7 @@ export function readNpcCoatingReservationEvidenceInTransaction(
   npcUuid: string,
   coatingInstanceId: string,
   pending: NpcPendingCommitEvidence | null = null,
+  session?: NpcGmPrimitiveReadSession,
 ) {
   const { childId, ...evidence } = readNpcReservedChildOrigin(
     db,
@@ -2398,6 +2440,7 @@ export function readNpcCoatingReservationEvidenceInTransaction(
     coatingInstanceId,
     'COATING_INSTANCE',
     pending,
+    session,
   );
   const operation =
     evidence.origin.current.poisonOperations.find(
@@ -2465,6 +2508,7 @@ export function readNpcCustomProfileReservationEvidenceInTransaction(
   scope: NpcScope,
   npcUuid: string,
   profileVersionId: string,
+  session?: NpcGmPrimitiveReadSession,
 ) {
   if (!db.inTransaction) return s.fail('INVALID_INPUT');
   const own = npcScopeValue(scope),
@@ -2475,10 +2519,15 @@ export function readNpcCustomProfileReservationEvidenceInTransaction(
     );
     const operationId = s.uuid(row['origin_operation_id']),
       operation = operationHashStatement(db).get(operationId) as Row | undefined;
-    const cause = readNpcGmPrimitiveCause(db, own, {
-        operationId,
-        recordSha256: s.hash(operation?.['record_sha256']),
-      }),
+    const cause = readNpcGmPrimitiveCause(
+        db,
+        own,
+        {
+          operationId,
+          recordSha256: s.hash(operation?.['record_sha256']),
+        },
+        session,
+      ),
       ordinal = s.integer(row['ordinal']);
     const allocation = cause.event.childAllocations[ordinal - 1];
     if (
@@ -2740,6 +2789,7 @@ function readDerivationPrefix(
   db: Database.Database,
   t: Omit<NpcDerivationTarget, 'commitOperationId'>,
   expectedStage: NpcStage,
+  session?: NpcGmPrimitiveReadSession,
 ): NpcCompositionDerivationPrefix {
   const rows = db
     .prepare(
@@ -2786,16 +2836,27 @@ function readDerivationPrefix(
     const operationRow = (operationHashQuery ??= operationHashStatement(db)).get(
       event.operationId,
     ) as Row | undefined;
-    const cause = verifyNpcGmPrimitiveCause(
-      db,
-      t.scope,
-      {
-        operationId: event.operationId,
-        recordSha256: s.hash(operationRow?.['record_sha256']),
-      },
-      queries,
-      { current: checkedRow, previous: previousCheckedRow },
-    ).proof;
+    const cause =
+      session === undefined
+        ? verifyNpcGmPrimitiveCause(
+            db,
+            t.scope,
+            {
+              operationId: event.operationId,
+              recordSha256: s.hash(operationRow?.['record_sha256']),
+            },
+            queries,
+            { current: checkedRow, previous: previousCheckedRow },
+          ).proof
+        : readNpcGmPrimitiveCause(
+            db,
+            t.scope,
+            {
+              operationId: event.operationId,
+              recordSha256: s.hash(operationRow?.['record_sha256']),
+            },
+            session,
+          );
     // An identical deeply frozen header already passed the fresh SQL row and scope check.
     // A separately decoded header still requires the original complete equality check.
     if (cause.event !== event) equal(cause.event, event);
@@ -3077,8 +3138,9 @@ function derivationPrefix(
   db: Database.Database,
   t: Omit<NpcDerivationTarget, 'commitOperationId'>,
   expectedStage: 'NPC-016' | 'NPC-017' = 'NPC-017',
+  session?: NpcGmPrimitiveReadSession,
 ): NpcDerivationPrefix {
-  const result = readDerivationPrefix(db, t, expectedStage);
+  const result = readDerivationPrefix(db, t, expectedStage, session);
   if (result.skillConfirmation === null) return s.fail();
   return { ...result, skillConfirmation: result.skillConfirmation };
 }
@@ -3281,16 +3343,22 @@ function storedDerivationVersion(
   scope: NpcScope,
   npcUuid: string,
   version: number,
+  session?: NpcGmPrimitiveReadSession,
 ): NpcStoredDerivationVersion {
   const row = db
     .prepare('SELECT * FROM npc_version WHERE campaign_id=? AND npc_uuid=? AND version=?')
     .get(scope.campaignId, npcUuid, version) as Row | undefined;
   const record = checked(row);
   const op = operationHashStatement(db).get(record['operationId']) as Row | undefined;
-  const cause = readNpcGmPrimitiveCause(db, scope, {
-    operationId: s.uuid(record['operationId']),
-    recordSha256: s.hash(op?.['record_sha256']),
-  });
+  const cause = readNpcGmPrimitiveCause(
+    db,
+    scope,
+    {
+      operationId: s.uuid(record['operationId']),
+      recordSha256: s.hash(op?.['record_sha256']),
+    },
+    session,
+  );
   equal(
     [
       row?.['campaign_id'],
@@ -3307,13 +3375,18 @@ function storedDerivationVersion(
     cause.event.ref.revision < 1
   )
     return s.fail();
-  const prefix = derivationPrefix(db, {
-    scope,
-    npcUuid,
-    npcDraftId: cause.event.ref.npcDraftId,
-    openAttemptRevision: cause.event.ref.revision - 1,
-    targetVersion: version,
-  });
+  const prefix = derivationPrefix(
+    db,
+    {
+      scope,
+      npcUuid,
+      npcDraftId: cause.event.ref.npcDraftId,
+      openAttemptRevision: cause.event.ref.revision - 1,
+      targetVersion: version,
+    },
+    'NPC-017',
+    session,
+  );
   equal(headerAttempt(cause.event), {
     ...prefix.openAttempt,
     revision: prefix.openAttempt.revision + 1,
@@ -3352,6 +3425,7 @@ export function readNpcInventoryHistoryEvidenceInTransaction(
   scopeValue: NpcScope,
   npcUuidValue: string,
   throughVersionValue: number,
+  session?: NpcGmPrimitiveReadSession,
 ): readonly Readonly<{ version: NpcVersionRef; stored: NpcStoredDerivationVersion }>[] {
   if (!db.inTransaction) return s.fail('INVALID_INPUT');
   const scope = npcScopeValue(scopeValue),
@@ -3368,7 +3442,7 @@ export function readNpcInventoryHistoryEvidenceInTransaction(
   const history = rows.map((row, index) => {
     const version = index + 1;
     equal(row['version'], version);
-    const stored = storedDerivationVersion(db, scope, npcUuid, version),
+    const stored = storedDerivationVersion(db, scope, npcUuid, version, session),
       sha256 = s.hash(row['record_sha256']);
     equal(digest(stored.record), sha256);
     equal(stored.record['scope'], scope);
@@ -3398,11 +3472,12 @@ function derivationOrigins(
   target: Omit<NpcDerivationTarget, 'commitOperationId'>,
   current: NpcCompositionDerivationPrefix,
   committedOrNull: NpcStoredDerivationVersion | null,
+  session?: NpcGmPrimitiveReadSession,
 ) {
   const initialOrNull =
     target.targetVersion === 1
       ? committedOrNull
-      : storedDerivationVersion(db, target.scope, target.npcUuid, 1);
+      : storedDerivationVersion(db, target.scope, target.npcUuid, 1, session);
   const initialPrefix = initialOrNull?.prefix ?? current;
   const reservation = db
     .prepare('SELECT * FROM npc_identity_reservation WHERE campaign_id=? AND draft_id=?')
@@ -3416,7 +3491,13 @@ function derivationOrigins(
       ? null
       : target.targetVersion === 2
         ? initialOrNull
-        : storedDerivationVersion(db, target.scope, target.npcUuid, target.targetVersion - 1);
+        : storedDerivationVersion(
+            db,
+            target.scope,
+            target.npcUuid,
+            target.targetVersion - 1,
+            session,
+          );
   return { initialOrNull, previousOrNull };
 }
 function assertOpenDerivationFrontier(
@@ -3469,6 +3550,7 @@ function assertOpenDerivationFrontier(
 export function readNpcVersionDerivationEvidenceInTransaction(
   db: Database.Database,
   value: NpcDerivationTarget,
+  session?: NpcGmPrimitiveReadSession,
 ): NpcVersionDerivationEvidence {
   if (!db.inTransaction) return s.fail('INVALID_INPUT');
   const target = derivationTarget(value);
@@ -3483,6 +3565,7 @@ export function readNpcVersionDerivationEvidenceInTransaction(
       target.scope,
       target.npcUuid,
       target.targetVersion,
+      session,
     );
     // The stored version has already checked this exact immutable prefix. Match every
     // caller coordinate before using it, without folding the same journal a second time.
@@ -3499,10 +3582,16 @@ export function readNpcVersionDerivationEvidenceInTransaction(
       target,
     );
   } else {
-    current = derivationPrefix(db, target);
+    current = derivationPrefix(db, target, 'NPC-017', session);
     assertOpenDerivationFrontier(db, target, current);
   }
-  const { initialOrNull, previousOrNull } = derivationOrigins(db, target, current, committedOrNull);
+  const { initialOrNull, previousOrNull } = derivationOrigins(
+    db,
+    target,
+    current,
+    committedOrNull,
+    session,
+  );
   return freezeEvidence({ target, current, committedOrNull, initialOrNull, previousOrNull });
 }
 

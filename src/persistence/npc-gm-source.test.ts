@@ -28,6 +28,8 @@ import {
   npcSourceEventId,
   readNpcGmPrimitiveCause,
   readNpcCompositionDerivationEvidenceInTransaction,
+  readNpcVersionDerivationEvidenceInTransaction,
+  readNpcInventoryHistoryEvidenceInTransaction,
   readNpcEffectAllocationInTransaction,
   withNpcGmPrimitiveReadSession,
   type NpcGmPrimitiveReadSession,
@@ -1512,6 +1514,59 @@ describe('NPC GM primitive source and existing QUEUE bridge', () => {
       });
       return { created, lastNavigation, committed };
     }
+
+    it.each(['version', 'inventory'] as const)(
+      'rejects closed and foreign database sessions through the %s derivation reader',
+      (kind) => {
+        const { committed } = statementHistory();
+        const attempt = committed.e.attempt;
+        const read = (session: NpcGmPrimitiveReadSession) =>
+          kind === 'version'
+            ? readNpcVersionDerivationEvidenceInTransaction(
+                db,
+                {
+                  scope,
+                  npcUuid: attempt.candidateNpcUuid,
+                  npcDraftId: attempt.npcDraftId,
+                  openAttemptRevision: attempt.revision - 1,
+                  commitOperationId: committed.o.operationId,
+                  targetVersion: 1,
+                },
+                session,
+              )
+            : readNpcInventoryHistoryEvidenceInTransaction(
+                db,
+                scope,
+                attempt.candidateNpcUuid,
+                1,
+                session,
+              );
+        let escaped: NpcGmPrimitiveReadSession | undefined;
+        withNpcGmPrimitiveReadSession(db, scope, (session) => {
+          expect(readNpcGmPrimitiveCause(db, scope, committed.cause, session).operation).toEqual(
+            committed.o,
+          );
+          escaped = session;
+        });
+        if (escaped === undefined) throw new Error('missing issued session');
+        const closed = escaped;
+        const before = db.serialize();
+        expect(() => read(closed)).toThrowError(new NetworkApplicationStoreError('INVALID_INPUT'));
+        const other = new Database(':memory:');
+        try {
+          other.exec('BEGIN IMMEDIATE');
+          withNpcGmPrimitiveReadSession(other, scope, (session) => {
+            expect(() => read(session)).toThrowError(
+              new NetworkApplicationStoreError('INVALID_INPUT'),
+            );
+          });
+        } finally {
+          if (other.inTransaction) other.exec('ROLLBACK');
+          other.close();
+        }
+        expect(db.serialize().equals(before)).toBe(true);
+      },
+    );
 
     it('keeps a warmed session mode while new factories observe true and then false', () => {
       const { committed } = statementHistory();

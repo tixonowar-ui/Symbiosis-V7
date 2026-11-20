@@ -15,6 +15,11 @@ import {
 import { enemyCompositionPatchValue } from '@shared/enemy-composition.js';
 import { enemyBuildPlanPatchValue } from '@shared/enemy-skill-plan.js';
 import { customMonsterCompositionPatchValue } from '@shared/custom-monster-state.js';
+import {
+  MONSTER_STAT_DRAFT_ACTIONS,
+  monsterStatDraftPatchValue,
+  monsterStatRollReceiptValue,
+} from '@shared/monster-stat-roll.js';
 
 export function enemyBrowserWorkflow(
   p: EnemyAuthoringProjection,
@@ -23,8 +28,25 @@ export function enemyBrowserWorkflow(
   data: JsonObject | null,
   versionStage?: EnemyPatchStage,
 ): EnemyWorkflowRequest | null {
+  const statDraft = Object.hasOwn(MONSTER_STAT_DRAFT_ACTIONS, actionKey);
+  const roll =
+    p.formId === 'ENM-018' &&
+    p.kind === 'CUSTOM_MONSTER_AUTHORING' &&
+    actionKey ===
+      (p.statGeneration?.originFormId === 'ENM-012' ? 'ENM-018::CTA::002' : 'ENM-018::CTA::005');
+  if (statDraft) {
+    const patch = monsterStatDraftPatchValue(data);
+    if (
+      p.kind !== 'CUSTOM_MONSTER_AUTHORING' ||
+      patch.sourceActionKey !== actionKey ||
+      MONSTER_STAT_DRAFT_ACTIONS[patch.sourceActionKey][0] !== p.formId ||
+      (versionStage !== undefined && versionStage !== 'MONSTER_STAT_DRAFT')
+    )
+      throw new Error('Черновик не принадлежит текущему переходу характеристик.');
+  }
   if (
     versionStage !== undefined &&
+    !statDraft &&
     (p.formId !== 'ENM-017' ||
       p.versionEditor === undefined ||
       (versionStage !== 'VERSION_CONFIGURATION' &&
@@ -33,7 +55,7 @@ export function enemyBrowserWorkflow(
   )
     throw new Error('Этап не принадлежит этой новой версии.');
   const stage =
-    versionStage ??
+    (statDraft ? 'MONSTER_STAT_DRAFT' : versionStage) ??
     (Object.entries(ENEMY_STAGE_FORMS) as [EnemyPatchStage, readonly string[]][]).find(
       ([, forms]) => forms[0] === p.formId && forms[2] === actionKey,
     )?.[0];
@@ -43,7 +65,7 @@ export function enemyBrowserWorkflow(
     append ||
     (p.formId === 'ENM-010' && actionKey === 'ENM-010::CTA::004') ||
     (p.formId === 'ENM-016' && actionKey === 'ENM-016::CTA::002');
-  if (stage === undefined && !commit) return null;
+  if (stage === undefined && !commit && !roll) return null;
   const attempt = p.context.attemptOrNull;
   if (attempt === null) throw new Error('Попытка отсутствует.');
   return enemyWorkflowRequestValue({
@@ -52,11 +74,13 @@ export function enemyBrowserWorkflow(
     commandKind: 'workflow-command',
     role: 'gm',
     commandId,
-    workflowCommandId: append
-      ? 'UI-CMD-ENEMY-NEW-VERSION'
-      : commit
-        ? 'UI-CMD-ENEMY-COMMIT-V1'
-        : 'UI-CMD-ENEMY-DRAFT-PATCH',
+    workflowCommandId: roll
+      ? 'UI-CMD-MONSTER-STATS-ROLL-ONCE'
+      : append
+        ? 'UI-CMD-ENEMY-NEW-VERSION'
+        : commit
+          ? 'UI-CMD-ENEMY-COMMIT-V1'
+          : 'UI-CMD-ENEMY-DRAFT-PATCH',
     expectedRevisions: {
       stateRevision: p.stateRevision,
       projectionRevision: p.projectionRevision,
@@ -66,7 +90,25 @@ export function enemyBrowserWorkflow(
       campaignId: p.campaignId,
       creationAttemptId: attempt.attemptId,
       expectedAttemptRevision: attempt.revision,
-      ...(append ? { reason: data?.['reason'] } : commit ? {} : { stage, data: data ?? {} }),
+      ...(roll
+        ? (() => {
+            const binding =
+              p.kind === 'CUSTOM_MONSTER_AUTHORING' ? p.statGeneration?.binding : undefined;
+            if (binding === undefined || p.context.monsterStatRoll?.rollOnceStatus !== 'NOT_ROLLED')
+              throw new Error('Однократная генерация недоступна.');
+            return {
+              attemptId: binding.attemptId,
+              monsterDraftId: binding.attemptId,
+              originFormId: binding.originFormId,
+              returnFormId: binding.originFormId,
+              versionBindingOrNull: binding.versionBindingOrNull,
+            };
+          })()
+        : append
+          ? { reason: data?.['reason'] }
+          : commit
+            ? {}
+            : { stage, data: data ?? {} }),
     },
   });
 }
@@ -91,7 +133,8 @@ export function enemyBrowserReceipt(
       (request.payload.stage === 'SENTIENT_BUILD' &&
       Object.hasOwn(request.payload.data ?? {}, 'operation')
         ? ' buildPhase'
-        : ''),
+        : '') +
+      (request.workflowCommandId === 'UI-CMD-MONSTER-STATS-ROLL-ONCE' ? ' randomStatsReceipt' : ''),
     '$.result',
   );
   const commit =
@@ -139,6 +182,22 @@ export function enemyBrowserReceipt(
   const timestamp = r.text(result['timestamp'], '$.timestamp');
   if (new Date(timestamp).toISOString() !== timestamp)
     throw new Error('Некорректная дата квитанции.');
+  if (request.workflowCommandId === 'UI-CMD-MONSTER-STATS-ROLL-ONCE') {
+    const original = monsterStatRollReceiptValue(result['randomStatsReceipt']);
+    if (
+      source.kind !== 'CUSTOM_MONSTER_AUTHORING' ||
+      source.formId !== 'ENM-018' ||
+      !admissionJsonEqual(original.binding, source.statGeneration?.binding) ||
+      original.generationSeed !== source.statGeneration?.generationSeed ||
+      original.operationId !== request.commandId ||
+      original.randomReceiptId !== receipt['receiptId'] ||
+      original.attemptRevision !== request.payload.expectedAttemptRevision ||
+      original.timestamp !== timestamp ||
+      original.artSha256 !== source.art.sha256 ||
+      !admissionJsonEqual(original.beforeDraftOrNull, source.context.monsterStatRoll?.draftOrNull)
+    )
+      throw new Error('Квитанция семи бросков не связана с исходной попыткой.');
+  }
   const revisions = r.exact(
     receipt['revisions'],
     'stateRevision projectionRevision actorVisibilityRevision',
@@ -198,6 +257,33 @@ export function enemyBrowserDestination(
         admissionJsonEqual(p.context.selectedVersionOrNull, result['committedVersionOrNull'])
       );
     const stage = result['stageOrNull'] as EnemyPatchStage;
+    if (result['workflowCommandId'] === 'UI-CMD-MONSTER-STATS-ROLL-ONCE') {
+      const original = monsterStatRollReceiptValue(result['randomStatsReceipt']);
+      return (
+        p.kind === 'CUSTOM_MONSTER_AUTHORING' &&
+        p.formId === original.binding.originFormId &&
+        p.context.attemptOrNull?.attemptId === original.binding.attemptId &&
+        p.context.attemptOrNull.revision === result['attemptRevision'] &&
+        admissionJsonEqual(p.context.monsterStatRoll?.randomReceiptOrNull, original) &&
+        admissionJsonEqual(p.statGeneration?.candidateStats, {
+          massKg: original.beforeDraftOrNull?.massKg ?? null,
+          ageYears: original.beforeDraftOrNull?.ageYears ?? null,
+          baseMaxHP: original.beforeDraftOrNull?.baseMaxHP ?? null,
+          baseStats: original.originalGeneratedStats,
+        })
+      );
+    }
+    if (stage === 'MONSTER_STAT_DRAFT')
+      return (
+        p.kind === 'CUSTOM_MONSTER_AUTHORING' &&
+        source.kind === 'CUSTOM_MONSTER_AUTHORING' &&
+        p.formId ===
+          (source.statGeneration?.rollOnceStatus === 'COMMITTED' ? 'ENM-019' : 'ENM-018') &&
+        p.statGeneration?.originFormId === source.formId &&
+        p.context.attemptOrNull !== null &&
+        p.context.attemptOrNull.attemptId === result['creationAttemptId'] &&
+        p.context.attemptOrNull.revision === result['attemptRevision']
+      );
     return (
       p.formId ===
         (source.formId === 'ENM-017'

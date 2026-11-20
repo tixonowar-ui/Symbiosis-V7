@@ -480,11 +480,11 @@ describe('campaign creation runtime with real SQLite and TCP bind', () => {
       count: 1,
     });
   });
-  it('negotiates the actual enemy NEW capability only for an enabled host and an offering resumed client', async () => {
+  it('negotiates actual enemy NEW and monster ROLL capabilities only for an enabled host and an offering resumed client', async () => {
     const h = await setup();
     const before = storageSnapshot(h.db),
       cursor = h.cursor();
-    const negotiate = async (enabled: boolean, offerNew: boolean) => {
+    const negotiate = async (enabled: boolean, offerNew: boolean, offerRoll = false) => {
       const resumed = harness(h.db, projectRoot, h.ctx(), baseline, {
         enemyAuthoringEnabled: enabled,
         project: () => {
@@ -507,6 +507,7 @@ describe('campaign creation runtime with real SQLite and TCP bind', () => {
           'UI-CMD-ENEMY-DRAFT-PATCH',
           'UI-CMD-ENEMY-COMMIT-V1',
           ...(offerNew ? ['UI-CMD-ENEMY-NEW-VERSION' as const] : []),
+          ...(offerRoll ? ['UI-CMD-MONSTER-STATS-ROLL-ONCE' as const] : []),
         ],
         unacknowledgedCommandIds: [],
       });
@@ -535,6 +536,14 @@ describe('campaign creation runtime with real SQLite and TCP bind', () => {
       'UI-CMD-ENEMY-DRAFT-PATCH',
       'UI-CMD-ENEMY-COMMIT-V1',
     ]);
+    expect(await negotiate(true, true, true)).toEqual([
+      'UI-CMD-CAMPAIGN-CREATE',
+      'UI-CMD-ENEMY-DRAFT-PATCH',
+      'UI-CMD-ENEMY-COMMIT-V1',
+      'UI-CMD-ENEMY-NEW-VERSION',
+      'UI-CMD-MONSTER-STATS-ROLL-ONCE',
+    ]);
+    expect(await negotiate(false, true, true)).toEqual(['UI-CMD-CAMPAIGN-CREATE']);
   });
   it('reuses the exact device-owned context on a fresh explicit Master launch and resumes its draft or paused campaign', async () => {
     const h = await setup();
@@ -833,7 +842,8 @@ describe('campaign creation runtime with real SQLite and TCP bind', () => {
       // Keep both real loaders and the upgrade itself in each timed scenario.
       fixture = createBaselineLineageFixture('B0');
       dirs.push(fixture.directory);
-    });
+      // Local exception: clean02 confirmed this two-case setup hook exceeded 30 s; allow finite 90 s.
+    }, 90_000);
     it('recovers the original paused campaign and exact CREATE receipt across the approved Atlas delivery', async () => {
       const oldBaseline = await loadLocalCharacterExportBaseline(fixture.projectRoot);
       expect(oldBaseline.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B0);

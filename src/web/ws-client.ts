@@ -15,6 +15,7 @@ import {
   enemyBrowserDestination,
 } from './forms/enm/enemy-authoring-application.js';
 import { enemyLibrarySelectionConfirmed } from './forms/enm/enemy-library-confirmation.js';
+import { monsterStatDraftPatchValue } from '@shared/monster-stat-roll.js';
 import {
   isEnemyLibraryForm,
   enemyLibraryProjectionValue,
@@ -12987,22 +12988,28 @@ export function connectProjection(
       if (commandId === null) return { ok: false, detail: 'Идентификатор команды недоступен.' };
       try {
         const p = enemyAuthoringProjectionValue(lastSnapshot.projection),
+          statDraft = stage === 'MONSTER_STAT_DRAFT' ? monsterStatDraftPatchValue(data) : null,
+          actionKey =
+            statDraft?.sourceActionKey ??
+            (p.formId === 'ENM-017' ? 'ENM-017::CTA::004' : ENEMY_STAGE_FORMS[stage][2]),
           request = enemyBrowserWorkflow(
             p,
-            p.formId === 'ENM-017' ? 'ENM-017::CTA::004' : ENEMY_STAGE_FORMS[stage][2],
+            actionKey,
             commandId,
             data,
-            p.formId === 'ENM-017' ? stage : undefined,
+            statDraft !== null || p.formId === 'ENM-017' ? stage : undefined,
           );
         if (
           request === null ||
-          (!lastSnapshot.availableActionKeys.includes(ENEMY_STAGE_FORMS[stage][2]) &&
-            !(p.formId === 'ENM-017' && p.versionEditor !== undefined) &&
-            !(
-              stage === 'SENTIENT_SYMBIONTS' &&
-              p.formId === 'ENM-008' &&
-              (data['operation'] === 'PREVIEW' || data['operation'] === 'CONFIRM')
-            )) ||
+          (statDraft !== null
+            ? !lastSnapshot.availableActionKeys.includes(actionKey)
+            : !lastSnapshot.availableActionKeys.includes(ENEMY_STAGE_FORMS[stage][2]) &&
+              !(p.formId === 'ENM-017' && p.versionEditor !== undefined) &&
+              !(
+                stage === 'SENTIENT_SYMBIONTS' &&
+                p.formId === 'ENM-008' &&
+                (data['operation'] === 'PREVIEW' || data['operation'] === 'CONFIRM')
+              )) ||
           !lastSnapshot.executableWorkflowCommandIds.includes(request.workflowCommandId)
         )
           return { ok: false, detail: 'Этап недоступен.' };

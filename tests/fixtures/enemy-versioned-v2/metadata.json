@@ -1,0 +1,706 @@
+{
+  "schemaVersion": 23,
+  "producerHead": "5c875e6108312cbe37356a2894fac5a8feea9a53",
+  "deliveredMainEquivalent": "fe61e291635f30cf0f5437e9692d8f92f896104f",
+  "producerTree": "bfee221e7a2ce1b319bbf9f34a2e9c365eaea5c5",
+  "producerSha256": "f7768e407a8738071eb4c04c1abd02018f95c0cf04ea8a3a033cf3a841c40593",
+  "producerSourceSha256": {
+    "package.json": "70f665c8a5c9cd2405f3ff7deb9b227d0a890792e96cb16ea51e4891d9b6b78e",
+    "package-lock.json": "35eb4cab21c51a9f6be3aedad90f78ce943ceaf5f2f06f44f673b6feb2d08d2c",
+    ".nvmrc": "474505894c819df312c25285f3f15f9200f04b072dcb70cbea3ad42e9f5b6f35",
+    "tsconfig.json": "0d8e8ed38e67ee4bde91cf47adee8a83239b810a8009b1f71d330d5e009b5452",
+    "tsconfig.base.json": "4b23a28de8dfd6fdb86060f3c0829ca6e08345bb04b16860e3a2c710bb1c8338",
+    "vitest.config.ts": "bb08b6272c3e433a05b3bfb5ccb7fde613071883aa5a0f47fabf49f9480a883a",
+    "artifacts/CHECKSUMS.sha256": "17910b701eb50d0e659fc2845f45bb510ac66398c75fa08f71db4a4520490111",
+    "tests/fixtures/enemy-composed-v1/schema21-composed-v1.sqlite.gz": "b4c726ec2fdae7a6be4c5d25013acf2206fdb5def0d2092ea235eddabaed4e52",
+    "tests/fixtures/enemy-composed-v1/metadata.json": "1531f0b4aaf70a4fc479de135afd85376d2c993d4acca8d41b1acaac3d5bf782",
+    "tests/fixtures/enemy-custom-v1/schema22-custom-v1.sqlite.gz": "50678d9abf89b1a3c04199d53b9066ae0dfc937b52a3c53f0dc158933d9f17d2",
+    "tests/fixtures/enemy-custom-v1/metadata.json": "83159665e135308bfa43bbe3669de2837aea768c48a5dc11ae7e79a9996b3551",
+    "src/persistence/database.ts": "1084896bbc6ed0c185b367f4e6d048b93241b487fcdd99535ab90eec4ec6c462",
+    "src/persistence/migrations/index.ts": "9c8319c439560879e4ac2f8f79b5ff92777730642609fe8f613a41e9e27d7e98",
+    "src/persistence/migrations/0021-sentient-enemy-v1.ts": "3db52c9902ad07016124e928c9819831f61fec2df5d1fddb6ae48981cdbb5275",
+    "src/persistence/migrations/0022-custom-monster-v1.ts": "dff77310391ae76f87dcc7801ebfc223e24920af8aabd9407860d3386c893021",
+    "src/persistence/migrations/0023-enemy-template-versions.ts": "1c2c19e3215bfbfac6ff5fe6585ecf0bdef174711243f220794b31aaef58706a",
+    "src/persistence/enemy-authoring-store.ts": "5a75ba5d8a953d6b3b12e2070aa86211314c7a42361f054e5cd87dc188d3ee73",
+    "src/persistence/enemy-version-source.ts": "364681ee037793798ab7ef3bf7d40dd21107c6b54fe12dcf7b34bd08aab31169",
+    "src/persistence/campaign-creation.ts": "890ba610034ddf9be1c468b136693257344bb1959bf23c85f1d80165ed0996ac",
+    "src/persistence/network-device-request.ts": "72cbfbcd4efdd248b1a24807d9a77644060f2dcc6d3908bea7ded9e389b66f40",
+    "src/persistence/network-local-application.ts": "eaecbae9b75599498a8952d5135bdc5b43018fb2012d53bb8dad2601c8e5569a",
+    "src/host/enemy-authoring-application.ts": "cd07951bfc19b96ca72dddf4a292e2321394dafe5fc7d2fab1ec6561838233b9",
+    "src/host/enemy-authoring-catalog.ts": "fd71e5e782a95beda1771b440a59878bd95189cdb12e28f070cb7ad13a278634",
+    "src/host/enemy-catalog.ts": "8eaa19196536d7baccf412eebf8d0e21ffa520bf24bee06b9d2fc06c89f77b96",
+    "src/host/custom-monster-application.ts": "d0432bf1ccc0be281f97dd9ce95db01b72369566d99a01657a758df3a71b0d8f",
+    "src/host/custom-monster-preparation.ts": "9aee9373d8f443a457f249c0a37855f4cbd30fc24e6b09a36133f255f0d3fea9",
+    "src/host/enemy-version-preparation.ts": "f973d23d0adfd0d478692605f2c8f37a35355277b80f108988b1d8936e8968a6",
+    "src/shared/enemy-authoring.ts": "80eb3e5b3cadb3102330bb66e94929727719078772a649321032512bd0a68b32",
+    "src/shared/custom-monster-state.ts": "d5e66fd7afd1d00abbccf00272e5f19e849408245280589fc4c2a0a075adc52e",
+    "src/shared/custom-monster.ts": "a7046c430a15e87ee547339b327f903626191e52482bf718909caed9055dea87",
+    "src/shared/enemy-version-configuration.ts": "53e8fedadca5c23cbfa4965556c04add91ed61ddecb29b0b0be51ac7ed23ae70",
+    "src/domain/entities/enemy-template/version-configuration.ts": "983c4bfa70e0a5f7bf3f1fc857f23ddc5997eed46628c173b8bdb3fe55ce39f0"
+  },
+  "fixtures": [
+    {
+      "kind": "SENTIENT",
+      "file": "schema23-sentient-v2.sqlite.gz",
+      "schemaVersion": 23,
+      "baselineVersion": "sha256:17910b701eb50d0e659fc2845f45bb510ac66398c75fa08f71db4a4520490111",
+      "scope": {
+        "ownerDeviceId": "504ae802-814a-46a3-aa71-e029921c163c",
+        "gmLocalContextId": "1591800f-74f8-42dd-888c-1a82250c1099",
+        "campaignId": "c21357d8-f2b5-455a-911f-03e6796aba84"
+      },
+      "gzipSha256": "4ab26fff36c815cae60ac65f94ba1f6aae1a932f99465d1e813f7de79b6bad33",
+      "inflatedPreOpenSha256": "8d066575ad1f20dd55741e514b376e9208a65c7e69272ec224b02c3f08ecae06",
+      "inflatedBytes": 1347584,
+      "canonicalRole": "Serialized old-producer bytes before native physical witness reopen; sole future consumer input is gzip above.",
+      "originalInput": {
+        "folder": "enemy-composed-v1",
+        "file": "schema21-composed-v1.sqlite.gz",
+        "gzipSha256": "b4c726ec2fdae7a6be4c5d25013acf2206fdb5def0d2092ea235eddabaed4e52",
+        "inflatedSha256": "3184d3810b723ecea8ac5b152bedfb8fb8cd2ac6904d03c8816a9325ba607b30"
+      },
+      "originalCommitRequest": {
+        "messageType": "command.request",
+        "protocolVersion": 1,
+        "commandKind": "workflow-command",
+        "workflowCommandId": "UI-CMD-ENEMY-COMMIT-V1",
+        "role": "gm",
+        "commandId": "e52a6437-ccd1-4ef2-b059-7f8ba7a0398e",
+        "expectedRevisions": {
+          "stateRevision": 7,
+          "projectionRevision": 11,
+          "actorVisibilityRevision": 0
+        },
+        "payload": {
+          "campaignId": "c21357d8-f2b5-455a-911f-03e6796aba84",
+          "creationAttemptId": "8943b49d-05d1-4cdf-8a98-9d485f817736",
+          "expectedAttemptRevision": 7
+        }
+      },
+      "originalCommitResult": {
+        "replayed": false,
+        "receipt": {
+          "commandId": "e52a6437-ccd1-4ef2-b059-7f8ba7a0398e",
+          "receiptId": "f04ec263-31d9-40a1-af25-08a609f72de8",
+          "revisions": {
+            "stateRevision": 8,
+            "projectionRevision": 12,
+            "actorVisibilityRevision": 0
+          },
+          "result": {
+            "campaignId": "c21357d8-f2b5-455a-911f-03e6796aba84",
+            "creationAttemptId": "8943b49d-05d1-4cdf-8a98-9d485f817736",
+            "timestamp": "2026-11-12T11:00:49.826Z",
+            "workflowCommandId": "UI-CMD-ENEMY-COMMIT-V1",
+            "sourceFormId": "ENM-010",
+            "stageOrNull": null,
+            "attemptRevision": 7,
+            "committedVersionOrNull": {
+              "campaignId": "c21357d8-f2b5-455a-911f-03e6796aba84",
+              "templateId": "e9507481-775b-48dd-849c-74f918cdb795",
+              "versionId": "762777a4-9d31-4a1d-8434-9303e22c112b",
+              "version": 1,
+              "kind": "SENTIENT",
+              "artAssetKey": "symbiosis_placeholder_sentient_enemy",
+              "artSha256": "5da7ee70db7c47dabfa92522e5bc8c9855c8a0c7596764d00b8b24cebd570a3f"
+            }
+          }
+        }
+      },
+      "newVersionRequest": {
+        "messageType": "command.request",
+        "protocolVersion": 1,
+        "commandKind": "workflow-command",
+        "role": "gm",
+        "commandId": "95ff24c7-b564-48f3-b9e3-3051c7b11e21",
+        "workflowCommandId": "UI-CMD-ENEMY-NEW-VERSION",
+        "expectedRevisions": {
+          "stateRevision": 13,
+          "projectionRevision": 24,
+          "actorVisibilityRevision": 0
+        },
+        "payload": {
+          "campaignId": "c21357d8-f2b5-455a-911f-03e6796aba84",
+          "creationAttemptId": "dbf634d1-27b5-45dd-b204-a12a0f96c628",
+          "expectedAttemptRevision": 2,
+          "reason": "Исторический полный N+1 без замены конфигурации"
+        }
+      },
+      "newVersionResult": {
+        "replayed": false,
+        "receipt": {
+          "commandId": "95ff24c7-b564-48f3-b9e3-3051c7b11e21",
+          "receiptId": "66523fd0-d180-44c6-a4a4-09637c8f5366",
+          "revisions": {
+            "stateRevision": 14,
+            "projectionRevision": 25,
+            "actorVisibilityRevision": 0
+          },
+          "result": {
+            "campaignId": "c21357d8-f2b5-455a-911f-03e6796aba84",
+            "creationAttemptId": "dbf634d1-27b5-45dd-b204-a12a0f96c628",
+            "timestamp": "2026-11-14T06:17:32.533Z",
+            "workflowCommandId": "UI-CMD-ENEMY-NEW-VERSION",
+            "sourceFormId": "ENM-017",
+            "stageOrNull": null,
+            "attemptRevision": 2,
+            "committedVersionOrNull": {
+              "campaignId": "c21357d8-f2b5-455a-911f-03e6796aba84",
+              "templateId": "e9507481-775b-48dd-849c-74f918cdb795",
+              "versionId": "595e4e80-074e-46eb-8550-90354aaf1dd1",
+              "version": 2,
+              "kind": "SENTIENT",
+              "artAssetKey": "symbiosis_placeholder_sentient_enemy",
+              "artSha256": "5da7ee70db7c47dabfa92522e5bc8c9855c8a0c7596764d00b8b24cebd570a3f"
+            }
+          }
+        }
+      },
+      "originalV1Record": {
+        "record_json": "{\"actorId\":\"d3bf9b57-6243-4a16-af42-02fb6b7eeb3c\",\"attempt\":{\"attemptId\":\"8943b49d-05d1-4cdf-8a98-9d485f817736\",\"baseStatsOrNull\":{\"C\":20,\"D\":20,\"I\":20,\"M\":20,\"S\":20,\"W\":20,\"Z\":20},\"buildOrNull\":{\"pureClassOrNull\":null,\"raceCode\":\"FREE\",\"skillSelections\":[{\"skillKey\":\"UNARMED\",\"targetBonus\":7},{\"skillKey\":\"ACROBATICS\",\"targetBonus\":1}]},\"campaignId\":\"c21357d8-f2b5-455a-911f-03e6796aba84\",\"compositionAcquisitions\":{\"activeAdvisorCardIdOrNull\":null,\"advisorCards\":[],\"freeSlotOrNull\":{\"permanentStatConsequence\":{\"M\":-1,\"S\":-1,\"Z\":-1},\"roll\":{\"factId\":\"ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/FACT\",\"mechanical\":{\"dieSides\":6,\"rawFace\":1},\"modeSnapshot\":\"MANUAL\",\"originatingCommandId\":\"6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9\",\"rollReceiptId\":\"ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/RECEIPT\",\"rollRequestId\":\"ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/REQUEST\"},\"statsBefore\":{\"M\":18,\"S\":18,\"Z\":18}},\"grossGrantOrNull\":null,\"schemaVersion\":1},\"compositionOrNull\":{\"acquisitions\":{\"activeAdvisorCardIdOrNull\":null,\"advisorCards\":[],\"freeSlotOrNull\":{\"permanentStatConsequence\":{\"M\":-1,\"S\":-1,\"Z\":-1},\"roll\":{\"factId\":\"ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/FACT\",\"mechanical\":{\"dieSides\":6,\"rawFace\":1},\"modeSnapshot\":\"MANUAL\",\"originatingCommandId\":\"6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9\",\"rollReceiptId\":\"ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/RECEIPT\",\"rollRequestId\":\"ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/REQUEST\"},\"statsBefore\":{\"M\":18,\"S\":18,\"Z\":18}},\"grossGrantOrNull\":null,\"schemaVersion\":1},\"advisorCardIdOrNull\":null,\"confirmationCommandIdOrNull\":\"6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9\",\"diceModeSnapshot\":\"MANUAL\",\"instanceIds\":[\"ea0c63a7-0302-46b9-8357-8921ace764a8\",\"be599ae4-3c42-407a-9b8e-3f1042586ebe\"],\"lifecycleSourceCommandIdOrNull\":null,\"monsterOrNull\":null,\"ordinarySymbiontInstances\":[{\"binding\":{\"kind\":\"OWL_EYE\",\"side\":\"LEFT\"},\"learnedNodeRefs\":[\"SYM-047\",\"SYM-048\"],\"speciesKey\":\"OWL\",\"targetLevel\":2},{\"binding\":{\"kind\":\"TICK_RIGHT_HAND\"},\"learnedNodeRefs\":[\"SYM-103\"],\"speciesKey\":\"TICK\",\"targetLevel\":1}],\"phase\":\"CONFIRMED\",\"previewCommandId\":\"0d56044c-4357-4f3d-97cf-252e5c5d39b6\",\"rolls\":[{\"factId\":\"ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/FACT\",\"mechanical\":{\"dieSides\":6,\"rawFace\":1},\"modeSnapshot\":\"MANUAL\",\"originatingCommandId\":\"6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9\",\"rollReceiptId\":\"ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/RECEIPT\",\"rollRequestId\":\"ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/REQUEST\"}],\"schemaVersion\":1,\"skills\":{\"advisorSkills\":[],\"dolphinSkills\":[]},\"symbiontCompositionMode\":\"ORDINARY_SYMBIONTS\",\"symbioticMonsterProfileIdOrNull\":null},\"identityOrNull\":{\"affiliation\":\"Fixture\",\"anatomyProfileId\":\"ORDINARY_SENTIENT\",\"description\":\"Actual old runtime before #258\",\"massKg\":80.1,\"name\":\"Исторический состав #257\",\"origin\":\"Исторический producer\"},\"inventoryOrNull\":{\"armorCompatibilityReasonOrNull\":null,\"inventoryItems\":[]},\"itemTemplateKeys\":[],\"kind\":\"SENTIENT\",\"revision\":7,\"schemaVersion\":2,\"skillPlanState\":{\"advisorInitialFillHistory\":[],\"advisorKnowledge\":[],\"pendingChoicesOrNull\":null,\"planOrNull\":{\"accountingOrNull\":{\"grossGrantOrNull\":null,\"knownSkills\":[{\"bonus\":7,\"dolphinSlots\":0,\"skillKey\":\"UNARMED\",\"source\":\"SELECTED\",\"startSlots\":9},{\"bonus\":1,\"dolphinSlots\":0,\"skillKey\":\"ACROBATICS\",\"source\":\"SELECTED\",\"startSlots\":1}],\"permanentLosses\":[],\"resolvedAtCommandId\":\"f98a223b-b4fc-48f2-8e08-3a407cde0528\",\"schemaVersion\":1},\"initialInput\":{\"baseStats\":{\"C\":20,\"D\":20,\"I\":20,\"M\":20,\"S\":20,\"W\":20,\"Z\":20},\"build\":{\"pureClassOrNull\":null,\"raceCode\":\"FREE\",\"skillSelections\":[{\"skillKey\":\"UNARMED\",\"targetBonus\":7},{\"skillKey\":\"ACROBATICS\",\"targetBonus\":1}]}},\"initialSkills\":[{\"bonus\":7,\"dolphinSlots\":0,\"skillKey\":\"UNARMED\",\"source\":\"SELECTED\",\"startSlots\":9},{\"bonus\":1,\"dolphinSlots\":0,\"skillKey\":\"ACROBATICS\",\"source\":\"SELECTED\",\"startSlots\":1}],\"initialStartCapacity\":10,\"planId\":\"f61af239-2504-4db7-a337-e853991c49e6\",\"revision\":1,\"schemaVersion\":1},\"rebuildPreviewOrNull\":null,\"schemaVersion\":1}},\"historyId\":\"32f557b6-74db-4385-a605-44808bf838a5\",\"identity\":{\"artAssetKey\":\"symbiosis_placeholder_sentient_enemy\",\"artSha256\":\"5da7ee70db7c47dabfa92522e5bc8c9855c8a0c7596764d00b8b24cebd570a3f\",\"campaignId\":\"c21357d8-f2b5-455a-911f-03e6796aba84\",\"kind\":\"SENTIENT\",\"templateId\":\"e9507481-775b-48dd-849c-74f918cdb795\",\"version\":1,\"versionId\":\"762777a4-9d31-4a1d-8434-9303e22c112b\"},\"operation\":\"CREATE_SENTIENT_ENEMY_TEMPLATE\",\"operationId\":\"e52a6437-ccd1-4ef2-b059-7f8ba7a0398e\",\"sheet\":{\"armor\":{\"acrobaticsModifier\":0,\"compatibilityRequiredItemIds\":[],\"dodgeModifier\":0,\"layersByZone\":{\"ARM_L\":[],\"ARM_R\":[],\"HEAD\":[],\"LEG_L\":[],\"LEG_R\":[],\"TORSO\":[]},\"mobilityModifier\":0,\"pieces\":[],\"requiredStrength\":0,\"runningModifier\":0},\"artAssetKey\":\"symbiosis_placeholder_sentient_enemy\",\"baseStats\":{\"C\":20,\"D\":20,\"I\":20,\"M\":20,\"S\":20,\"W\":20,\"Z\":20},\"build\":{\"pureClassOrNull\":null,\"raceCode\":\"FREE\",\"skillSelections\":[{\"skillKey\":\"UNARMED\",\"targetBonus\":7},{\"skillKey\":\"ACROBATICS\",\"targetBonus\":1}]},\"classMovementModifier\":0,\"composition\":{\"acquisitions\":{\"activeAdvisorCardIdOrNull\":null,\"advisorCards\":[],\"freeSlotOrNull\":{\"permanentStatConsequence\":{\"M\":-1,\"S\":-1,\"Z\":-1},\"roll\":{\"factId\":\"ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/FACT\",\"mechanical\":{\"dieSides\":6,\"rawFace\":1},\"modeSnapshot\":\"MANUAL\",\"originatingCommandId\":\"6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9\",\"rollReceiptId\":\"ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/RECEIPT\",\"rollRequestId\":\"ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/REQUEST\"},\"statsBefore\":{\"M\":18,\"S\":18,\"Z\":18}},\"grossGrantOrNull\":null,\"schemaVersion\":1},\"advisorCardIdOrNull\":null,\"confirmationCommandIdOrNull\":\"6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9\",\"diceModeSnapshot\":\"MANUAL\",\"instanceIds\":[\"ea0c63a7-0302-46b9-8357-8921ace764a8\",\"be599ae4-3c42-407a-9b8e-3f1042586ebe\"],\"lifecycleSourceCommandIdOrNull\":null,\"monsterOrNull\":null,\"ordinarySymbiontInstances\":[{\"binding\":{\"kind\":\"OWL_EYE\",\"side\":\"LEFT\"},\"learnedNodeRefs\":[\"SYM-047\",\"SYM-048\"],\"speciesKey\":\"OWL\",\"targetLevel\":2},{\"binding\":{\"kind\":\"TICK_RIGHT_HAND\"},\"learnedNodeRefs\":[\"SYM-103\"],\"speciesKey\":\"TICK\",\"targetLevel\":1}],\"phase\":\"CONFIRMED\",\"previewCommandId\":\"0d56044c-4357-4f3d-97cf-252e5c5d39b6\",\"rolls\":[{\"factId\":\"ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/FACT\",\"mechanical\":{\"dieSides\":6,\"rawFace\":1},\"modeSnapshot\":\"MANUAL\",\"originatingCommandId\":\"6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9\",\"rollReceiptId\":\"ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/RECEIPT\",\"rollRequestId\":\"ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/REQUEST\"}],\"schemaVersion\":1,\"skills\":{\"advisorSkills\":[],\"dolphinSkills\":[]},\"symbiontCompositionMode\":\"ORDINARY_SYMBIONTS\",\"symbioticMonsterProfileIdOrNull\":null},\"compositionFacts\":{\"advisorOrNull\":null,\"capacity\":2,\"dolphinSkillSlots\":{\"capacity\":0,\"used\":0},\"interactions\":[],\"learnedRuleFacts\":[{\"automationStatus\":\"AUTOMATED_ACCEPTED\",\"description\":\"Нормативная база (действует во всей непротиворечащей части):\\nдобавить +10 к осмотру/слежке/дальнему визуальному обнаружению днём. Если изучен «Двойной фокус внимания» Хамелеона, не применять его бонус и физические изменения.\\nПриоритетные авторские дельты (заменяют только прямо пересекающиеся ветви):\\n[Q-SYM-021] Пока Сова активна в теле, «Двойной фокус внимания» полностью подавлен. После удаления, гибели или отключения Совы изученная способность Хамелеона автоматически начинает давать бонус и необходимые физические изменения без повторного изучения; при возвращении активной Совы снова подавляется.\",\"name\":\"Безупречное зрение и подавление Двойного фокуса\",\"nodeRef\":\"SYM-047\",\"ruleId\":\"SYM-047\",\"sourceEnabled\":true,\"symbiontInstanceId\":\"ea0c63a7-0302-46b9-8357-8921ace764a8\"},{\"automationStatus\":\"AUTOMATED_ACCEPTED\",\"description\":\"удалить штраф к осмотру, вызванный временем суток или тёмным помещением.\",\"name\":\"Абсолютное ночное зрение\",\"nodeRef\":\"SYM-048\",\"ruleId\":\"SYM-048\",\"sourceEnabled\":true,\"symbiontInstanceId\":\"ea0c63a7-0302-46b9-8357-8921ace764a8\"},{\"automationStatus\":\"AUTOMATED_ACCEPTED\",\"description\":\"Нормативная база (действует во всей непротиворечащей части):\\nдобавить L к урону.\\nПриоритетные авторские дельты (заменяют только прямо пересекающиеся ветви):\\n[Q-SYM-043] Бонус +L к урону получает любая успешная рукопашная атака, в которой правая рука непосредственно наносит удар или удерживает оружие, включая двуручное. Бонус применяется после попадания и пробития; атаки без участия правой руки его не получают.\",\"name\":\"Кровопийца\",\"nodeRef\":\"SYM-103\",\"ruleId\":\"SYM-103\",\"sourceEnabled\":true,\"symbiontInstanceId\":\"be599ae4-3c42-407a-9b8e-3f1042586ebe\"}],\"lostSkills\":[],\"occupiedSlots\":2,\"specimens\":[{\"currentOE\":20,\"effectsEnabled\":true,\"learnedNodeRefs\":[\"SYM-047\",\"SYM-048\"],\"maxOE\":20,\"name\":\"Сова\",\"slotCost\":1,\"specialHistories\":{\"companions\":[],\"devourings\":[],\"ratpack\":[]},\"speciesKey\":\"OWL\",\"status\":\"ACTIVE\",\"symbiontInstanceId\":\"ea0c63a7-0302-46b9-8357-8921ace764a8\",\"targetLevel\":2},{\"currentOE\":50,\"effectsEnabled\":true,\"learnedNodeRefs\":[\"SYM-103\"],\"maxOE\":50,\"name\":\"Клещ\",\"slotCost\":1,\"specialHistories\":{\"companions\":[],\"devourings\":[],\"ratpack\":[]},\"speciesKey\":\"TICK\",\"status\":\"ACTIVE\",\"symbiontInstanceId\":\"be599ae4-3c42-407a-9b8e-3f1042586ebe\",\"targetLevel\":1}],\"startSkillSlots\":{\"available\":0,\"capacity\":10,\"overflow\":0,\"used\":10},\"temporarilyUnavailableAdvisorSkills\":[],\"temporarilyUnavailableSkills\":[]},\"effectiveStats\":{\"C\":20,\"D\":20,\"I\":20,\"M\":17,\"S\":17,\"W\":25,\"Z\":17},\"identity\":{\"affiliation\":\"Fixture\",\"anatomyProfileId\":\"ORDINARY_SENTIENT\",\"description\":\"Actual old runtime before #258\",\"massKg\":80.1,\"name\":\"Исторический состав #257\",\"origin\":\"Исторический producer\"},\"inventory\":{\"armorCompatibilityReasonOrNull\":null,\"inventoryItems\":[]},\"items\":[],\"maxHP\":100,\"permanentStats\":{\"C\":20,\"D\":20,\"I\":20,\"M\":17,\"S\":17,\"W\":25,\"Z\":17},\"progressionPolicy\":\"NO_XP_PROGRESSION\",\"requirementPenalties\":{\"armor\":{\"appliesTo\":[\"PHYSICAL_ACTION\",\"MOVEMENT\",\"ACTIVE_DEFENSE\"],\"deficit\":0,\"penalty\":0,\"requiredStrength\":0},\"sourceRuleId\":\"CORE-016\",\"weapons\":[]},\"skillPlanState\":{\"advisorInitialFillHistory\":[],\"advisorKnowledge\":[],\"pendingChoicesOrNull\":null,\"planOrNull\":{\"accountingOrNull\":{\"grossGrantOrNull\":null,\"knownSkills\":[{\"bonus\":7,\"dolphinSlots\":0,\"skillKey\":\"UNARMED\",\"source\":\"SELECTED\",\"startSlots\":9},{\"bonus\":1,\"dolphinSlots\":0,\"skillKey\":\"ACROBATICS\",\"source\":\"SELECTED\",\"startSlots\":1}],\"permanentLosses\":[],\"resolvedAtCommandId\":\"f98a223b-b4fc-48f2-8e08-3a407cde0528\",\"schemaVersion\":1},\"initialInput\":{\"baseStats\":{\"C\":20,\"D\":20,\"I\":20,\"M\":20,\"S\":20,\"W\":20,\"Z\":20},\"build\":{\"pureClassOrNull\":null,\"raceCode\":\"FREE\",\"skillSelections\":[{\"skillKey\":\"UNARMED\",\"targetBonus\":7},{\"skillKey\":\"ACROBATICS\",\"targetBonus\":1}]}},\"initialSkills\":[{\"bonus\":7,\"dolphinSlots\":0,\"skillKey\":\"UNARMED\",\"source\":\"SELECTED\",\"startSlots\":9},{\"bonus\":1,\"dolphinSlots\":0,\"skillKey\":\"ACROBATICS\",\"source\":\"SELECTED\",\"startSlots\":1}],\"initialStartCapacity\":10,\"planId\":\"f61af239-2504-4db7-a337-e853991c49e6\",\"revision\":1,\"schemaVersion\":1},\"rebuildPreviewOrNull\":null,\"schemaVersion\":1},\"skillSlots\":{\"capacity\":10,\"overflow\":0,\"remaining\":0,\"used\":10},\"skillStageStats\":{\"C\":20,\"D\":20,\"I\":20,\"M\":18,\"S\":18,\"W\":20,\"Z\":18},\"skills\":[{\"bonus\":7,\"name\":\"Рукопашный бой\",\"skillKey\":\"UNARMED\",\"slotCost\":9,\"source\":\"SELECTED\"},{\"bonus\":1,\"name\":\"Акробатика\",\"skillKey\":\"ACROBATICS\",\"slotCost\":1,\"source\":\"SELECTED\"}]},\"sourceBaselineVersion\":\"sha256:73c143c90f588da5a1166b1456991aa8aafd4cde4101fac839a2967c27e68a11\",\"timestamp\":\"2026-11-12T11:00:49.826Z\"}",
+        "record_sha256": "00fdee42d42060ac5c301cd0bbdecc334b842814c6fcdd25f8a44ef05d0bbe96"
+      },
+      "currentVersion": {
+        "campaignId": "c21357d8-f2b5-455a-911f-03e6796aba84",
+        "templateId": "e9507481-775b-48dd-849c-74f918cdb795",
+        "versionId": "595e4e80-074e-46eb-8550-90354aaf1dd1",
+        "version": 2,
+        "kind": "SENTIENT",
+        "artAssetKey": "symbiosis_placeholder_sentient_enemy",
+        "artSha256": "5da7ee70db7c47dabfa92522e5bc8c9855c8a0c7596764d00b8b24cebd570a3f"
+      },
+      "openAttempt": {
+        "attemptOrNull": {
+          "attemptId": "b7fe95f4-5ab7-467e-8d12-f4ef78d43d9c",
+          "baseStatsOrNull": {
+            "C": 20,
+            "D": 20,
+            "I": 20,
+            "M": 20,
+            "S": 20,
+            "W": 20,
+            "Z": 20
+          },
+          "buildOrNull": {
+            "pureClassOrNull": null,
+            "raceCode": "FREE",
+            "skillSelections": [
+              {
+                "skillKey": "UNARMED",
+                "targetBonus": 7
+              },
+              {
+                "skillKey": "ACROBATICS",
+                "targetBonus": 1
+              }
+            ]
+          },
+          "campaignId": "c21357d8-f2b5-455a-911f-03e6796aba84",
+          "compositionAcquisitions": {
+            "activeAdvisorCardIdOrNull": null,
+            "advisorCards": [],
+            "freeSlotOrNull": {
+              "permanentStatConsequence": {
+                "M": -1,
+                "S": -1,
+                "Z": -1
+              },
+              "roll": {
+                "factId": "ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/FACT",
+                "mechanical": {
+                  "dieSides": 6,
+                  "rawFace": 1
+                },
+                "modeSnapshot": "MANUAL",
+                "originatingCommandId": "6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9",
+                "rollReceiptId": "ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/RECEIPT",
+                "rollRequestId": "ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/REQUEST"
+              },
+              "statsBefore": {
+                "M": 18,
+                "S": 18,
+                "Z": 18
+              }
+            },
+            "grossGrantOrNull": null,
+            "schemaVersion": 1
+          },
+          "compositionOrNull": {
+            "acquisitions": {
+              "activeAdvisorCardIdOrNull": null,
+              "advisorCards": [],
+              "freeSlotOrNull": {
+                "permanentStatConsequence": {
+                  "M": -1,
+                  "S": -1,
+                  "Z": -1
+                },
+                "roll": {
+                  "factId": "ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/FACT",
+                  "mechanical": {
+                    "dieSides": 6,
+                    "rawFace": 1
+                  },
+                  "modeSnapshot": "MANUAL",
+                  "originatingCommandId": "6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9",
+                  "rollReceiptId": "ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/RECEIPT",
+                  "rollRequestId": "ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/REQUEST"
+                },
+                "statsBefore": {
+                  "M": 18,
+                  "S": 18,
+                  "Z": 18
+                }
+              },
+              "grossGrantOrNull": null,
+              "schemaVersion": 1
+            },
+            "advisorCardIdOrNull": null,
+            "confirmationCommandIdOrNull": "6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9",
+            "diceModeSnapshot": "MANUAL",
+            "instanceIds": [
+              "ea0c63a7-0302-46b9-8357-8921ace764a8",
+              "be599ae4-3c42-407a-9b8e-3f1042586ebe"
+            ],
+            "lifecycleSourceCommandIdOrNull": null,
+            "monsterOrNull": null,
+            "ordinarySymbiontInstances": [
+              {
+                "binding": {
+                  "kind": "OWL_EYE",
+                  "side": "LEFT"
+                },
+                "learnedNodeRefs": ["SYM-047", "SYM-048"],
+                "speciesKey": "OWL",
+                "targetLevel": 2
+              },
+              {
+                "binding": {
+                  "kind": "TICK_RIGHT_HAND"
+                },
+                "learnedNodeRefs": ["SYM-103"],
+                "speciesKey": "TICK",
+                "targetLevel": 1
+              }
+            ],
+            "phase": "CONFIRMED",
+            "previewCommandId": "0d56044c-4357-4f3d-97cf-252e5c5d39b6",
+            "rolls": [
+              {
+                "factId": "ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/FACT",
+                "mechanical": {
+                  "dieSides": 6,
+                  "rawFace": 1
+                },
+                "modeSnapshot": "MANUAL",
+                "originatingCommandId": "6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9",
+                "rollReceiptId": "ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/RECEIPT",
+                "rollRequestId": "ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/REQUEST"
+              }
+            ],
+            "schemaVersion": 1,
+            "skills": {
+              "advisorSkills": [],
+              "dolphinSkills": []
+            },
+            "symbiontCompositionMode": "ORDINARY_SYMBIONTS",
+            "symbioticMonsterProfileIdOrNull": null
+          },
+          "identityOrNull": {
+            "affiliation": "Fixture",
+            "anatomyProfileId": "ORDINARY_SENTIENT",
+            "description": "Actual old runtime before #258",
+            "massKg": 80.1,
+            "name": "Незавершённая следующая версия SENTIENT",
+            "origin": "Исторический producer"
+          },
+          "inventoryOrNull": {
+            "armorCompatibilityReasonOrNull": null,
+            "inventoryItems": []
+          },
+          "itemTemplateKeys": [],
+          "kind": "SENTIENT",
+          "revision": 2,
+          "schemaVersion": 2,
+          "skillPlanState": {
+            "advisorInitialFillHistory": [],
+            "advisorKnowledge": [],
+            "pendingChoicesOrNull": null,
+            "planOrNull": {
+              "accountingOrNull": {
+                "grossGrantOrNull": null,
+                "knownSkills": [
+                  {
+                    "bonus": 7,
+                    "dolphinSlots": 0,
+                    "skillKey": "UNARMED",
+                    "source": "SELECTED",
+                    "startSlots": 9
+                  },
+                  {
+                    "bonus": 1,
+                    "dolphinSlots": 0,
+                    "skillKey": "ACROBATICS",
+                    "source": "SELECTED",
+                    "startSlots": 1
+                  }
+                ],
+                "permanentLosses": [],
+                "resolvedAtCommandId": "f98a223b-b4fc-48f2-8e08-3a407cde0528",
+                "schemaVersion": 1
+              },
+              "initialInput": {
+                "baseStats": {
+                  "C": 20,
+                  "D": 20,
+                  "I": 20,
+                  "M": 20,
+                  "S": 20,
+                  "W": 20,
+                  "Z": 20
+                },
+                "build": {
+                  "pureClassOrNull": null,
+                  "raceCode": "FREE",
+                  "skillSelections": [
+                    {
+                      "skillKey": "UNARMED",
+                      "targetBonus": 7
+                    },
+                    {
+                      "skillKey": "ACROBATICS",
+                      "targetBonus": 1
+                    }
+                  ]
+                }
+              },
+              "initialSkills": [
+                {
+                  "bonus": 7,
+                  "dolphinSlots": 0,
+                  "skillKey": "UNARMED",
+                  "source": "SELECTED",
+                  "startSlots": 9
+                },
+                {
+                  "bonus": 1,
+                  "dolphinSlots": 0,
+                  "skillKey": "ACROBATICS",
+                  "source": "SELECTED",
+                  "startSlots": 1
+                }
+              ],
+              "initialStartCapacity": 10,
+              "planId": "f61af239-2504-4db7-a337-e853991c49e6",
+              "revision": 1,
+              "schemaVersion": 1
+            },
+            "rebuildPreviewOrNull": null,
+            "schemaVersion": 1
+          }
+        },
+        "selectedVersionOrNull": null,
+        "versionAttempt": {
+          "origin": {
+            "base": {
+              "artAssetKey": "symbiosis_placeholder_sentient_enemy",
+              "artSha256": "5da7ee70db7c47dabfa92522e5bc8c9855c8a0c7596764d00b8b24cebd570a3f",
+              "campaignId": "c21357d8-f2b5-455a-911f-03e6796aba84",
+              "kind": "SENTIENT",
+              "templateId": "e9507481-775b-48dd-849c-74f918cdb795",
+              "version": 2,
+              "versionId": "595e4e80-074e-46eb-8550-90354aaf1dd1"
+            },
+            "expectedRevisions": {
+              "actorVisibilityRevision": 0,
+              "projectionRevision": 26,
+              "stateRevision": 14
+            },
+            "navigationRequestId": "b7fe95f4-5ab7-467e-8d12-f4ef78d43d9c",
+            "schemaVersion": 1
+          },
+          "reason": "Открытая подлинная попытка после сохранённого V2",
+          "replacementPreviewOrNull": null,
+          "retainedMandatoryFacts": {
+            "advisorCards": [],
+            "freeSlotOrNull": {
+              "permanentStatConsequence": {
+                "M": -1,
+                "S": -1,
+                "Z": -1
+              },
+              "roll": {
+                "factId": "ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/FACT",
+                "mechanical": {
+                  "dieSides": 6,
+                  "rawFace": 1
+                },
+                "modeSnapshot": "MANUAL",
+                "originatingCommandId": "6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9",
+                "rollReceiptId": "ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/RECEIPT",
+                "rollRequestId": "ENEMY_COMPOSITION/6cd141b8-4fd2-4c35-84cd-9b96ffc2f8f9/FREE_SLOT/REQUEST"
+              },
+              "statsBefore": {
+                "M": 18,
+                "S": 18,
+                "Z": 18
+              }
+            },
+            "kind": "SENTIENT",
+            "schemaVersion": 1
+          },
+          "schemaVersion": 1
+        }
+      },
+      "producerProof": {
+        "originalReplayExact": true,
+        "newVersionReplayExact": true,
+        "physicalOriginalReplayExact": true,
+        "physicalNewVersionReplayExact": true,
+        "currentViewUnchanged": true
+      }
+    },
+    {
+      "kind": "CUSTOM_MONSTER",
+      "file": "schema23-custom-v2.sqlite.gz",
+      "schemaVersion": 23,
+      "baselineVersion": "sha256:17910b701eb50d0e659fc2845f45bb510ac66398c75fa08f71db4a4520490111",
+      "scope": {
+        "ownerDeviceId": "75c31416-3309-42d3-ba7e-e6aa5d5aa97d",
+        "gmLocalContextId": "b1d623b2-9e7c-44cf-a4de-af0ce4646429",
+        "campaignId": "23cdb9db-8be7-403e-9084-93fe5582fd91"
+      },
+      "gzipSha256": "e4786563f5fbaae747cd25f938c99c8f07643dc0fd62ab16772391b522209fbb",
+      "inflatedPreOpenSha256": "bf668fce4379cd3b941279065dabd000bd07c9ef4634dd235fb77cfa4d49fe93",
+      "inflatedBytes": 1253376,
+      "canonicalRole": "Serialized old-producer bytes before native physical witness reopen; sole future consumer input is gzip above.",
+      "originalInput": {
+        "folder": "enemy-custom-v1",
+        "file": "schema22-custom-v1.sqlite.gz",
+        "gzipSha256": "50678d9abf89b1a3c04199d53b9066ae0dfc937b52a3c53f0dc158933d9f17d2",
+        "inflatedSha256": "61f6e340d3236059f8dd3488e91e1f97c0aaf6eab2fb8874d85a25dea8d9fe19"
+      },
+      "originalCommitRequest": {
+        "messageType": "command.request",
+        "protocolVersion": 1,
+        "commandKind": "workflow-command",
+        "workflowCommandId": "UI-CMD-ENEMY-COMMIT-V1",
+        "role": "gm",
+        "commandId": "63caca13-0738-46be-8b91-1d0efee4d77e",
+        "expectedRevisions": {
+          "stateRevision": 8,
+          "projectionRevision": 12,
+          "actorVisibilityRevision": 0
+        },
+        "payload": {
+          "campaignId": "23cdb9db-8be7-403e-9084-93fe5582fd91",
+          "creationAttemptId": "0dcc6a85-4c6b-4fee-ae38-bd235ff55dee",
+          "expectedAttemptRevision": 7
+        }
+      },
+      "originalCommitResult": {
+        "replayed": false,
+        "receipt": {
+          "commandId": "63caca13-0738-46be-8b91-1d0efee4d77e",
+          "receiptId": "76dc42a4-9a42-47c0-a965-282e64fbef4a",
+          "revisions": {
+            "stateRevision": 9,
+            "projectionRevision": 13,
+            "actorVisibilityRevision": 0
+          },
+          "result": {
+            "campaignId": "23cdb9db-8be7-403e-9084-93fe5582fd91",
+            "creationAttemptId": "0dcc6a85-4c6b-4fee-ae38-bd235ff55dee",
+            "timestamp": "2026-11-12T21:42:02.704Z",
+            "workflowCommandId": "UI-CMD-ENEMY-COMMIT-V1",
+            "sourceFormId": "ENM-016",
+            "stageOrNull": null,
+            "attemptRevision": 7,
+            "committedVersionOrNull": {
+              "campaignId": "23cdb9db-8be7-403e-9084-93fe5582fd91",
+              "templateId": "f47a45e3-717a-477f-bb84-e014c2ad19c4",
+              "versionId": "495ecc7e-d55e-458e-b892-1a7946171f36",
+              "version": 1,
+              "kind": "CUSTOM_MONSTER",
+              "artAssetKey": "symbiosis_placeholder_monster",
+              "artSha256": "563c23e0190bff9b5498bc0ec46830f9209fa1d181fe163e3ea76edbab7e7e86"
+            }
+          }
+        }
+      },
+      "newVersionRequest": {
+        "messageType": "command.request",
+        "protocolVersion": 1,
+        "commandKind": "workflow-command",
+        "role": "gm",
+        "commandId": "2ab91640-48b7-4d35-aae7-9d14d9d75ee3",
+        "workflowCommandId": "UI-CMD-ENEMY-NEW-VERSION",
+        "expectedRevisions": {
+          "stateRevision": 13,
+          "projectionRevision": 23,
+          "actorVisibilityRevision": 0
+        },
+        "payload": {
+          "campaignId": "23cdb9db-8be7-403e-9084-93fe5582fd91",
+          "creationAttemptId": "ee68211d-705d-4a15-8ad7-79318943d45b",
+          "expectedAttemptRevision": 2,
+          "reason": "Исторический полный N+1 без замены конфигурации"
+        }
+      },
+      "newVersionResult": {
+        "replayed": false,
+        "receipt": {
+          "commandId": "2ab91640-48b7-4d35-aae7-9d14d9d75ee3",
+          "receiptId": "0093c773-bc9e-4600-ae6f-4dff691e08cf",
+          "revisions": {
+            "stateRevision": 14,
+            "projectionRevision": 24,
+            "actorVisibilityRevision": 0
+          },
+          "result": {
+            "campaignId": "23cdb9db-8be7-403e-9084-93fe5582fd91",
+            "creationAttemptId": "ee68211d-705d-4a15-8ad7-79318943d45b",
+            "timestamp": "2026-11-14T06:17:55.777Z",
+            "workflowCommandId": "UI-CMD-ENEMY-NEW-VERSION",
+            "sourceFormId": "ENM-017",
+            "stageOrNull": null,
+            "attemptRevision": 2,
+            "committedVersionOrNull": {
+              "campaignId": "23cdb9db-8be7-403e-9084-93fe5582fd91",
+              "templateId": "f47a45e3-717a-477f-bb84-e014c2ad19c4",
+              "versionId": "2dbbb120-4ea6-467a-a9a4-d455ec572e72",
+              "version": 2,
+              "kind": "CUSTOM_MONSTER",
+              "artAssetKey": "symbiosis_placeholder_monster",
+              "artSha256": "563c23e0190bff9b5498bc0ec46830f9209fa1d181fe163e3ea76edbab7e7e86"
+            }
+          }
+        }
+      },
+      "originalV1Record": {
+        "record_json": "{\"actorId\":\"9a6570b8-166e-49eb-9703-733cd7bf1035\",\"attempt\":{\"activeAdvisorCardIdOrNull\":null,\"advisorCards\":[],\"attackOrNull\":{\"actionCost\":1,\"additionalDamageDefinition\":{\"mode\":\"CONSTANT\",\"value\":1.5},\"category\":\"MONSTER_ATTACK\",\"distance\":\"MELEE\",\"penetrationDefinition\":{\"mode\":\"ZERO\"}},\"attemptId\":\"0dcc6a85-4c6b-4fee-ae38-bd235ff55dee\",\"campaignId\":\"23cdb9db-8be7-403e-9084-93fe5582fd91\",\"compositionOrNull\":{\"advisorCardIdOrNull\":null,\"confirmationCommandIdOrNull\":\"77818dc9-d097-463f-ad22-7c0add188879\",\"phase\":\"CONFIRMED\",\"previewCommandId\":\"46562d17-d789-43da-ad12-96af53136a9f\",\"selection\":{\"mode\":\"NONE\"},\"symbiontInstanceIdOrNull\":null},\"identityOrNull\":{\"creatureType\":\"CUSTOM_MONSTER\",\"description\":\"Actual delivered B16 runtime before source288\",\"name\":\"Исторический CUSTOM NONE #258\"},\"kind\":\"CUSTOM_MONSTER\",\"physicsOrNull\":{\"anatomyMode\":\"NONSTANDARD_TORSO_ONLY\",\"metadataHasNoMechanicalEffect\":true,\"movement\":\"Ходит\",\"naturalArmorDefinition\":{\"bonus\":3,\"dieSides\":20,\"mode\":\"PER_RESOLUTION_ROLL\",\"multiplier\":2},\"normalizedHitRegion\":\"TORSO\",\"physicalTags\":[\"Каменная кожа\"],\"size\":\"Небольшой\"},\"revision\":7,\"schemaVersion\":1,\"statsOrNull\":{\"ageYears\":1,\"baseMaxHP\":7,\"baseStats\":{\"C\":20,\"D\":20,\"I\":20,\"M\":20,\"S\":20,\"W\":20,\"Z\":20},\"massKg\":5.1,\"rollReceiptOrNull\":null,\"statMode\":\"MANUAL\"}},\"historyId\":\"d9a202c5-c8db-4cb9-90d2-f46566dc3461\",\"identity\":{\"artAssetKey\":\"symbiosis_placeholder_monster\",\"artSha256\":\"563c23e0190bff9b5498bc0ec46830f9209fa1d181fe163e3ea76edbab7e7e86\",\"campaignId\":\"23cdb9db-8be7-403e-9084-93fe5582fd91\",\"kind\":\"CUSTOM_MONSTER\",\"templateId\":\"f47a45e3-717a-477f-bb84-e014c2ad19c4\",\"version\":1,\"versionId\":\"495ecc7e-d55e-458e-b892-1a7946171f36\"},\"operation\":\"CREATE_CUSTOM_MONSTER_TEMPLATE\",\"operationId\":\"63caca13-0738-46be-8b91-1d0efee4d77e\",\"sheet\":{\"advisorOrNull\":null,\"alive\":true,\"artAssetKey\":\"symbiosis_placeholder_monster\",\"attack\":{\"actionCost\":1,\"additionalDamageDefinition\":{\"mode\":\"CONSTANT\",\"value\":1.5},\"category\":\"MONSTER_ATTACK\",\"distance\":\"MELEE\",\"penetrationDefinition\":{\"mode\":\"ZERO\"}},\"conscious\":true,\"currentHP\":7,\"effectiveMaxHP\":7,\"identity\":{\"creatureType\":\"CUSTOM_MONSTER\",\"description\":\"Actual delivered B16 runtime before source288\",\"name\":\"Исторический CUSTOM NONE #258\"},\"kind\":\"CUSTOM_MONSTER\",\"permanentStats\":{\"C\":20,\"D\":20,\"I\":20,\"M\":20,\"S\":20,\"W\":20,\"Z\":20},\"physics\":{\"anatomyMode\":\"NONSTANDARD_TORSO_ONLY\",\"metadataHasNoMechanicalEffect\":true,\"movement\":\"Ходит\",\"naturalArmorDefinition\":{\"bonus\":3,\"dieSides\":20,\"mode\":\"PER_RESOLUTION_ROLL\",\"multiplier\":2},\"normalizedHitRegion\":\"TORSO\",\"physicalTags\":[\"Каменная кожа\"],\"size\":\"Небольшой\"},\"progressionPolicy\":\"NO_XP_PROGRESSION\",\"ruleFacts\":[],\"stats\":{\"ageYears\":1,\"baseMaxHP\":7,\"baseStats\":{\"C\":20,\"D\":20,\"I\":20,\"M\":20,\"S\":20,\"W\":20,\"Z\":20},\"massKg\":5.1,\"rollReceiptOrNull\":null,\"statMode\":\"MANUAL\"},\"symbiontOrNull\":null},\"sourceBaselineVersion\":\"sha256:73c143c90f588da5a1166b1456991aa8aafd4cde4101fac839a2967c27e68a11\",\"timestamp\":\"2026-11-12T21:42:02.704Z\"}",
+        "record_sha256": "777a6d5f78e51f95dd7785263a200d5e8466059212618a155a6a8c7827211eae"
+      },
+      "currentVersion": {
+        "campaignId": "23cdb9db-8be7-403e-9084-93fe5582fd91",
+        "templateId": "f47a45e3-717a-477f-bb84-e014c2ad19c4",
+        "versionId": "2dbbb120-4ea6-467a-a9a4-d455ec572e72",
+        "version": 2,
+        "kind": "CUSTOM_MONSTER",
+        "artAssetKey": "symbiosis_placeholder_monster",
+        "artSha256": "563c23e0190bff9b5498bc0ec46830f9209fa1d181fe163e3ea76edbab7e7e86"
+      },
+      "openAttempt": {
+        "attemptOrNull": {
+          "activeAdvisorCardIdOrNull": null,
+          "advisorCards": [],
+          "attackOrNull": {
+            "actionCost": 1,
+            "additionalDamageDefinition": {
+              "mode": "CONSTANT",
+              "value": 1.5
+            },
+            "category": "MONSTER_ATTACK",
+            "distance": "MELEE",
+            "penetrationDefinition": {
+              "mode": "ZERO"
+            }
+          },
+          "attemptId": "7f90f2f0-3845-4c3b-9a9d-2c511dc46d1f",
+          "campaignId": "23cdb9db-8be7-403e-9084-93fe5582fd91",
+          "compositionOrNull": {
+            "advisorCardIdOrNull": null,
+            "confirmationCommandIdOrNull": "77818dc9-d097-463f-ad22-7c0add188879",
+            "phase": "CONFIRMED",
+            "previewCommandId": "46562d17-d789-43da-ad12-96af53136a9f",
+            "selection": {
+              "mode": "NONE"
+            },
+            "symbiontInstanceIdOrNull": null
+          },
+          "identityOrNull": {
+            "creatureType": "CUSTOM_MONSTER",
+            "description": "Actual delivered B16 runtime before source288",
+            "name": "Незавершённая следующая версия CUSTOM_MONSTER"
+          },
+          "kind": "CUSTOM_MONSTER",
+          "physicsOrNull": {
+            "anatomyMode": "NONSTANDARD_TORSO_ONLY",
+            "metadataHasNoMechanicalEffect": true,
+            "movement": "Ходит",
+            "naturalArmorDefinition": {
+              "bonus": 3,
+              "dieSides": 20,
+              "mode": "PER_RESOLUTION_ROLL",
+              "multiplier": 2
+            },
+            "normalizedHitRegion": "TORSO",
+            "physicalTags": ["Каменная кожа"],
+            "size": "Небольшой"
+          },
+          "revision": 2,
+          "schemaVersion": 1,
+          "statsOrNull": {
+            "ageYears": 1,
+            "baseMaxHP": 7,
+            "baseStats": {
+              "C": 20,
+              "D": 20,
+              "I": 20,
+              "M": 20,
+              "S": 20,
+              "W": 20,
+              "Z": 20
+            },
+            "massKg": 5.1,
+            "rollReceiptOrNull": null,
+            "statMode": "MANUAL"
+          }
+        },
+        "selectedVersionOrNull": null,
+        "versionAttempt": {
+          "origin": {
+            "base": {
+              "artAssetKey": "symbiosis_placeholder_monster",
+              "artSha256": "563c23e0190bff9b5498bc0ec46830f9209fa1d181fe163e3ea76edbab7e7e86",
+              "campaignId": "23cdb9db-8be7-403e-9084-93fe5582fd91",
+              "kind": "CUSTOM_MONSTER",
+              "templateId": "f47a45e3-717a-477f-bb84-e014c2ad19c4",
+              "version": 2,
+              "versionId": "2dbbb120-4ea6-467a-a9a4-d455ec572e72"
+            },
+            "expectedRevisions": {
+              "actorVisibilityRevision": 0,
+              "projectionRevision": 25,
+              "stateRevision": 14
+            },
+            "navigationRequestId": "7f90f2f0-3845-4c3b-9a9d-2c511dc46d1f",
+            "schemaVersion": 1
+          },
+          "reason": "Открытая подлинная попытка после сохранённого V2",
+          "replacementPreviewOrNull": null,
+          "retainedMandatoryFacts": {
+            "advisorCards": [],
+            "kind": "CUSTOM_MONSTER",
+            "schemaVersion": 1
+          },
+          "schemaVersion": 1,
+          "unconfiguredAdvisorCardIdOrNull": null
+        }
+      },
+      "producerProof": {
+        "originalReplayExact": true,
+        "newVersionReplayExact": true,
+        "physicalOriginalReplayExact": true,
+        "physicalNewVersionReplayExact": true,
+        "currentViewUnchanged": true
+      }
+    }
+  ],
+  "limits": [
+    "Подлинный старый producer259: полные V1/V2 и следующая открытая попытка обеих kind; исходные команды/квитанции и JSON/hash сохранены.",
+    "gzip содержит канонический serialized SQLite до отдельного native physical reopen; physical witness и абсолютные рабочие пути оставлены во внешнем evidence.",
+    "Owner verifier fixture обходит password KDF; LAN/WS/Chrome и динамический счётчик native sampler в producer не проверялись.",
+    "Успех producer на23 не доказывает миграцию/owning replay потребителя24; это отдельная проверка."
+  ]
+}

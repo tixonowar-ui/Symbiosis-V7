@@ -147,6 +147,7 @@ describe('strict fixture Atlas byte patches', () => {
       direction: reverse ? 'reverse' : 'forward',
     })),
   );
+  // Full clean01 Git rows took 44.193/31.545s at 30s; finite 90s covers the same 34 direction rows.
   it.each(edges)(
     'matches real Git for patch $name $direction with both full release seals',
     ({ edge, reverse }) => {
@@ -198,6 +199,7 @@ describe('strict fixture Atlas byte patches', () => {
         expect(patch.equals(originalPatch)).toBe(true);
       });
     },
+    90_000,
   );
 
   it.each([false, true])('returns detached UTF-8 buffers in direction reverse=%s', (reverse) => {

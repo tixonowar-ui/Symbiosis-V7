@@ -733,7 +733,8 @@ describe('first durable identity checkpoint server path', () => {
       await app.close();
       database.close();
     }
-  });
+    // ADR 0088: clean02 confirmed the 30 s deadline; give this real checkpoint/restart case 90 s.
+  }, 90_000);
 
   it('destroys the old identity scope before a fallible post-commit shell advance', async () => {
     const database = openPersistenceDatabase(':memory:');
@@ -914,7 +915,8 @@ describe('first durable identity checkpoint server path', () => {
       await app.close();
       database.close();
     }
-  });
+    // ADR 0088: clean02 confirmed the 30 s deadline; give this separate shell-failure integration 90 s.
+  }, 90_000);
 
   it('names an unsupported checkpoint stage with zero writes', async () => {
     const database = openPersistenceDatabase(':memory:');

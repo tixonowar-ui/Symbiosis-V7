@@ -5,6 +5,7 @@ import type { PresentedBaseForm } from '@shared/wire-v2-protocol.js';
 import {
   ENEMY_PLACEHOLDER,
   enemyAuthoringActions,
+  enemyMonsterStatRollBinding,
   enemyWorkflowRequestValue,
   isEnemyAuthoringForm,
   isSentientEnemyAuthoringForm,
@@ -32,6 +33,7 @@ import type {
   CampaignPrivateOwnerValidator,
   GmRequestReviewScope,
   GmRequestReviewViewState,
+  StoredGmRequestQueueEvent,
 } from '../persistence/campaign-creation.js';
 import type { GmRequestReviewSource } from '../persistence/network-device-request.js';
 import { networkApplicationStorage as s } from '../persistence/network-local-application.js';
@@ -68,6 +70,7 @@ import {
 } from './custom-monster-preparation.js';
 import { customMonsterStatsValue } from '@shared/custom-monster.js';
 import { prepareCustomMonsterCommand, projectCustomMonster } from './custom-monster-application.js';
+import { prepareMonsterStatRollCommand } from './monster-stat-roll-preparation.js';
 import { diffEnemyVersionValues } from '../domain/entities/enemy-template/version-configuration.js';
 import {
   enemyVersionHistoryValue,
@@ -85,6 +88,7 @@ import {
 } from './enemy-version-preparation.js';
 import { collectEnemyVersionMandatoryFacts } from '../persistence/enemy-version-source.js';
 import { enemyVersionLegacyEffectRequiresUpgrade } from '../domain/entities/enemy-template/version-configuration.js';
+import { monsterStatGeneration } from '@shared/monster-stat-roll-presentation.js';
 
 function validateAttempt(catalog: EnemyAuthoringSourceCatalog, value: EnemyAttempt): void {
   const attempt = enemyAttemptValue(value);
@@ -146,7 +150,7 @@ export function validateEnemyAuthoringSource(
             event.mutation.cause.committedVersionOrNull?.kind === 'CUSTOM_MONSTER')),
     );
   if (monsterRelevant) {
-    if (![22, 23].includes(readAppliedMigrationVersion(db))) return s.fail('SOURCE_CHANGED');
+    if (![22, 23, 24].includes(readAppliedMigrationVersion(db))) return s.fail('SOURCE_CHANGED');
     catalog.assertMonsterCurrent();
   }
   const versionRelevant =
@@ -156,7 +160,17 @@ export function validateEnemyAuthoringSource(
         event.view.enemyAuthoring?.versionAttempt !== undefined ||
         (event.mutation.kind === 'NAV' && event.mutation.request.actionKey === 'ENM-001::CTA::008'),
     );
-  if (versionRelevant && readAppliedMigrationVersion(db) !== 23) return s.fail('SOURCE_CHANGED');
+  if (versionRelevant && ![23, 24].includes(readAppliedMigrationVersion(db)))
+    return s.fail('SOURCE_CHANGED');
+  const statRollRelevant =
+    source.viewOrNull?.enemyAuthoring?.monsterStatRoll !== undefined ||
+    state.events.some(
+      (event) =>
+        event.view.enemyAuthoring?.monsterStatRoll !== undefined ||
+        (event.mutation.kind === 'ENEMY_AUTHORING' &&
+          event.mutation.cause.preparedMonsterStatRoll !== undefined),
+    );
+  if (statRollRelevant && readAppliedMigrationVersion(db) !== 24) return s.fail('SOURCE_CHANGED');
   validateEnemyCompositionReservations(db, source.scope, state.events);
   const versions = readEnemyVersions(db, source.scope, state.events);
   for (const [index, event] of state.events.entries()) {
@@ -194,6 +208,39 @@ export function validateEnemyAuthoringSource(
       } else if (original.kind === 'CUSTOM_MONSTER') {
         if (mutation.preparedComposition !== undefined || mutation.preparedSkillState !== undefined)
           return s.fail('SOURCE_CHANGED');
+        if (
+          mutation.request.workflowCommandId === 'UI-CMD-MONSTER-STATS-ROLL-ONCE' ||
+          mutation.request.payload.stage === 'MONSTER_STAT_DRAFT'
+        ) {
+          const previous = state.events[index - 1]?.view ?? s.fail('SOURCE_CHANGED');
+          const prepared = mutation.preparedMonsterStatRoll ?? s.fail('SOURCE_CHANGED');
+          let faceIndex = 0;
+          const expected = prepareMonsterStatRollCommand(
+            previous.enemyAuthoring ?? s.fail('SOURCE_CHANGED'),
+            previous.formId,
+            mutation.request,
+            {
+              operation: () => ({
+                operationId: mutation.request.commandId,
+                randomReceiptId: mutation.receiptId,
+                attemptRevision: original.revision,
+                authorMasterProfileId: mutation.authorMasterProfileId,
+                timestamp: mutation.timestamp,
+                sourceBaselineVersion: mutation.sourceBaselineVersion,
+                artSha256: catalog.monsterArt.sha256,
+              }),
+              newSeed: () => prepared.generationSeed,
+              sampleNaturalR20: () =>
+                prepared.randomReceiptOrNull?.dieFaces[faceIndex++] ?? s.fail('SOURCE_CHANGED'),
+            },
+          );
+          if (
+            !s.same(expected.preparedMonsterStatRoll, prepared) ||
+            faceIndex !==
+              (mutation.request.workflowCommandId === 'UI-CMD-MONSTER-STATS-ROLL-ONCE' ? 7 : 0)
+          )
+            return s.fail('SOURCE_CHANGED');
+        } else if (mutation.preparedMonsterStatRoll !== undefined) return s.fail('SOURCE_CHANGED');
         if (mutation.request.payload.stage === 'MONSTER_STATS') {
           const expectedKnowledge = prepareCustomMonsterKnowledge(
             catalog.monster,
@@ -425,6 +472,12 @@ export function createEnemyAuthoringApplication(d: {
             })
           )
             return s.fail('STALE_REVISION');
+          if (
+            attempt.kind !== 'CUSTOM_MONSTER' &&
+            (request.workflowCommandId === 'UI-CMD-MONSTER-STATS-ROLL-ONCE' ||
+              request.payload.stage === 'MONSTER_STAT_DRAFT')
+          )
+            return s.fail('INVALID_INPUT');
           if (request.payload.stage === 'VERSION_CONFIGURATION') {
             const state = view.enemyAuthoring?.versionAttempt ?? s.fail('UNAVAILABLE');
             return {
@@ -648,7 +701,9 @@ export function createEnemyAuthoringApplication(d: {
         .transaction(() => {
           let versions: readonly EnemyStoredVersion[] = [];
           let monsterDiceMode: 'AUTO' | 'MANUAL' | undefined;
+          let owningEvents: readonly StoredGmRequestQueueEvent[] = [];
           const source = d.readCurrent((source, state) => {
+            owningEvents = state.events;
             if (!s.same(source.scope, d.scope)) return s.fail('FOREIGN_OWNER');
             versions = validateEnemyAuthoringSource(
               d.database,
@@ -754,6 +809,31 @@ export function createEnemyAuthoringApplication(d: {
               monsterDiceMode ?? s.fail('SOURCE_CHANGED'),
               versionHistory,
               versionEditor,
+              version?.attempt.kind === 'CUSTOM_MONSTER'
+                ? (() => {
+                    const index = owningEvents.findIndex(
+                      (event) =>
+                        event.mutation.kind === 'ENEMY_AUTHORING' &&
+                        event.mutation.cause.request.commandId === version.operationId,
+                    );
+                    const previous = owningEvents[index - 1]?.view.enemyAuthoring;
+                    // The selected commit's earlier prefix owns this receipt, never a later canceled attempt.
+                    if (
+                      index < 1 ||
+                      previous === undefined ||
+                      !s.same(previous.attemptOrNull, version.attempt)
+                    )
+                      return s.fail('SOURCE_CHANGED');
+                    return previous.monsterStatRoll === undefined
+                      ? null
+                      : monsterStatGeneration(
+                          enemyMonsterStatRollBinding(previous),
+                          version.attempt.revision,
+                          version.attempt.statsOrNull,
+                          previous.monsterStatRoll,
+                        );
+                  })()
+                : null,
             );
           if (
             version !== null &&

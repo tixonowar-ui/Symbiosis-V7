@@ -222,6 +222,8 @@ import {
   type NpcStoredDerivationVersion,
   type NpcVersionDerivationEvidence,
   type NpcDerivationPrefix,
+  type NpcGmPrimitiveReadSession,
+  withNpcGmPrimitiveReadSession,
 } from '../persistence/npc-gm-source.js';
 import type {
   NpcAttempt,
@@ -1318,6 +1320,7 @@ export function createNpcOrdinaryDomainReaders(
     context: NpcAttemptReadContext,
     requests: readonly NpcInventoryRequestEntry[],
     calendar: NpcCalendarReadContext,
+    session?: NpcGmPrimitiveReadSession,
   ): NpcAttemptReadContext {
     const target = attempt.targetOrNull ?? fail('restore requires a committed predecessor');
     const history = inventoryHistoryContext(
@@ -1345,6 +1348,7 @@ export function createNpcOrdinaryDomainReaders(
       attempt.scope,
       attempt.candidateNpcUuid,
       target.expectedCurrentVersion,
+      session,
     ).map((entry) => entry.stored.prefix);
     const itemBindings = [...context.itemBindings],
       linkedSets = [...(context.linkedSets ?? [])],
@@ -1371,6 +1375,8 @@ export function createNpcOrdinaryDomainReaders(
           attempt.scope,
           attempt.candidateNpcUuid,
           coatingInstanceId,
+          null,
+          session,
         );
         const input = actual.request.preparation.input;
         equal(input.targetItemInstanceId, request.itemInstanceId, 'restored coating carrier');
@@ -1447,6 +1453,7 @@ export function createNpcOrdinaryDomainReaders(
           attempt.scope,
           attempt.candidateNpcUuid,
           custom.reference.profileVersionId,
+          session,
         );
         equal(
           [actual.binding.itemInstanceId, actual.binding.reference],
@@ -1624,9 +1631,25 @@ export function createNpcOrdinaryDomainReaders(
     inheritedSnapshotOrNull: ReturnType<typeof readSnapshot> | null,
     revision = prefix.openAttempt.revision,
     operationId = prefix.openOperationId,
+    session?: NpcGmPrimitiveReadSession,
   ): NpcAttemptReadContext {
     const a = prefix.openAttempt;
     requireCalendar(calendar, a.scope);
+    // Reuse compilation through recursive restore reads; every proof still checks live SQL.
+    // The owner closes this reader before returning the constructed context.
+    if (session === undefined)
+      return withNpcGmPrimitiveReadSession(db, a.scope, (owned) =>
+        contextAt(
+          evidence,
+          prefix,
+          calendar,
+          inheritedSnapshotOrNull,
+          revision,
+          operationId,
+          owned,
+        ),
+      );
+
     if (a.targetOrNull === null && inheritedSnapshotOrNull !== null)
       return fail('unexpected checked inherited snapshot');
     const rows = prefix.itemReservations.filter((r) => r.attemptRevision <= revision);
@@ -1664,6 +1687,7 @@ export function createNpcOrdinaryDomainReaders(
             a.scope,
             a.candidateNpcUuid,
             row.profileVersionId,
+            session,
           );
           equal(
             [actual.operationId, actual.npcDraftId, actual.attemptRevision, actual.eventSha256],
@@ -1769,6 +1793,8 @@ export function createNpcOrdinaryDomainReaders(
           a.scope,
           a.candidateNpcUuid,
           coating.coatingInstanceId,
+          null,
+          session,
         );
         coatingBindings.push({
           coatingInstanceId: coating.coatingInstanceId,
@@ -1786,6 +1812,8 @@ export function createNpcOrdinaryDomainReaders(
           a.scope,
           a.candidateNpcUuid,
           archived.coatingInstanceId,
+          null,
+          session,
         );
         equal(archived.preparationOperationId, actual.operationId, 'archived preparation origin');
         coatingBindings.push({
@@ -1808,6 +1836,8 @@ export function createNpcOrdinaryDomainReaders(
           a.scope,
           a.candidateNpcUuid,
           mode.effectInstanceId,
+          null,
+          session,
         );
         if (!runtimeEffectBindings.some((row) => row.effectInstanceId === mode.effectInstanceId))
           runtimeEffectBindings.push({
@@ -1831,6 +1861,7 @@ export function createNpcOrdinaryDomainReaders(
         a.scope,
         a.candidateNpcUuid,
         a.targetOrNull.expectedCurrentVersion,
+        session,
       ).map((entry) => entry.stored.prefix);
       for (const set of priorPrefixes.flatMap((p) =>
         p.compositeReservations.map((r) => r.binding),
@@ -1864,6 +1895,8 @@ export function createNpcOrdinaryDomainReaders(
             a.scope,
             a.candidateNpcUuid,
             trauma.trauma.traumaInstanceId,
+            null,
+            session,
           );
           if (!traumaBindings.some((b) => b.traumaInstanceId === fact.traumaInstanceId))
             traumaBindings.push({
@@ -1880,6 +1913,8 @@ export function createNpcOrdinaryDomainReaders(
           a.scope,
           a.candidateNpcUuid,
           symbiont.symbiontInstanceId,
+          null,
+          session,
         );
         if (!symbiontBindings.some((b) => b.symbiontInstanceId === fact.symbiontInstanceId))
           symbiontBindings.push({
@@ -1896,6 +1931,8 @@ export function createNpcOrdinaryDomainReaders(
           a.scope,
           a.candidateNpcUuid,
           wound.woundInstanceId,
+          null,
+          session,
         );
         if (!woundBindings.some((b) => b.woundInstanceId === fact.woundInstanceId))
           woundBindings.push({
@@ -1912,6 +1949,8 @@ export function createNpcOrdinaryDomainReaders(
             a.scope,
             a.candidateNpcUuid,
             effect.effectInstanceId,
+            null,
+            session,
           );
           if (!runtimeEffectBindings.some((row) => row.effectInstanceId === fact.effectInstanceId))
             runtimeEffectBindings.push({
@@ -1944,6 +1983,8 @@ export function createNpcOrdinaryDomainReaders(
           a.scope,
           a.candidateNpcUuid,
           effect.effectInstanceId,
+          null,
+          session,
         );
         if (!effectBindings.some((r) => r.effectInstanceId === fact.effectInstanceId))
           effectBindings.push({
@@ -1993,6 +2034,7 @@ export function createNpcOrdinaryDomainReaders(
         inheritedSnapshotOrNull,
         restored.previous.revision,
         restored.previousOperationId,
+        session,
       );
       const scoped = npcEditorForItemAttempt(editor, sources.inventory, before);
       const draft = applyNpcStageInput(
@@ -2034,7 +2076,7 @@ export function createNpcOrdinaryDomainReaders(
           },
           request.preparation.itemInstanceId,
         );
-        result = bindRestoredInventory(a, result, selected, calendar);
+        result = bindRestoredInventory(a, result, selected, calendar, session);
         assertCompletedInventoryPrefix(completed);
       } finally {
         completedInventoryPrefix = parent;
@@ -2502,7 +2544,7 @@ export function createNpcOrdinaryDomainReaders(
     evidence: NpcVersionDerivationEvidence,
     calendar: NpcCalendarReadContext,
     pending: NpcPendingCommitEvidence | null,
-  ) {
+  ): ReturnType<typeof poisonReaders.context> | null {
     if (
       !Object.hasOwn(
         s.object(s.object(evidence.current.openAttempt.values)['initialState']),
@@ -2515,10 +2557,36 @@ export function createNpcOrdinaryDomainReaders(
       evidence.committedOrNull === null
         ? calendar
         : historicalCalendar(evidence.committedOrNull.operation, calendar);
-    return poisonReaders.context(evidence.current.openAttempt, current, {
-      operationId: evidence.target.commitOperationId,
-      committedAt: time.committedAt,
-    });
+    const read = () =>
+      poisonReaders.context(evidence.current.openAttempt, current, {
+        operationId: evidence.target.commitOperationId,
+        committedAt: time.committedAt,
+      });
+    if (evidence.previousOrNull === null) return read();
+    // Nested coating/mode reads still check their current SQL and original clocks.
+    // Keep only this invocation's checked saved predecessor available until they return.
+    const source = initialStateSourceBasis(evidence.current.openAttempt, current);
+    equal(
+      source.evidence.current.openAttempt,
+      evidence.current.openAttempt,
+      'poison owner attempt',
+    );
+    equal(
+      source.evidence.previousOrNull?.record ?? null,
+      evidence.previousOrNull.record,
+      'poison owner saved predecessor',
+    );
+    const completed = source.completedPrefix ?? fail('missing checked poison owner predecessor');
+    assertCompletedInventoryPrefix(completed);
+    const parent = completedInventoryPrefix;
+    completedInventoryPrefix = completed;
+    try {
+      const result = read();
+      assertCompletedInventoryPrefix(completed);
+      return result;
+    } finally {
+      completedInventoryPrefix = parent;
+    }
   }
   type SnapshotPoisonRead = NonNullable<ReturnType<typeof poisonState>> & {
     readonly evidence: NpcVersionDerivationEvidence;

@@ -9,6 +9,7 @@ import {
   CAMPAIGN_LOBBY_TABLES,
 } from './migrations/0013-campaign-lobby.js';
 import { createHash } from 'node:crypto';
+import { hasStoredIdentity } from './identity-existence.js';
 import { types } from 'node:util';
 import type Database from 'better-sqlite3';
 import type { PublicCandidateRef } from '@shared/device-admission.js';
@@ -924,7 +925,8 @@ function schema(db: Database.Database): void {
     row['version'] !== 20 &&
     row['version'] !== 21 &&
     row['version'] !== 22 &&
-    row['version'] !== 23
+    row['version'] !== 23 &&
+    row['version'] !== 24
   )
     return fail();
   if (
@@ -938,7 +940,8 @@ function schema(db: Database.Database): void {
     row['version'] === 20 ||
     row['version'] === 21 ||
     row['version'] === 22 ||
-    row['version'] === 23
+    row['version'] === 23 ||
+    row['version'] === 24
   )
     probeSchemaTables(db, CAMPAIGN_LOBBY_TABLES);
   if (db.prepare('SELECT 1 FROM schema_migration WHERE version=14').get() !== undefined)
@@ -952,7 +955,8 @@ function schema(db: Database.Database): void {
     row['version'] === 20 ||
     row['version'] === 21 ||
     row['version'] === 22 ||
-    row['version'] === 23
+    row['version'] === 23 ||
+    row['version'] === 24
   )
     probeSchemaTables(db, NPC_TABLES);
   probeSchemaTables(db, NETWORK_APPLICATION_TABLES);
@@ -969,7 +973,8 @@ function schema(db: Database.Database): void {
     row['version'] === 20 ||
     row['version'] === 21 ||
     row['version'] === 22 ||
-    row['version'] === 23
+    row['version'] === 23 ||
+    row['version'] === 24
   )
     probeSchemaTables(db, DEVICE_REQUEST_REVIEW_TABLES);
   if (
@@ -984,7 +989,8 @@ function schema(db: Database.Database): void {
     row['version'] === 20 ||
     row['version'] === 21 ||
     row['version'] === 22 ||
-    row['version'] === 23
+    row['version'] === 23 ||
+    row['version'] === 24
   )
     probeSchemaTables(db, CAMPAIGN_ADMISSION_TABLES);
 }
@@ -1006,7 +1012,8 @@ function hasRequestReviewSchema(db: Database.Database): boolean {
     version !== 20 &&
     version !== 21 &&
     version !== 22 &&
-    version !== 23
+    version !== 23 &&
+    version !== 24
   )
     return fail();
   return (
@@ -1022,7 +1029,8 @@ function hasRequestReviewSchema(db: Database.Database): boolean {
     version === 20 ||
     version === 21 ||
     version === 22 ||
-    version === 23
+    version === 23 ||
+    version === 24
   );
 }
 function owner(db: Database.Database, id: string): void {
@@ -2455,7 +2463,8 @@ function readHistory(
     version === 20 ||
     version === 21 ||
     version === 22 ||
-    version === 23
+    version === 23 ||
+    version === 24
   ) {
     for (const [table, records, key] of [
       ['local_network_lane_binding', review.lanes, 'request_id'],
@@ -2817,7 +2826,7 @@ function assertUnusedOutsideNpc(db: Database.Database, id: string): void {
     ['campaign_character_copy', ['campaign_character_id']],
   ] as const)
     for (const column of columns)
-      if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
+      if (hasStoredIdentity(db, table, column, id)) return fail('IDEMPOTENCY_CONFLICT');
   if (db.prepare('SELECT 1 FROM schema_migration WHERE version=13').get() !== undefined)
     for (const [table, columns] of [
       ...CAMPAIGN_LOBBY_IDENTITIES,
@@ -2826,7 +2835,7 @@ function assertUnusedOutsideNpc(db: Database.Database, id: string): void {
         : CAMPAIGN_LIFECYCLE_IDENTITIES),
     ])
       for (const column of columns)
-        if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
+        if (hasStoredIdentity(db, table, column, id)) return fail('IDEMPOTENCY_CONFLICT');
   if (hasRequestReviewSchema(db))
     for (const [table, columns] of [
       ['hosted_device_request_decision', ['command_id', 'receipt_id']],
@@ -2835,11 +2844,11 @@ function assertUnusedOutsideNpc(db: Database.Database, id: string): void {
       ['gm_request_queue_event', ['event_id']],
     ] as const)
       for (const column of columns)
-        if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
+        if (hasStoredIdentity(db, table, column, id)) return fail('IDEMPOTENCY_CONFLICT');
   if (db.prepare('SELECT 1 FROM schema_migration WHERE version=12').get() !== undefined)
     for (const [table, columns] of CAMPAIGN_ADMISSION_IDENTITIES)
       for (const column of columns)
-        if (at(db, table, column, id) !== undefined) return fail('IDEMPOTENCY_CONFLICT');
+        if (hasStoredIdentity(db, table, column, id)) return fail('IDEMPOTENCY_CONFLICT');
 }
 function admissionMutationKind(value: unknown): unknown {
   return input(() => object(object(value)['mutation'])['kind']);

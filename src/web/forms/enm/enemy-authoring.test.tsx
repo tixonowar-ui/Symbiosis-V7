@@ -1050,9 +1050,9 @@ it.each(['SENTIENT', 'CUSTOM_MONSTER'] as const)(
         container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Причина новой версии"]')
           ?.value,
       ).toBe(source.reasonData.reason);
-      expect(container.textContent?.includes('Однократная генерация характеристик')).toBe(
-        kind === 'CUSTOM_MONSTER',
-      );
+      expect(
+        container.querySelector('[aria-label="Однократные характеристики монстра"]') !== null,
+      ).toBe(kind === 'CUSTOM_MONSTER');
       if (kind === 'SENTIENT') {
         const attempt = source.initial.context.attemptOrNull;
         if (attempt?.kind !== 'SENTIENT' || attempt.compositionOrNull === null)

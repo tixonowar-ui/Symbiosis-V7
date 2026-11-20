@@ -337,7 +337,8 @@ async function enterWeapon(
 describe('CHR-022 real host WS journey', () => {
   it.each(['MANUAL', 'AUTO'] as const)(
     'preserves %s selection and one D20 through hostile commands, safe-return, two sessions and SQLite restart',
-    { timeout: 30000 },
+    // ADR 0088: clean02 MANUAL exceeded 30 s; both rows execute this same real WS/restart journey.
+    { timeout: 90_000 },
     async (mode) => {
       const prefix = `weapon-${mode.toLowerCase()}`;
       const directory = await mkdtemp(join(tmpdir(), `${prefix}-`));

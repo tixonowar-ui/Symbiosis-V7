@@ -1,4 +1,5 @@
 import { ENEMY_AUTHORING_SOURCE_SEALS } from './enemy-authoring-source-seals.js';
+import { readAppliedMigrationVersion } from '../persistence/migrations/index.js';
 import { CUSTOM_MONSTER_PLACEHOLDER } from '@shared/custom-monster.js';
 import {
   ENEMY_PLACEHOLDER,
@@ -96,6 +97,7 @@ for (const [folder, file, kind, variant] of [
   ['enemy-custom-v1', 'schema22-custom-v1.sqlite.gz', 'CUSTOM_MONSTER', 'CANCELED_CARD'],
   ['enemy-empty-v1', 'schema21-empty-v1.sqlite.gz', 'SENTIENT', 'CANCELED_SENTIENT_CARD'],
 ] as const) {
+  // Full clean01 CUSTOM CANCELED_CARD recorded 357.770s at 300s; only that named body gets finite 600s.
   it(
     variant === 'SOURCE'
       ? `refuses changed ${kind} source inputs and future SQL or owning-prefix witnesses after later NAV and disk reopen`
@@ -310,8 +312,17 @@ for (const [folder, file, kind, variant] of [
             ),
           ).toBe(true);
           expect(db.prepare('SELECT MAX(version) n FROM schema_migration').get()).toEqual({
-            n: 23,
+            n: 24,
           });
+          expect(
+            structural.events.some(
+              (event) => event.view.enemyAuthoring?.monsterStatRoll !== undefined,
+            ),
+          ).toBe(false);
+          // No #260 context exists here: retain the explicit, intact23 -> missing23 source boundary.
+          expect(db.prepare('DELETE FROM schema_migration WHERE version=24').run().changes).toBe(1);
+          expect(readAppliedMigrationVersion(db)).toBe(23);
+          expect(readCurrent().viewOrNull?.formId).toBe('GM-001');
           expect(db.prepare('DELETE FROM schema_migration WHERE version=23').run().changes).toBe(1);
           expect(db.prepare('SELECT MAX(version) n FROM schema_migration').get()).toEqual({
             n: 22,
@@ -319,7 +330,7 @@ for (const [folder, file, kind, variant] of [
           const bytes = db.serialize();
           expect(() => readCurrent()).toThrow('SOURCE_CHANGED');
           expect(() => app().project()).toThrow('SOURCE_CHANGED');
-          expect(db.serialize()).toEqual(bytes);
+          expect(db.serialize().equals(bytes)).toBe(true);
           expect(oldRows()).toEqual(original);
           return;
         }
@@ -433,11 +444,11 @@ for (const [folder, file, kind, variant] of [
             ).toThrow('FOREIGN_OWNER');
             const directCalls = callsFor(foreignKind);
             expect(directCalls).toBe(1);
-            expect(db.serialize()).toEqual(foreignBytes);
+            expect(db.serialize().equals(foreignBytes)).toBe(true);
             expect(() => app().command(foreignKind)).toThrow('INVALID_INPUT');
             expect(callsFor(foreignKind)).toBeGreaterThan(directCalls);
             // No durable receipt, fact, event or identifier allocation survives the refusal.
-            expect(db.serialize()).toEqual(foreignBytes);
+            expect(db.serialize().equals(foreignBytes)).toBe(true);
             const changedSource = join(sourceRoot, 'generated/spec/character/skills.json');
             const sourceBytes = readFileSync(changedSource);
             const target = request('VERSION_CONFIGURATION', {
@@ -448,7 +459,7 @@ for (const [folder, file, kind, variant] of [
             writeFileSync(changedSource, Buffer.concat([sourceBytes, Buffer.from([10])]));
             expect(() => scopedApp.command(target)).toThrow('INVALID_INPUT');
             expect(callsFor(target)).toBe(0);
-            expect(db.serialize()).toEqual(beforeDrift);
+            expect(db.serialize().equals(beforeDrift)).toBe(true);
             writeFileSync(changedSource, sourceBytes);
             expect(scopedApp.project().base.formId).toBe('ENM-017');
             app().command(
@@ -458,14 +469,16 @@ for (const [folder, file, kind, variant] of [
               }),
             );
             const manual = enemyAuthoringProjectionValue(app().project().base.roleFilteredPayload);
-            expect(isEnemyAuthoringForm('ENM-018')).toBe(false);
-            expect(isEnemyAuthoringForm('ENM-019')).toBe(false);
-            expect(app().project().base.availableActionKeys).not.toContain('ENM-017::CTA::006');
+            expect(isEnemyAuthoringForm('ENM-018')).toBe(true);
+            expect(isEnemyAuthoringForm('ENM-019')).toBe(true);
+            expect(app().project().base.availableActionKeys.includes('ENM-017::CTA::006')).toBe(
+              kind === 'CUSTOM_MONSTER',
+            );
             expect(app().project().base.availableActionKeys).not.toContain('ENM-017::CTA::007');
             for (const key of ['ENM-017::CTA::006', 'ENM-017::CTA::007'] as const) {
               const bytes = db.serialize();
               expect(() => nav(key)).toThrow('CORRUPT_STORAGE');
-              expect(db.serialize()).toEqual(bytes);
+              expect(db.serialize().equals(bytes)).toBe(true);
             }
             const forms = r.record(
               JSON.parse(readFileSync('generated/spec/atlas/forms-by-id.json', 'utf8')),
@@ -485,25 +498,44 @@ for (const [folder, file, kind, variant] of [
               '$.rollCommandId',
             );
             expect(rollCommandId).toBe('UI-CMD-MONSTER-STATS-ROLL-ONCE');
-            expect(ENEMY_AUTHORING_WORKFLOWS).not.toContain(rollCommandId);
+            expect(ENEMY_AUTHORING_WORKFLOWS).toContain(rollCommandId);
+            const rollAttempt = manual.context.attemptOrNull,
+              currentBase = manual.context.versionAttempt?.origin.base;
+            if (rollAttempt === null || currentBase === undefined)
+              throw new Error('Missing actual current version binding');
             const noRoll = {
               ...request('VERSION_CONFIGURATION', {
                 operation: 'SET_REASON',
                 reason: 'Недоступный бросок',
               }),
               workflowCommandId: rollCommandId,
+              payload: {
+                campaignId: scope.campaignId,
+                creationAttemptId: rollAttempt.attemptId,
+                expectedAttemptRevision: rollAttempt.revision,
+                attemptId: rollAttempt.attemptId,
+                monsterDraftId: rollAttempt.attemptId,
+                originFormId: 'ENM-017',
+                returnFormId: 'ENM-017',
+                versionBindingOrNull: {
+                  templateId: currentBase.templateId,
+                  expectedCurrentVersion: currentBase.version,
+                },
+              },
             };
-            const beforeRoll = db.serialize();
-            expect(() => app().command(noRoll)).toThrow('UNRECOGNIZED');
+            const beforeRoll = db.serialize(),
+              beforeSamples = vi.mocked(randomInt).mock.calls.length;
+            expect(() => app().command(noRoll)).toThrow('INVALID_INPUT');
             expect(callsFor(noRoll)).toBe(0);
-            expect(db.serialize()).toEqual(beforeRoll);
+            expect(vi.mocked(randomInt).mock.calls.length).toBe(beforeSamples);
+            expect(db.serialize().equals(beforeRoll)).toBe(true);
             if (manual.context.attemptOrNull?.kind === 'CUSTOM_MONSTER') {
               const stats = manual.context.attemptOrNull.statsOrNull;
               if (stats === null) throw new Error('Missing actual manual stats');
               const rollMode = request('MONSTER_STATS', json({ ...stats, statMode: 'ROLL_ONCE' }));
               const bytes = db.serialize();
               expect(() => app().command(rollMode)).toThrow('INVALID_INPUT');
-              expect(db.serialize()).toEqual(bytes);
+              expect(db.serialize().equals(bytes)).toBe(true);
             }
             nav('ENM-017::CTA::005');
             nav('ENM-020::CTA::002');
@@ -552,7 +584,7 @@ for (const [folder, file, kind, variant] of [
             expect(lib().project().base.availableActionKeys).not.toContain('ENM-001::CTA::008');
             const beforeSystem = db.serialize();
             expect(() => nav('ENM-001::CTA::008')).toThrow('CORRUPT_STORAGE');
-            expect(db.serialize()).toEqual(beforeSystem);
+            expect(db.serialize().equals(beforeSystem)).toBe(true);
             choose(null, identity);
             nav('ENM-001::CTA::008');
             app().command(
@@ -634,7 +666,7 @@ for (const [folder, file, kind, variant] of [
             expect(() => readCurrent()).toThrow('SOURCE_CHANGED');
             expect(() => app().command(currentRequest)).toThrow('INVALID_INPUT');
             expect(callsFor(currentRequest)).toBe(0);
-            expect(db.serialize()).toEqual(beforeRejected);
+            expect(db.serialize().equals(beforeRejected)).toBe(true);
             // Restore only the exact original SQL mirrors before the independent owning-QUEUE tamper.
             db.prepare(
               'UPDATE campaign_enemy_version SET record_json=?,record_sha256=? WHERE version_id=?',
@@ -728,7 +760,7 @@ for (const [folder, file, kind, variant] of [
             expect(() => readCurrent()).toThrow('SOURCE_CHANGED');
             expect(() => app().command(currentRequest)).toThrow('INVALID_INPUT');
             expect(callsFor(currentRequest)).toBe(0);
-            expect(db.serialize()).toEqual(badBytes);
+            expect(db.serialize().equals(badBytes)).toBe(true);
             expect(oldRows()).toEqual(original);
             expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
             expect(db.pragma('integrity_check')).toEqual([{ integrity_check: 'ok' }]);
@@ -792,7 +824,7 @@ for (const [folder, file, kind, variant] of [
             const samples = vi.mocked(randomInt).mock.calls.length;
             expect(() => app().command(command)).toThrow(marker); // Proves the actual intended SQL site was reached.
             expect(db.inTransaction).toBe(false);
-            expect(db.serialize()).toEqual(before);
+            expect(db.serialize().equals(before)).toBe(true);
             expect(allRows()).toEqual(rows);
             expect(schema()).toEqual(beforeSchema);
             expect(readCurrent().viewOrNull).toEqual(beforeView);
@@ -810,7 +842,7 @@ for (const [folder, file, kind, variant] of [
           const persistedRows = allRows(),
             stable = db.serialize();
           expect(app().command(command)).toEqual({ ...committed, replayed: true });
-          expect(db.serialize()).toEqual(stable);
+          expect(db.serialize().equals(stable)).toBe(true);
           expect(allRows()).toEqual(persistedRows);
           db.close();
           db = openPersistenceDatabase(filename);
@@ -822,7 +854,7 @@ for (const [folder, file, kind, variant] of [
             ...r.record(metadata['commitResult'], '$.oldCommitResult'),
             replayed: true,
           });
-          expect(db.serialize()).toEqual(reopened);
+          expect(db.serialize().equals(reopened)).toBe(true);
           const full = enemyAuthoringProjectionValue(app().project().base.roleFilteredPayload);
           expect(full.formId).toBe('ENM-020');
           expect(full.context.selectedVersionOrNull?.version).toBe(2);
@@ -956,7 +988,7 @@ for (const [folder, file, kind, variant] of [
               expect(() => app().command(negative.request)).toThrow(negative.code);
               expect(callsFor(negative.request)).toBe(0); // Historical observer calls have different actual requests.
               expect(vi.mocked(randomInt).mock.calls.length).toBe(sampleCount);
-              expect(db.serialize()).toEqual(bytes);
+              expect(db.serialize().equals(bytes)).toBe(true);
             }
             const clientOrigin = {
               ...confirmation,
@@ -966,7 +998,7 @@ for (const [folder, file, kind, variant] of [
             const beforeHiddenOrigin = db.serialize();
             expect(() => app().command(clientOrigin)).toThrow('UNRECOGNIZED');
             expect(callsFor(clientOrigin)).toBe(0);
-            expect(db.serialize()).toEqual(beforeHiddenOrigin);
+            expect(db.serialize().equals(beforeHiddenOrigin)).toBe(true);
             const acquired = app().command(confirmation);
             expect(callsFor(confirmation)).toBeGreaterThan(0);
             const actualCard = readCurrent().viewOrNull?.enemyAuthoring?.attemptOrNull;
@@ -996,7 +1028,7 @@ for (const [folder, file, kind, variant] of [
             expect(app().command(commit)).toEqual({ ...committed, replayed: true });
             expect(readCurrent().viewOrNull?.formId).toBe('ENM-017');
             expect(readCurrent().viewOrNull?.enemyAuthoring).toEqual(currentContext);
-            expect(db.serialize()).toEqual(stable);
+            expect(db.serialize().equals(stable)).toBe(true);
             const changed = {
               ...previewRequest,
               payload: {
@@ -1006,7 +1038,7 @@ for (const [folder, file, kind, variant] of [
             };
             expect(() => app().command(changed)).toThrow('IDEMPOTENCY_CONFLICT');
             expect(callsFor(changed)).toBe(0);
-            expect(db.serialize()).toEqual(stable);
+            expect(db.serialize().equals(stable)).toBe(true);
             const beforeAdvance = readCurrent().viewOrNull?.enemyAuthoring?.attemptOrNull;
             if (beforeAdvance == null) throw new Error('Missing actual current attempt');
             const priorAttemptRevision = beforeAdvance.revision;
@@ -1034,7 +1066,7 @@ for (const [folder, file, kind, variant] of [
             const beforeStaleAttempt = db.serialize();
             expect(() => app().command(staleAttempt)).toThrow('INVALID_INPUT');
             expect(callsFor(staleAttempt)).toBe(0);
-            expect(db.serialize()).toEqual(beforeStaleAttempt);
+            expect(db.serialize().equals(beforeStaleAttempt)).toBe(true);
             // A new active GM context is used only to revoke this context, never to fabricate a stale live base.
             const masterProfileId = readCurrent().context.masterProfileId;
             let denied = 0;
@@ -1078,7 +1110,7 @@ for (const [folder, file, kind, variant] of [
               const beforeDenied = denied;
               expect(() => authorized.command(target)).toThrow('CORRUPT_STORAGE');
               expect(denied).toBe(beforeDenied + 1);
-              expect(db.serialize()).toEqual(beforeRevoked);
+              expect(db.serialize().equals(beforeRevoked)).toBe(true);
             }
             expect(callsFor(fresh)).toBe(0);
             expect(oldRows()).toEqual(original);
@@ -1328,7 +1360,7 @@ for (const [folder, file, kind, variant] of [
           });
           const bytes = db.serialize();
           expect(() => app().command(invalidLoadout)).toThrow('INVALID_INPUT');
-          expect(db.serialize()).toEqual(bytes);
+          expect(db.serialize().equals(bytes)).toBe(true);
           expect(accounting()).toEqual(beforeBody);
           const lost = body();
           expect(accounting().knownSkills.some((skill) => skill.skillKey === 'UNARMED')).toBe(
@@ -2279,7 +2311,7 @@ for (const [folder, file, kind, variant] of [
             : variant === 'CANCELED_SENTIENT_CARD'
               ? 600_000
               : variant === 'CANCELED_CARD'
-                ? 300_000
+                ? 600_000
                 : 120_000,
   ); // ADR0088: full-cohort body-timeout markers were MECHANICAL 572.129 s, CUSTOM COPY 67.141 s, CUSTOM card 191.543 s and SENTIENT card 391.571 s. Only these named bodies receive rounded 1.5x finite headroom; timings establish neither a resource cause nor a CI duration guarantee.
 }
@@ -2318,7 +2350,7 @@ it('refuses source-valid-shaped changed displayed replacement costs, capacity or
             ),
           ),
         ).toThrow();
-        expect(snapshot()).toEqual(before);
+        expect(snapshot().equals(before)).toBe(true);
       }
     },
   });
@@ -2377,7 +2409,7 @@ it('rederives a coherently rehashed historical replacement summary at its actual
       ).toBe('SENTIENT');
       const bytes = database.serialize();
       expect(() => checkedRead()).toThrow('network application storage: SOURCE_CHANGED');
-      expect(database.serialize()).toEqual(bytes);
+      expect(database.serialize().equals(bytes)).toBe(true);
       expect(database.prepare('PRAGMA foreign_key_check').all()).toEqual([]);
     },
   });

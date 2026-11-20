@@ -44,6 +44,8 @@ const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
   'ENM-015',
   'ENM-016',
   'ENM-017',
+  'ENM-018',
+  'ENM-019',
   'ENM-020',
   'NPC-001',
   'NPC-002',
