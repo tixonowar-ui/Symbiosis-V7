@@ -28,8 +28,8 @@ import {
   enemySkillRebuildPreviewValue,
 } from '@shared/enemy-skill-plan.js';
 import type { JsonObject, JsonValue } from '@shared/wire-protocol.js';
+import { enemyArtOverrideValue, enemyAttemptArt } from '@shared/enemy-art.js';
 import {
-  ENEMY_PLACEHOLDER,
   ENEMY_STATS,
   type EnemyAttempt,
   type EnemyIdentity,
@@ -133,6 +133,7 @@ export function enemyAttemptValue(value: unknown): EnemyAttempt {
   const row = r.exact(
     value,
     'attemptId campaignId kind revision identityOrNull baseStatsOrNull buildOrNull compositionOrNull inventoryOrNull itemTemplateKeys' +
+      (Object.hasOwn(raw, 'artOverride') ? ' artOverride' : '') +
       (Object.hasOwn(raw, 'compositionAcquisitions') ? ' compositionAcquisitions' : '') +
       (Object.hasOwn(raw, 'schemaVersion')
         ? ' schemaVersion skillPlanState'
@@ -144,6 +145,7 @@ export function enemyAttemptValue(value: unknown): EnemyAttempt {
   r.uuid(row['attemptId'], '$.attemptId');
   r.uuid(row['campaignId'], '$.campaignId');
   w.literal(row['kind'], 'SENTIENT', '$.kind');
+  if (Object.hasOwn(row, 'artOverride')) enemyArtOverrideValue('SENTIENT', row['artOverride']);
   r.integer(row['revision'], '$.revision', 0);
   if (Object.hasOwn(row, 'legacySkillPlanPreview'))
     enemySkillRebuildPreviewValue(row['legacySkillPlanPreview']);
@@ -383,6 +385,6 @@ export function deriveSentientEnemySheet(
       })) ?? [],
     ).subtotalHP,
     progressionPolicy: 'NO_XP_PROGRESSION',
-    artAssetKey: ENEMY_PLACEHOLDER,
+    artAssetKey: enemyAttemptArt(attempt).assetKey,
   };
 }

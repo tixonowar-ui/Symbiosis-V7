@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useState, useMemo, useCallback } from 'react';
+import { EnemyArtContent } from './enemy-art-content.js';
 import { admissionJsonEqual } from '@shared/campaign-admission-codec.js';
 import type { JsonObject, JsonValue } from '@shared/wire-protocol.js';
 import {
@@ -1013,6 +1014,9 @@ const versionFieldLabels: Readonly<Record<string, string>> = {
   baseStats: 'Прямые характеристики',
   baseMaxHP: 'Базовое максимальное HP',
   ageYears: 'Возраст',
+  art: 'Портрет',
+  assetKey: 'Источник изображения',
+  sha256: 'Контрольная сумма SHA-256',
 };
 function versionDiffLabel(path: string): string {
   return path === ''
@@ -1125,8 +1129,23 @@ export function VersionChanges({
     Object.values(value).forEach(collectNames);
   };
   collectNames(catalog);
+  for (const change of changes) {
+    if (change.path !== '/art/assetKey') continue;
+    for (const side of [change.before, change.after]) {
+      if (side.present && typeof side.value === 'string') {
+        names.set(
+          side.value,
+          side.value.startsWith('enemy-upload:')
+            ? 'Загруженный файл · SHA-256 ' +
+                side.value.slice('enemy-upload:'.length, 'enemy-upload:'.length + 12)
+            : 'Поставленная заглушка',
+        );
+      }
+    }
+  }
   const ordinary = changes.filter(
     (change) =>
+      change.path !== '/art/sha256' &&
       !change.path
         .split('/')
         .some(
@@ -1547,15 +1566,6 @@ function EnemyVersionContent({
         Тип: {attempt.kind === 'SENTIENT' ? 'мыслящий враг' : 'произвольный монстр'}. Основа —
         версия {state.origin.base.version}; текущая версия — {editor.currentVersion.version}.
         Прежние версии и их ссылки неизменяемы.
-      </p>
-      <img
-        alt="Закреплённый портрет шаблона"
-        src={`data:image/png;base64,${p.art.bytesBase64}`}
-        width={180}
-      />
-      <p>
-        Портрет наследуется. Его загрузка и очистка пока недоступны. Боевые экземпляры здесь не
-        создаются.
       </p>
       {p.validationErrors.map((error) => (
         <p role="alert" key={error}>
@@ -2026,6 +2036,8 @@ function EnemyVersionContent({
 
 export function EnemyAuthoringContent(props: {
   readonly projection: JsonObject;
+  readonly artEditingEnabled?: boolean;
+  readonly onArtReadPending?: (pending: boolean) => void;
   readonly onValue: (data: JsonObject | null) => void;
   readonly onPrepare: (data: JsonObject) => { readonly ok: boolean; readonly detail?: string };
   readonly onMonsterDraft?: (data: JsonObject | null) => void;
@@ -2036,17 +2048,14 @@ export function EnemyAuthoringContent(props: {
   ) => { readonly ok: boolean; readonly detail?: string };
 }) {
   const p = anyEnemyAuthoringProjectionValue(props.projection);
-  if (p.formId === 'ENM-017')
-    return (
-      <EnemyVersionContent
-        projection={p}
-        onValue={props.onValue}
-        onStage={props.onStage}
-        onMonsterDraft={props.onMonsterDraft}
-      />
-    );
   return (
     <>
+      <EnemyArtContent
+        projection={p}
+        enabled={props.artEditingEnabled ?? false}
+        {...(props.onArtReadPending === undefined ? {} : { onReadPending: props.onArtReadPending })}
+        {...(props.onStage === undefined ? {} : { onEdit: (data) => props.onStage!('ART', data) })}
+      />
       {p.versionHistory === undefined ? null : (
         <section aria-label="История версий шаблона">
           <p>
@@ -2082,7 +2091,14 @@ export function EnemyAuthoringContent(props: {
           <p>Активные боевые привязки отсутствуют: создание боевых экземпляров пока недоступно.</p>
         </section>
       )}
-      {props.projection['kind'] === 'CUSTOM_MONSTER_AUTHORING' ? (
+      {p.formId === 'ENM-017' ? (
+        <EnemyVersionContent
+          projection={p}
+          onValue={props.onValue}
+          onStage={props.onStage}
+          onMonsterDraft={props.onMonsterDraft}
+        />
+      ) : props.projection['kind'] === 'CUSTOM_MONSTER_AUTHORING' ? (
         <CustomMonsterContent
           {...props}
           projection={customMonsterProjectionValue(props.projection)}
@@ -2210,12 +2226,6 @@ function SentientEnemyAuthoringContent({
       {p.formId === 'ENM-020' && p.versionConfigurationSummaryOrNull === null ? (
         <p>У этой сохранённой версии нет отдельного подтверждения конфигурации N+1.</p>
       ) : null}
-      <img
-        alt="Заглушка мыслящего врага"
-        src={`data:image/png;base64,${p.art.bytesBase64}`}
-        width="220"
-      />
-      <p>При сохранении V1 закрепляется эта заглушка. Загрузка другого арта пока недоступна.</p>
       {p.formId === 'ENM-005' ? (
         <SentientIdentityFields value={identity} onChange={setIdentity} />
       ) : null}

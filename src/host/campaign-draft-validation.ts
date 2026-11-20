@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { isIP } from 'node:net';
+import { LOCAL_IMAGE_MAX_BYTES, localImageMediaType } from '../shared/local-image.js';
 import type {
   CampaignArtValue,
   CampaignDraftFormId,
@@ -12,7 +13,7 @@ import type {
 } from '../shared/campaign-creation.js';
 
 /** ADR 0064 bounds local artwork transport; it does not constrain campaign fiction. */
-export const CAMPAIGN_ART_MAX_BYTES = 12 * 1024 * 1024;
+export const CAMPAIGN_ART_MAX_BYTES = LOCAL_IMAGE_MAX_BYTES;
 export class CampaignDraftValidationError extends Error {
   constructor(readonly fieldError: CampaignFieldError) {
     super(`Invalid campaign field: ${fieldError.field}:${fieldError.reason}`);
@@ -62,7 +63,10 @@ function optionalText(value: unknown, field: 'title' | 'description'): string | 
   if (value.trim().length === 0) return invalid(field, 'INVALID_VALUE');
   return value;
 }
-function artBytes(value: unknown): { art: CampaignArtValue; bytes: Buffer } {
+export function validatedCampaignArtBytes(value: unknown): {
+  art: CampaignArtValue;
+  bytes: Buffer;
+} {
   const row = record(value, ['kind', 'mediaType', 'bytesBase64'], 'art');
   if (
     row['kind'] !== 'local-file' ||
@@ -76,23 +80,20 @@ function artBytes(value: unknown): { art: CampaignArtValue; bytes: Buffer } {
   const bytes = Buffer.from(encoded, 'base64');
   if (bytes.length > CAMPAIGN_ART_MAX_BYTES || bytes.toString('base64') !== encoded)
     return invalid('art', 'INVALID_IMAGE');
-  const signature =
-    row['mediaType'] === 'image/png'
-      ? Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
-      : Buffer.from([0xff, 0xd8, 0xff]);
-  if (bytes.length < signature.length || !bytes.subarray(0, signature.length).equals(signature))
-    return invalid('art', 'INVALID_IMAGE');
+  if (localImageMediaType(bytes) !== row['mediaType']) return invalid('art', 'INVALID_IMAGE');
   return { art: { kind: 'local-file', mediaType: row['mediaType'], bytesBase64: encoded }, bytes };
 }
 export function campaignArtChecksum(art: CampaignArtValue | null): string | null {
-  return art === null ? null : createHash('sha256').update(artBytes(art).bytes).digest('hex');
+  return art === null
+    ? null
+    : createHash('sha256').update(validatedCampaignArtBytes(art).bytes).digest('hex');
 }
 export function validateCampaignMetadata(value: unknown): CampaignMetadataValues {
   const row = record(value, ['title', 'description', 'art'], 'title');
   return {
     title: optionalText(row['title'], 'title'),
     description: optionalText(row['description'], 'description'),
-    art: row['art'] === null ? null : artBytes(row['art']).art,
+    art: row['art'] === null ? null : validatedCampaignArtBytes(row['art']).art,
   };
 }
 function optionalInteger(

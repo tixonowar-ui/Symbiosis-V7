@@ -5,6 +5,7 @@ import { openPersistenceDatabase } from '../persistence/database.js';
 import { migration0022 } from '../persistence/migrations/0022-custom-monster-v1.js';
 import { migration0023 } from '../persistence/migrations/0023-enemy-template-versions.js';
 import { migration0024 } from '../persistence/migrations/0024-monster-stat-roll-once.js';
+import { migration0025 } from '../persistence/migrations/0025-enemy-art-upload.js';
 import type * as NodeCrypto from 'node:crypto';
 import { createCampaignCreationRuntime } from './campaign-creation.js';
 import { createCampaignBindManager } from './campaign-bind.js';
@@ -1372,6 +1373,7 @@ it('CORE216 runtime reads genuine pre257 bytes and keeps a pending legacy upgrad
     expect(originalRegistry).toHaveLength(21);
     const migratedRows = {
       ...rows,
+      campaign_enemy_art_upload: [],
       schema_migration: [
         ...originalRegistry,
         {
@@ -1388,6 +1390,11 @@ it('CORE216 runtime reads genuine pre257 bytes and keeps a pending legacy upgrad
           version: migration0024.version,
           name: migration0024.name,
           checksum_sha256: createHash('sha256').update(migration0024.sql).digest('hex'),
+        },
+        {
+          version: migration0025.version,
+          name: migration0025.name,
+          checksum_sha256: createHash('sha256').update(migration0025.sql).digest('hex'),
         },
       ],
     };
@@ -1422,7 +1429,7 @@ it('CORE216 runtime reads genuine pre257 bytes and keeps a pending legacy upgrad
     expect(compositionStorageRows({ db: database() })).toEqual(migratedRows);
     expect(
       database().prepare('SELECT MAX(version) version,COUNT(*) count FROM schema_migration').get(),
-    ).toEqual({ version: 24, count: 24 });
+    ).toEqual({ version: 25, count: 25 });
     expect(database().pragma('user_version', { simple: true })).toBe(0);
     const current = enemyAuthoringProjectionValue(app().project().base.roleFilteredPayload);
     expect(current.formId).toBe('ENM-009');
@@ -2043,6 +2050,106 @@ it('ENM-005…010/020 atomically saves complete sexless SENTIENT V1 and exact re
     f.close();
   }
 });
+it('CORE-193 binds the ENM-005 upload to the validated attempt, including an exact replay after clear and reopen', () => {
+  const f = fixture();
+  try {
+    const bytes = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x10]);
+    const file = {
+      kind: 'local-file',
+      mediaType: 'image/jpeg',
+      bytesBase64: bytes.toString('base64'),
+    };
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    const upload = f.request('ART', { operation: 'UPLOAD', file });
+    const stateBefore = f.db.serialize();
+    for (const data of [
+      { operation: 'UPLOAD', file: { ...file, mediaType: 'image/png' } },
+      { operation: 'UPLOAD', file: { ...file, sha256 } },
+      { operation: 'UPLOAD', file: { kind: 'asset-key', assetKey: 'npc-upload:' + sha256 } },
+      { operation: 'CLEAR', path: 'gm-entity-portraits' },
+    ]) {
+      expect(() => f.app().command({ ...upload, payload: { ...upload.payload, data } })).toThrow();
+    }
+    expect(() =>
+      f.app().command({ ...upload, payload: { ...upload.payload, campaignId: randomUUID() } }),
+    ).toThrow();
+    expect(f.db.serialize().equals(stateBefore)).toBe(true);
+    f.db.exec(
+      "CREATE TRIGGER fail_enemy_blob BEFORE INSERT ON campaign_enemy_art_upload BEGIN SELECT RAISE(ABORT,'ENEMY_BLOB_INSERT_REACHED'); END",
+    );
+    // SQLite may alter unused freelist bytes on rollback. Remove those pages before comparing whole files.
+    if (f.db.pragma('freelist_count', { simple: true }) !== 0) f.db.exec('VACUUM');
+    const beforeFault = f.db.serialize();
+    expect(() => f.app().command(upload)).toThrow('ENEMY_BLOB_INSERT_REACHED');
+    expect(f.db.serialize().equals(beforeFault)).toBe(true);
+    f.db.exec('DROP TRIGGER fail_enemy_blob');
+    const receipt = f.app().command(upload);
+    const projection = () =>
+      enemyAuthoringProjectionValue(f.app().project().base.roleFilteredPayload);
+    expect(projection().art).toEqual({
+      mediaType: file.mediaType,
+      sha256,
+      bytesBase64: file.bytesBase64,
+    });
+    expect(projection().context.attemptOrNull?.artOverride).toEqual({
+      assetKey: 'enemy-upload:' + sha256,
+      sha256,
+      uploadCommandIdOrNull: upload.commandId,
+    });
+    const afterUpload = f.db.serialize();
+    expect(
+      f.db
+        .prepare('SELECT bytes FROM campaign_enemy_art_upload WHERE command_id=?')
+        .get(upload.commandId),
+    ).toEqual({ bytes });
+    const event = f.db
+      .prepare<[string], { record_json: string }>(
+        'SELECT record_json FROM gm_request_queue_event WHERE event_id=?',
+      )
+      .get(upload.commandId);
+    expect(event?.record_json).toContain(sha256);
+    expect(event?.record_json).not.toContain(file.bytesBase64);
+    expect(() => f.app().command({ ...upload, commandId: randomUUID() })).toThrow();
+    expect(() =>
+      f.app().command({ ...upload, payload: { ...upload.payload, data: { operation: 'CLEAR' } } }),
+    ).toThrow();
+    expect(f.db.serialize().equals(afterUpload)).toBe(true);
+    const clear = f.request('ART', { operation: 'CLEAR' });
+    f.app().command(clear);
+    f.restart();
+    const afterClear = f.db.serialize();
+    expect(f.app().command(upload)).toEqual({ ...receipt, replayed: true });
+    expect(projection().art).toEqual(catalog.art);
+    expect(f.db.serialize().equals(afterClear)).toBe(true);
+    expect(f.db.prepare('SELECT count(*) n FROM campaign_enemy_version').get()).toEqual({ n: 0 });
+    // An original upload remains an owned fact even after the user clears the attempt.
+    const setHash = f.db.prepare(
+      'UPDATE campaign_enemy_art_upload SET sha256=? WHERE command_id=?',
+    );
+    setHash.run('0'.repeat(64), upload.commandId);
+    expect(() => f.app().project()).toThrow('SOURCE_CHANGED');
+    setHash.run(sha256, upload.commandId);
+    const insert = f.db.prepare(
+      'INSERT INTO campaign_enemy_art_upload(command_id,campaign_id,media_type,sha256,bytes) VALUES(?,?,?,?,?)',
+    );
+    insert.run(clear.commandId, f.scope.campaignId, file.mediaType, sha256, bytes);
+    expect(() => f.app().project()).toThrow('SOURCE_CHANGED');
+    const remove = f.db.prepare('DELETE FROM campaign_enemy_art_upload WHERE command_id=?');
+    remove.run(clear.commandId);
+    remove.run(upload.commandId);
+    expect(() => f.app().project()).toThrow('SOURCE_CHANGED');
+    insert.run(upload.commandId, f.scope.campaignId, file.mediaType, sha256, bytes);
+    const changed = Buffer.from(bytes);
+    changed[3] = 0xef;
+    f.db
+      .prepare('UPDATE campaign_enemy_art_upload SET bytes=? WHERE command_id=?')
+      .run(changed, upload.commandId);
+    expect(() => f.app().project()).toThrow('SOURCE_CHANGED');
+  } finally {
+    f.close();
+  }
+});
+
 it('CORE-193 padded name is canonical in PATCH view, complete preview, saved version and exact receipt replay after reopen', () => {
   const f = fixture();
   try {
@@ -2365,6 +2472,16 @@ it('checks actual file freshness at first tentative authoring entry/current view
       mkdirSync(dirname(to), { recursive: true });
       writeFileSync(to, readFileSync(join(process.cwd(), path)));
     }
+    const manifest = join(root, 'generated/spec/gm-entity-portraits/catalog.json');
+    const savedManifest = readFileSync(manifest, 'utf8');
+    const remapped = savedManifest.replace(
+      'gm-entity-portraits/symbiosis_placeholder_sentient_enemy.png',
+      'gm-entity-portraits/symbiosis_placeholder_monster.png',
+    );
+    expect(remapped).not.toBe(savedManifest);
+    writeFileSync(manifest, remapped);
+    expect(() => loadEnemyAuthoringSourceCatalog(root, common)).toThrow('changed source');
+    writeFileSync(manifest, savedManifest);
     const issued = loadEnemyAuthoringSourceCatalog(root, common);
     let checks = 0;
     f = fixture(

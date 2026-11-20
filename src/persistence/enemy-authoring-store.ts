@@ -28,6 +28,7 @@ import {
 } from './campaign-creation.js';
 import { readGmRequestReviewSource, type GmRequestReviewSource } from './network-device-request.js';
 import { readAppliedMigrationVersion } from './migrations/index.js';
+import { checkEnemyArtRequestBytes, writeEnemyUpload } from './enemy-art-store.js';
 import { npcIdentityInUse, legacyLocalIdentityInUse } from './npc-identities.js';
 import { readCampaignLifecycleLedger } from './campaign-lifecycle-ledger.js';
 import {
@@ -242,7 +243,7 @@ function schema(db: Database.Database): boolean {
       return s.fail('SOURCE_CHANGED');
     return false;
   }
-  if (version !== 21 && version !== 22 && version !== 23 && version !== 24)
+  if (version !== 21 && version !== 22 && version !== 23 && version !== 24 && version !== 25)
     return s.fail('SOURCE_CHANGED');
   for (const table of tables) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   return true;
@@ -524,6 +525,7 @@ export function commitEnemyAuthoring(
       readonly versionOrNull: EnemyStoredVersion | null;
     };
   },
+  uploadBytes?: Buffer,
 ) {
   if (db.inTransaction) return s.fail('INVALID_INPUT');
   return db
@@ -532,11 +534,20 @@ export function commitEnemyAuthoring(
       const source = readGmRequestReviewSource(db, scope, validateOwner);
       s.guarded(db, integration.observe, source, 'APPLY');
       const state = readGmRequestReviewViewStateInTransaction(db, scope);
+      const upload = checkEnemyArtRequestBytes(request, uploadBytes);
+      if (request.payload.stage === 'ART' && readAppliedMigrationVersion(db) !== 25)
+        return s.fail('SOURCE_CHANGED');
       const known = state.events.find((event) => event.eventId === request.commandId);
       if (known !== undefined) {
         if (
           known.mutation.kind !== 'ENEMY_AUTHORING' ||
-          !s.same(known.mutation.cause.request, request)
+          !s.same(known.mutation.cause.request, request) ||
+          (upload !== null &&
+            db
+              .prepare(
+                'SELECT 1 FROM campaign_enemy_art_upload WHERE command_id=? AND campaign_id=? AND bytes=?',
+              )
+              .get(request.commandId, scope.campaignId, upload.bytes) === undefined)
         )
           return s.fail('IDEMPOTENCY_CONFLICT');
         return {
@@ -753,12 +764,15 @@ export function commitEnemyAuthoring(
         eventId: request.commandId,
         mutation: { kind: 'ENEMY_AUTHORING', cause: prepared.mutation },
       });
+      if (upload !== null)
+        writeEnemyUpload(db, scope, request.commandId, upload.patch, upload.bytes);
       readEnemyVersions(db, scope, readGmRequestReviewViewStateInTransaction(db, scope).events);
       if (
         !db.inTransaction ||
         s.changes(db) !==
           before +
             (version === null ? 0 : version.identity.version === 1 ? 4 : 3) +
+            (upload === null ? 0 : 1) +
             appended.rowWrites
       )
         return s.fail('SOURCE_CHANGED');

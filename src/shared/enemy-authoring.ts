@@ -31,7 +31,17 @@ import {
   type EnemySkillPlanState,
   type EnemySkillRebuildPreview,
 } from './enemy-skill-plan.js';
-import { CUSTOM_MONSTER_PLACEHOLDER, CUSTOM_MONSTER_PLACEHOLDER_SHA256 } from './custom-monster.js';
+import {
+  assertEnemyArtReference,
+  enemyArtOverrideValue,
+  enemyArtPatchValue,
+  enemyStoredArtPatchValue,
+  enemyArtProjectionValue,
+  enemyAttemptArt,
+  type EnemyArtOverride,
+  type EnemyArtProjection,
+  type EnemyArtReference,
+} from './enemy-art.js';
 import {
   CUSTOM_MONSTER_STAGE_FORMS,
   customMonsterAttemptValue,
@@ -117,10 +127,7 @@ export const ENEMY_AUTHORING_WORKFLOWS = [
 ] as const;
 export const ENEMY_STATS = ['S', 'D', 'M', 'Z', 'I', 'W', 'C'] as const;
 export type EnemyStats = Readonly<Record<(typeof ENEMY_STATS)[number], number>>;
-export const ENEMY_PLACEHOLDER = 'symbiosis_placeholder_sentient_enemy' as const;
-/** ADR0077 A, supplied SENTIENT PNG; #261 will introduce a separate upload grammar. */
-export const ENEMY_PLACEHOLDER_SHA256 =
-  '5da7ee70db7c47dabfa92522e5bc8c9855c8a0c7596764d00b8b24cebd570a3f';
+export { ENEMY_PLACEHOLDER, ENEMY_PLACEHOLDER_SHA256 } from './enemy-art.js';
 export interface EnemyIdentity {
   readonly name: string;
   readonly description: string | null;
@@ -150,6 +157,7 @@ export interface EnemyEmptyComposition {
 }
 export type EnemyComposition = EnemyEmptyComposition | EnemyComposedComposition;
 export interface EnemyAttempt {
+  readonly artOverride?: EnemyArtOverride;
   readonly schemaVersion?: 2;
   readonly skillPlanState?: EnemySkillPlanState;
   readonly legacySkillPlanPreview?: EnemySkillRebuildPreview;
@@ -171,7 +179,7 @@ export interface SentientEnemyVersionIdentity {
   readonly versionId: string;
   readonly version: number;
   readonly kind: 'SENTIENT';
-  readonly artAssetKey: typeof ENEMY_PLACEHOLDER;
+  readonly artAssetKey: string;
   readonly artSha256: string;
 }
 export type EnemyVersionIdentity = SentientEnemyVersionIdentity | CustomMonsterVersionIdentity;
@@ -184,6 +192,7 @@ export interface EnemyAuthoringContext {
 }
 export type EnemyUserEntry = EnemyVersionIdentity & { readonly displayName: string };
 export type EnemyPatchStage =
+  | 'ART'
   | 'MONSTER_STAT_DRAFT'
   | 'VERSION_CONFIGURATION'
   | 'SENTIENT_IDENTITY'
@@ -210,6 +219,8 @@ export type EnemyWorkflowRequest = WorkflowCommandRequestMessage<
   EnemyWorkflowPayload
 > & { readonly role: 'gm' };
 export interface EnemyAuthoringMutation {
+  readonly preparedArt?: EnemyArtReference;
+  readonly artSourceFormId?: 'ENM-005' | 'ENM-011' | 'ENM-017';
   readonly versionPatchSourceFormId?: 'ENM-017';
   readonly authorMasterProfileId: string;
   readonly sourceBaselineVersion: string;
@@ -262,7 +273,7 @@ export interface EnemySheet {
   readonly classMovementModifier: number;
   readonly maxHP: number;
   readonly progressionPolicy: 'NO_XP_PROGRESSION';
-  readonly artAssetKey: typeof ENEMY_PLACEHOLDER;
+  readonly artAssetKey: string;
 }
 export interface SentientEnemyAuthoringProjection extends RevisionVector {
   readonly kind: 'SENTIENT_ENEMY_AUTHORING';
@@ -291,11 +302,7 @@ export interface SentientEnemyAuthoringProjection extends RevisionVector {
     }>[];
     errors: readonly string[];
   }>;
-  readonly art: {
-    readonly mediaType: 'image/png';
-    readonly sha256: string;
-    readonly bytesBase64: string;
-  };
+  readonly art: EnemyArtProjection;
 }
 export type EnemyAuthoringProjection = SentientEnemyAuthoringProjection | CustomMonsterProjection;
 /** Existing SENTIENT widgets/fixtures fail closed when accidentally handed the other kind. */
@@ -347,6 +354,15 @@ export const ENEMY_STAGE_FORMS = {
   SENTIENT_INVENTORY: ['ENM-009', 'ENM-010', 'ENM-009::CTA::002'],
 } as const;
 export function enemyWorkflowRequestValue(value: unknown): EnemyWorkflowRequest {
+  return readEnemyWorkflowRequest(value, enemyArtPatchValue);
+}
+export function enemyStoredWorkflowRequestValue(value: unknown): EnemyWorkflowRequest {
+  return readEnemyWorkflowRequest(value, enemyStoredArtPatchValue);
+}
+function readEnemyWorkflowRequest(
+  value: unknown,
+  checkArt: (data: unknown) => unknown,
+): EnemyWorkflowRequest {
   const row = r.exact(
     value,
     'messageType protocolVersion commandKind role commandId workflowCommandId expectedRevisions payload',
@@ -374,8 +390,9 @@ export function enemyWorkflowRequestValue(value: unknown): EnemyWorkflowRequest 
   r.uuid(payload['creationAttemptId'], '$.creationAttemptId');
   r.integer(payload['expectedAttemptRevision'], '$.expectedAttemptRevision', 0);
   if (patch) {
-    r.oneOf(payload['stage'], Object.keys(ENEMY_STAGE_FORMS), '$.stage');
+    r.oneOf(payload['stage'], [...Object.keys(ENEMY_STAGE_FORMS), 'ART'], '$.stage');
     w.jsonObject(payload['data'], '$.data');
+    if (payload['stage'] === 'ART') checkArt(payload['data']);
     if (payload['stage'] === 'VERSION_CONFIGURATION')
       enemyVersionConfigurationPatchValue(payload['data']);
     if (payload['stage'] === 'MONSTER_STAT_DRAFT') monsterStatDraftPatchValue(payload['data']);
@@ -655,20 +672,8 @@ export function enemyVersionIdentityValue(value: unknown): EnemyVersionIdentity 
   );
   for (const key of ['campaignId', 'templateId', 'versionId']) r.uuid(row[key], '$.' + key);
   r.integer(row['version'], '$.version', 1);
-  r.oneOf(row['kind'], ['SENTIENT', 'CUSTOM_MONSTER'], '$.kind');
-  const monster = row['kind'] === 'CUSTOM_MONSTER';
-  w.literal(
-    row['artAssetKey'],
-    monster ? CUSTOM_MONSTER_PLACEHOLDER : ENEMY_PLACEHOLDER,
-    '$.artAssetKey',
-  );
-  if (typeof row['artSha256'] !== 'string' || !/^[a-f0-9]{64}$/u.test(row['artSha256']))
-    r.invalid('$.artSha256', 'SHA-256', null);
-  w.literal(
-    row['artSha256'],
-    monster ? CUSTOM_MONSTER_PLACEHOLDER_SHA256 : ENEMY_PLACEHOLDER_SHA256,
-    '$.artSha256',
-  );
+  const kind = r.oneOf(row['kind'], ['SENTIENT', 'CUSTOM_MONSTER'] as const, '$.kind');
+  assertEnemyArtReference(kind, row['artAssetKey'], row['artSha256']);
   return w.validated(row);
 }
 export function enemyAuthoringMutationValue(value: unknown): EnemyAuthoringMutation {
@@ -676,6 +681,7 @@ export function enemyAuthoringMutationValue(value: unknown): EnemyAuthoringMutat
   const row = r.exact(
     value,
     'request itemTemplateKeys committedVersionOrNull receiptId timestamp sourceBaselineVersion authorMasterProfileId' +
+      (Object.hasOwn(raw, 'preparedArt') ? ' preparedArt artSourceFormId' : '') +
       (Object.hasOwn(raw, 'versionPatchSourceFormId') ? ' versionPatchSourceFormId' : '') +
       (Object.hasOwn(raw, 'preparedComposition') ? ' preparedComposition' : '') +
       (Object.hasOwn(raw, 'preparedSkillState') ? ' preparedSkillState' : '') +
@@ -687,7 +693,15 @@ export function enemyAuthoringMutationValue(value: unknown): EnemyAuthoringMutat
   );
   r.text(row['sourceBaselineVersion'], '$.sourceBaselineVersion');
   r.uuid(row['authorMasterProfileId'], '$.authorMasterProfileId');
-  const request = enemyWorkflowRequestValue(row['request']);
+  const request = enemyStoredWorkflowRequestValue(row['request']);
+  if (request.payload.stage === 'ART') {
+    const art = r.exact(row['preparedArt'], 'assetKey sha256', '$.preparedArt');
+    r.text(art['assetKey'], '$.preparedArt.assetKey');
+    r.text(art['sha256'], '$.preparedArt.sha256');
+    r.oneOf(row['artSourceFormId'], ['ENM-005', 'ENM-011', 'ENM-017'], '$.artSourceFormId');
+  } else if (Object.hasOwn(row, 'preparedArt')) {
+    r.invalid('$.preparedArt', 'bound art patch only', null);
+  }
   const statCommand =
     request.workflowCommandId === 'UI-CMD-MONSTER-STATS-ROLL-ONCE' ||
     request.payload.stage === 'MONSTER_STAT_DRAFT';
@@ -799,7 +813,10 @@ export function enemyAuthoringReceipt(
                 ? mutation.committedVersionOrNull?.kind === 'CUSTOM_MONSTER'
                   ? 'ENM-016'
                   : 'ENM-010'
-                : ENEMY_STAGE_FORMS[mutation.request.payload.stage][0],
+                : mutation.request.payload.stage === 'ART'
+                  ? (mutation.artSourceFormId ??
+                    r.invalid('$.artSourceFormId', 'bound art patch', null))
+                  : ENEMY_STAGE_FORMS[mutation.request.payload.stage][0],
       stageOrNull: mutation.request.payload.stage ?? null,
       attemptRevision:
         mutation.request.payload.expectedAttemptRevision +
@@ -938,22 +955,12 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
       context.selectedVersionOrNull.campaignId !== row['campaignId'])
   )
     r.invalid('$.context', 'own campaign/current form binding', null);
-  const art = r.exact(row['art'], 'mediaType sha256 bytesBase64', '$.art');
-  w.literal(art['sha256'], ENEMY_PLACEHOLDER_SHA256, '$.art.sha256');
-  w.literal(art['mediaType'], 'image/png', '$.art.mediaType');
-  if (
-    typeof art['sha256'] !== 'string' ||
-    !/^[a-f0-9]{64}$/u.test(art['sha256']) ||
-    typeof art['bytesBase64'] !== 'string' ||
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(art['bytesBase64']) ||
-    art['bytesBase64'].length === 0
-  )
-    r.invalid('$.art', 'PNG digest/base64', null);
-  if (
-    context.selectedVersionOrNull !== null &&
-    context.selectedVersionOrNull.artSha256 !== art['sha256']
-  )
-    r.invalid('$.art', 'version-bound placeholder', null);
+  const selected = context.selectedVersionOrNull;
+  const expectedArt =
+    selected === null
+      ? enemyAttemptArt(context.attemptOrNull ?? r.invalid('$.attempt', 'own art context', null))
+      : { assetKey: selected.artAssetKey, sha256: selected.artSha256 };
+  enemyArtProjectionValue(row['art'], expectedArt);
   for (const error of r.list(row['validationErrors'], '$.validationErrors'))
     r.text(error, '$.error');
   const rawCatalog = w.record(row['catalog'], '$.catalog');
@@ -1428,7 +1435,7 @@ export function enemyAuthoringProjectionValue(value: unknown): EnemyAuthoringPro
     numeric(sheet['classMovementModifier'], '$.classMovementModifier');
     r.integer(sheet['maxHP'], '$.maxHP', 1);
     w.literal(sheet['progressionPolicy'], 'NO_XP_PROGRESSION', '$.progressionPolicy');
-    w.literal(sheet['artAssetKey'], ENEMY_PLACEHOLDER, '$.artAssetKey');
+    w.literal(sheet['artAssetKey'], expectedArt.assetKey, '$.artAssetKey');
     if (context.attemptOrNull !== null) {
       const a = context.attemptOrNull;
       if (
@@ -1532,6 +1539,7 @@ export function enemyAuthoringContextValue(value: unknown): EnemyAuthoringContex
     const attempt = r.exact(
       row['attemptOrNull'],
       'attemptId campaignId kind revision identityOrNull baseStatsOrNull buildOrNull compositionOrNull inventoryOrNull itemTemplateKeys' +
+        (Object.hasOwn(rawAttempt, 'artOverride') ? ' artOverride' : '') +
         (Object.hasOwn(rawAttempt, 'compositionAcquisitions') ? ' compositionAcquisitions' : '') +
         (Object.hasOwn(rawAttempt, 'schemaVersion')
           ? ' schemaVersion skillPlanState'
@@ -1543,6 +1551,8 @@ export function enemyAuthoringContextValue(value: unknown): EnemyAuthoringContex
     r.uuid(attempt['attemptId'], '$.attemptId');
     r.uuid(attempt['campaignId'], '$.campaignId');
     w.literal(attempt['kind'], 'SENTIENT', '$.kind');
+    if (Object.hasOwn(attempt, 'artOverride'))
+      enemyArtOverrideValue('SENTIENT', attempt['artOverride']);
     r.integer(attempt['revision'], '$.revision', 0);
     if (Object.hasOwn(attempt, 'legacySkillPlanPreview')) {
       const preview = enemySkillRebuildPreviewValue(attempt['legacySkillPlanPreview']);
@@ -1719,6 +1729,41 @@ export function reduceEnemyAuthoring(
   )
     r.invalid('$.expectedRevisions', 'current revisions', null);
   const versionState = context.versionAttempt;
+  if (payload.stage === 'ART') {
+    const expectedForm =
+      versionState === undefined
+        ? attempt.kind === 'SENTIENT'
+          ? 'ENM-005'
+          : 'ENM-011'
+        : 'ENM-017';
+    if (
+      request.workflowCommandId !== 'UI-CMD-ENEMY-DRAFT-PATCH' ||
+      formId !== expectedForm ||
+      mutation.artSourceFormId !== expectedForm ||
+      mutation.versionPatchSourceFormId !== (versionState === undefined ? undefined : 'ENM-017') ||
+      mutation.preparedSkillState !== undefined
+    ) {
+      return r.invalid('$.artSourceFormId', 'own current art editor', null);
+    }
+    const patch = enemyStoredArtPatchValue(payload.data);
+    const ref = mutation.preparedArt ?? r.invalid('$.preparedArt', 'host validated art', null);
+    if (patch.operation === 'UPLOAD' && ref.sha256 !== patch.sha256)
+      return r.invalid('$.preparedArt.sha256', 'same upload as the stored command', null);
+    const artOverride = enemyArtOverrideValue(attempt.kind, {
+      ...ref,
+      uploadCommandIdOrNull: patch.operation === 'CLEAR' ? null : request.commandId,
+    });
+    return {
+      context: enemyAuthoringContextValue({
+        ...context,
+        attemptOrNull: { ...attempt, artOverride, revision: attempt.revision + 1 },
+        ...(versionState === undefined
+          ? {}
+          : { versionAttempt: { ...versionState, replacementPreviewOrNull: null } }),
+      }),
+      formId: expectedForm,
+    };
+  }
   const pendingStats =
     attempt.kind === 'CUSTOM_MONSTER' &&
     monsterStatDraftRequiresAcceptance(
@@ -1774,7 +1819,7 @@ export function reduceEnemyAuthoring(
         receipt.authorMasterProfileId !== mutation.authorMasterProfileId ||
         receipt.timestamp !== mutation.timestamp ||
         receipt.sourceBaselineVersion !== mutation.sourceBaselineVersion ||
-        receipt.artSha256 !== CUSTOM_MONSTER_PLACEHOLDER_SHA256 ||
+        receipt.artSha256 !== enemyAttemptArt(attempt).sha256 ||
         !admissionJsonEqual(receipt.beforeDraftOrNull, previous.draftOrNull) ||
         !admissionJsonEqual(
           {
@@ -1850,8 +1895,8 @@ export function reduceEnemyAuthoring(
         identity.campaignId !== base.campaignId ||
         identity.kind !== base.kind ||
         identity.version !== base.version + 1 ||
-        identity.artAssetKey !== base.artAssetKey ||
-        identity.artSha256 !== base.artSha256 ||
+        identity.artAssetKey !== enemyAttemptArt(attempt).assetKey ||
+        identity.artSha256 !== enemyAttemptArt(attempt).sha256 ||
         identity.versionId === base.versionId ||
         request.payload.reason !== versionState.reason ||
         versionState.reason.trim().length === 0 ||
@@ -1974,6 +2019,8 @@ export function reduceEnemyAuthoring(
       formId !== (attempt.kind === 'CUSTOM_MONSTER' ? 'ENM-016' : 'ENM-010') ||
       mutation.committedVersionOrNull?.campaignId !== attempt.campaignId ||
       mutation.committedVersionOrNull.kind !== attempt.kind ||
+      mutation.committedVersionOrNull.artAssetKey !== enemyAttemptArt(attempt).assetKey ||
+      mutation.committedVersionOrNull.artSha256 !== enemyAttemptArt(attempt).sha256 ||
       mutation.committedVersionOrNull.version !== 1
     )
       r.invalid('$.commit', 'own ENM-010 attempt', null);

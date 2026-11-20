@@ -926,7 +926,8 @@ function schema(db: Database.Database): void {
     row['version'] !== 21 &&
     row['version'] !== 22 &&
     row['version'] !== 23 &&
-    row['version'] !== 24
+    row['version'] !== 24 &&
+    row['version'] !== 25
   )
     return fail();
   if (
@@ -941,7 +942,8 @@ function schema(db: Database.Database): void {
     row['version'] === 21 ||
     row['version'] === 22 ||
     row['version'] === 23 ||
-    row['version'] === 24
+    row['version'] === 24 ||
+    row['version'] === 25
   )
     probeSchemaTables(db, CAMPAIGN_LOBBY_TABLES);
   if (db.prepare('SELECT 1 FROM schema_migration WHERE version=14').get() !== undefined)
@@ -956,7 +958,8 @@ function schema(db: Database.Database): void {
     row['version'] === 21 ||
     row['version'] === 22 ||
     row['version'] === 23 ||
-    row['version'] === 24
+    row['version'] === 24 ||
+    row['version'] === 25
   )
     probeSchemaTables(db, NPC_TABLES);
   probeSchemaTables(db, NETWORK_APPLICATION_TABLES);
@@ -974,7 +977,8 @@ function schema(db: Database.Database): void {
     row['version'] === 21 ||
     row['version'] === 22 ||
     row['version'] === 23 ||
-    row['version'] === 24
+    row['version'] === 24 ||
+    row['version'] === 25
   )
     probeSchemaTables(db, DEVICE_REQUEST_REVIEW_TABLES);
   if (
@@ -990,7 +994,8 @@ function schema(db: Database.Database): void {
     row['version'] === 21 ||
     row['version'] === 22 ||
     row['version'] === 23 ||
-    row['version'] === 24
+    row['version'] === 24 ||
+    row['version'] === 25
   )
     probeSchemaTables(db, CAMPAIGN_ADMISSION_TABLES);
 }
@@ -1013,7 +1018,8 @@ function hasRequestReviewSchema(db: Database.Database): boolean {
     version !== 21 &&
     version !== 22 &&
     version !== 23 &&
-    version !== 24
+    version !== 24 &&
+    version !== 25
   )
     return fail();
   return (
@@ -1030,7 +1036,8 @@ function hasRequestReviewSchema(db: Database.Database): boolean {
     version === 21 ||
     version === 22 ||
     version === 23 ||
-    version === 24
+    version === 24 ||
+    version === 25
   );
 }
 function owner(db: Database.Database, id: string): void {
@@ -2464,7 +2471,8 @@ function readHistory(
     version === 21 ||
     version === 22 ||
     version === 23 ||
-    version === 24
+    version === 24 ||
+    version === 25
   ) {
     for (const [table, records, key] of [
       ['local_network_lane_binding', review.lanes, 'request_id'],

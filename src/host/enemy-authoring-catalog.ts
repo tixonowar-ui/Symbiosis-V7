@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import type { SentientAuthoringCatalog } from '../domain/entities/enemy-template/sentient-authoring.js';
 import type { NpcAuthoringSourceCatalog } from './npc-catalog.js';
 import type { JsonObject } from '@shared/wire-protocol.js';
-import { ENEMY_PLACEHOLDER } from '@shared/enemy-authoring.js';
+import { ENEMY_PLACEHOLDER, ENEMY_PLACEHOLDER_SHA256 } from '@shared/enemy-art.js';
 import { ENEMY_AUTHORING_SOURCE_SEALS } from './enemy-authoring-source-seals.js';
 import { array, record, string } from './json-source.js';
 import { npcInventoryMetadataChoices } from '../domain/rules/npc-authoring/inventory.js';
@@ -70,6 +70,7 @@ export function loadEnemyAuthoringSourceCatalog(
     (row) =>
       row['assetKey'] === ENEMY_PLACEHOLDER &&
       row['entityKind'] === 'SENTIENT' &&
+      row['mediaPath'] === 'gm-entity-portraits/' + ENEMY_PLACEHOLDER + '.png' &&
       row['raceCodeOrNull'] === null &&
       row['sexOrNull'] === null,
   );
@@ -77,11 +78,13 @@ export function loadEnemyAuthoringSourceCatalog(
   const asset = matching[0]!,
     bytes = readFileSync(join(root, 'generated/media', string(asset['mediaPath'], 'art path')));
   const digest = sha(bytes);
-  if (digest !== asset['sha256']) return fail('placeholder bytes differ');
+  if (digest !== asset['sha256'] || digest !== ENEMY_PLACEHOLDER_SHA256)
+    return fail('placeholder bytes differ');
   const monsterAssets = artRows.filter(
     (row) =>
       row['assetKey'] === CUSTOM_MONSTER_PLACEHOLDER &&
       row['entityKind'] === 'CUSTOM_MONSTER' &&
+      row['mediaPath'] === 'gm-entity-portraits/' + CUSTOM_MONSTER_PLACEHOLDER + '.png' &&
       row['raceCodeOrNull'] === null &&
       row['sexOrNull'] === null,
   );

@@ -24,6 +24,7 @@ import { openPersistenceDatabase } from '../persistence/database.js';
 import { readGmRequestReviewSourceWith } from '../persistence/network-device-request.js';
 import { readAppliedMigrationVersion } from '../persistence/migrations/index.js';
 import { migration0024 } from '../persistence/migrations/0024-monster-stat-roll-once.js';
+import { migration0025 } from '../persistence/migrations/0025-enemy-art-upload.js';
 
 vi.mock('node:crypto', async (original) => {
   const actual = await original<typeof NodeCrypto>();
@@ -64,7 +65,7 @@ for (const [kind, gzipSha256, inflatedSha256] of [
     'bf668fce4379cd3b941279065dabd000bd07c9ef4634dd235fb77cfa4d49fe93',
   ],
 ] as const)
-  it(`preserves genuine delivered259 ${kind} schema23 V1/V2/open attempt and exact original receipts through24 and physical reopen`, () => {
+  it(`preserves genuine delivered259 ${kind} schema23 V1/V2/open attempt and exact original receipts through25 and physical reopen`, () => {
     const root = join(process.cwd(), 'tests/fixtures/enemy-versioned-v2'),
       metadata = r.record(
         JSON.parse(readFileSync(join(root, 'metadata.json'), 'utf8')),
@@ -111,12 +112,18 @@ for (const [kind, gzipSha256, inflatedSha256] of [
       expect(before['campaign_enemy_version']).toHaveLength(2);
       const expected = {
         ...before,
+        campaign_enemy_art_upload: [],
         schema_migration: [
           ...(before['schema_migration'] ?? []),
           {
             version: migration0024.version,
             name: migration0024.name,
             checksum_sha256: hash(migration0024.sql),
+          },
+          {
+            version: migration0025.version,
+            name: migration0025.name,
+            checksum_sha256: hash(migration0025.sql),
           },
         ],
       };
@@ -148,7 +155,7 @@ for (const [kind, gzipSha256, inflatedSha256] of [
           readCurrent,
           validateOwner: () => undefined,
         });
-      expect(readAppliedMigrationVersion(database())).toBe(24);
+      expect(readAppliedMigrationVersion(database())).toBe(25);
       expect(rows(database())).toEqual(expected);
       const originalResult = r.record(f['originalCommitResult'], '$.originalResult'),
         newResult = r.record(f['newVersionResult'], '$.newResult');

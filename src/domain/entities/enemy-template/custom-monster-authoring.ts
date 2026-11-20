@@ -17,7 +17,7 @@ import {
   customMonsterIdentityValue,
 } from '@shared/custom-monster.js';
 import type { EnemyStats } from '@shared/enemy-authoring.js';
-import { CUSTOM_MONSTER_PLACEHOLDER } from '@shared/custom-monster.js';
+import { enemyAttemptArt } from '@shared/enemy-art.js';
 import {
   customMonsterAttemptValue,
   type CustomMonsterAttempt,
@@ -347,6 +347,6 @@ export function deriveCustomMonsterSheet(
     ruleFacts,
     advisorOrNull,
     progressionPolicy: 'NO_XP_PROGRESSION',
-    artAssetKey: CUSTOM_MONSTER_PLACEHOLDER,
+    artAssetKey: enemyAttemptArt(attempt).assetKey,
   };
 }

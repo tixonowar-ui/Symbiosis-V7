@@ -312,13 +312,16 @@ for (const [folder, file, kind, variant] of [
             ),
           ).toBe(true);
           expect(db.prepare('SELECT MAX(version) n FROM schema_migration').get()).toEqual({
-            n: 24,
+            n: 25,
           });
           expect(
             structural.events.some(
               (event) => event.view.enemyAuthoring?.monsterStatRoll !== undefined,
             ),
           ).toBe(false);
+          expect(db.prepare('SELECT * FROM campaign_enemy_art_upload').all()).toEqual([]);
+          db.exec('DROP TABLE campaign_enemy_art_upload');
+          expect(db.prepare('DELETE FROM schema_migration WHERE version=25').run().changes).toBe(1);
           // No #260 context exists here: retain the explicit, intact23 -> missing23 source boundary.
           expect(db.prepare('DELETE FROM schema_migration WHERE version=24').run().changes).toBe(1);
           expect(readAppliedMigrationVersion(db)).toBe(23);

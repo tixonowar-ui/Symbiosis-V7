@@ -15,11 +15,32 @@ import {
 import { enemyCompositionPatchValue } from '@shared/enemy-composition.js';
 import { enemyBuildPlanPatchValue } from '@shared/enemy-skill-plan.js';
 import { customMonsterCompositionPatchValue } from '@shared/custom-monster-state.js';
+import { enemyArtPatchValue } from '@shared/enemy-art.js';
 import {
   MONSTER_STAT_DRAFT_ACTIONS,
   monsterStatDraftPatchValue,
   monsterStatRollReceiptValue,
 } from '@shared/monster-stat-roll.js';
+
+/** ART edits the current attempt in place under the form's existing PATCH capability. */
+export function enemyArtPatchAction(formId: string) {
+  if (formId === 'ENM-005') return 'ENM-005::CTA::003';
+  if (formId === 'ENM-011') return 'ENM-011::CTA::002';
+  if (formId === 'ENM-017') return 'ENM-017::CTA::004';
+  return null;
+}
+
+export function enemyArtDeliveryMatches(projection: JsonObject, request: EnemyWorkflowRequest) {
+  const p = enemyAuthoringProjectionValue(projection);
+  const ref = p.context.attemptOrNull?.artOverride;
+  const patch = enemyArtPatchValue(request.payload.data);
+  if (patch.operation === 'CLEAR') return ref?.uploadCommandIdOrNull === null;
+  return (
+    ref?.uploadCommandIdOrNull === request.commandId &&
+    p.art.mediaType === patch.file.mediaType &&
+    p.art.bytesBase64 === patch.file.bytesBase64
+  );
+}
 
 export function enemyBrowserWorkflow(
   p: EnemyAuthoringProjection,
@@ -44,8 +65,11 @@ export function enemyBrowserWorkflow(
     )
       throw new Error('Черновик не принадлежит текущему переходу характеристик.');
   }
+  if (versionStage === 'ART' && actionKey !== enemyArtPatchAction(p.formId))
+    throw new Error('Портрет нельзя изменить на этой форме.');
   if (
     versionStage !== undefined &&
+    versionStage !== 'ART' &&
     !statDraft &&
     (p.formId !== 'ENM-017' ||
       p.versionEditor === undefined ||
@@ -56,9 +80,9 @@ export function enemyBrowserWorkflow(
     throw new Error('Этап не принадлежит этой новой версии.');
   const stage =
     (statDraft ? 'MONSTER_STAT_DRAFT' : versionStage) ??
-    (Object.entries(ENEMY_STAGE_FORMS) as [EnemyPatchStage, readonly string[]][]).find(
-      ([, forms]) => forms[0] === p.formId && forms[2] === actionKey,
-    )?.[0];
+    (
+      Object.entries(ENEMY_STAGE_FORMS) as [keyof typeof ENEMY_STAGE_FORMS, readonly string[]][]
+    ).find(([, forms]) => forms[0] === p.formId && forms[2] === actionKey)?.[0];
   const append =
     p.formId === 'ENM-017' && actionKey === 'ENM-017::CTA::004' && versionStage === undefined;
   const commit =
@@ -286,8 +310,8 @@ export function enemyBrowserDestination(
       );
     return (
       p.formId ===
-        (source.formId === 'ENM-017'
-          ? 'ENM-017'
+        (source.formId === 'ENM-017' || stage === 'ART'
+          ? source.formId
           : stage === 'SENTIENT_BUILD' &&
               (result['buildPhase'] === 'PREVIEW_REBUILD' ||
                 result['buildPhase'] === 'REBUILD_DISCARDED')

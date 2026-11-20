@@ -1,4 +1,4 @@
-import { randomInt, randomUUID } from 'node:crypto';
+import { createHash, randomInt, randomUUID } from 'node:crypto';
 import type * as NodeCrypto from 'node:crypto';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -181,7 +181,11 @@ function fixture(mode: 'AUTO' | 'MANUAL', authoringCatalog = catalog) {
   };
   const patch = (stage: string, data: unknown) =>
     app().command(request('UI-CMD-ENEMY-DRAFT-PATCH', { stage, data: json(data) }));
-  const select = (identity: ReturnType<typeof enemyVersionIdentityValue> | null) => {
+  const select = (
+    identity: ReturnType<typeof enemyVersionIdentityValue> | null,
+    activeTab: 'SENTIENT_ENEMIES' | 'MONSTERS' = 'MONSTERS',
+    sourceFormId: 'ENM-001' | 'ENM-020' = 'ENM-001',
+  ) => {
     const current = view();
     return lib().select({
       messageType: 'network.enemy-selection.replace',
@@ -189,8 +193,8 @@ function fixture(mode: 'AUTO' | 'MANUAL', authoringCatalog = catalog) {
       operationId: randomUUID(),
       contextId: f.scope.gmLocalContextId,
       campaignId: f.scope.campaignId,
-      sourceFormId: 'ENM-001',
-      activeTab: 'MONSTERS',
+      sourceFormId,
+      activeTab,
       selectionOrNull: null,
       userSelectionOrNull: identity,
       expectedRevisions: {
@@ -239,6 +243,166 @@ function fixture(mode: 'AUTO' | 'MANUAL', authoringCatalog = catalog) {
   };
 }
 
+it.each(['SENTIENT', 'CUSTOM_MONSTER'] as const)(
+  'CORE-193 pins %s uploaded V1, inherited V2, replaced V3 and cleared V4 through restart and old-version selection',
+  (kind) => {
+    const h = fixture('MANUAL');
+    const tab = kind === 'SENTIENT' ? 'SENTIENT_ENEMIES' : 'MONSTERS';
+    const supplied = kind === 'SENTIENT' ? catalog.art : catalog.monsterArt;
+    const upload = (mediaType: 'image/jpeg' | 'image/png', bytes: Buffer) => ({
+      mediaType,
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+      bytesBase64: bytes.toString('base64'),
+    });
+    // Real one-pixel JPEG and PNG so this history also exercises decodable files.
+    const first = upload(
+      'image/jpeg',
+      Buffer.from(
+        '/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDiqKKK+aPjz//Z',
+        'base64',
+      ),
+    );
+    const replacement = upload(
+      'image/png',
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+        'base64',
+      ),
+    );
+    const replace = (art: typeof first) =>
+      h.patch('ART', {
+        operation: 'UPLOAD',
+        file: { kind: 'local-file', mediaType: art.mediaType, bytesBase64: art.bytesBase64 },
+      });
+    const projection = () =>
+      enemyAuthoringProjectionValue(h.app().project().base.roleFilteredPayload);
+    try {
+      h.select(null, tab);
+      h.nav(kind === 'SENTIENT' ? 'ENM-001::CTA::003' : 'ENM-001::CTA::011');
+      expect(projection().art).toEqual(supplied);
+      replace(first);
+      if (kind === 'SENTIENT') {
+        h.patch('SENTIENT_IDENTITY', {
+          name: 'Страж',
+          description: null,
+          origin: 'Дозор',
+          affiliation: 'Город',
+          massKg: 80.1,
+          anatomyProfileId: 'ORDINARY_SENTIENT',
+        });
+        h.patch('SENTIENT_STATS', { S: 20, D: 20, M: 20, Z: 20, I: 20, W: 20, C: 20 });
+        h.patch('SENTIENT_BUILD', {
+          raceCode: 'PURE',
+          pureClassOrNull: 'SOLDIER',
+          skillSelections: [{ skillKey: 'UNARMED', targetBonus: 7 }],
+        });
+        h.patch('SENTIENT_SYMBIONTS', {
+          symbiontCompositionMode: 'ORDINARY_SYMBIONTS',
+          ordinarySymbiontInstances: [],
+          symbioticMonsterProfileIdOrNull: null,
+        });
+        h.patch('SENTIENT_INVENTORY', { inventoryItems: [], armorCompatibilityReasonOrNull: null });
+      } else {
+        h.patch('MONSTER_IDENTITY', { name: 'Зверь', description: null, creatureType: kind });
+        h.patch('MONSTER_STATS', edited);
+        h.patch('MONSTER_PHYSICS', physics);
+        h.patch('MONSTER_ATTACK', attack);
+        h.patch('MONSTER_SYMBIONT', { operation: 'PREVIEW', selection: { mode: 'NONE' } });
+        const a = h.view().enemyAuthoring?.attemptOrNull;
+        if (a?.kind !== 'CUSTOM_MONSTER' || a.compositionOrNull === null)
+          throw new Error('Expected actual monster preview');
+        const { previewCommandId } = a.compositionOrNull;
+        h.patch('MONSTER_SYMBIONT', {
+          operation: 'CONFIRM',
+          previewCommandId,
+          manualFacesOrNull: null,
+        });
+        h.patch('MONSTER_SYMBIONT', { operation: 'FINISH', previewCommandId, advisorSkills: [] });
+      }
+      const save = h.app().command(h.request('UI-CMD-ENEMY-COMMIT-V1'));
+      const identities = [enemyVersionIdentityValue(save.receipt.result.committedVersionOrNull)];
+      const expected = [first, first, replacement, supplied] as const;
+      for (const [i, reason] of [
+        'Сохранить прежний портрет',
+        'Заменить портрет',
+        'Убрать портрет',
+      ].entries()) {
+        const last = identities.at(-1);
+        if (last === undefined) throw new Error('Missing committed version');
+        expect(projection().art).toEqual(expected[i]);
+        h.nav('ENM-020::CTA::002');
+        h.select(last, tab);
+        h.nav('ENM-001::CTA::008');
+        expect(projection().art).toEqual(expected[i]);
+        if (i === 1) replace(replacement);
+        if (i === 2) h.patch('ART', { operation: 'CLEAR' });
+        h.patch('VERSION_CONFIGURATION', { operation: 'SET_REASON', reason });
+        const command = h.request('UI-CMD-ENEMY-NEW-VERSION', { reason });
+        const result = h.app().command(command);
+        identities.push(enemyVersionIdentityValue(result.receipt.result.committedVersionOrNull));
+      }
+      h.f.restartFromDisk();
+      for (const [i, id] of identities.entries()) {
+        h.select(id, tab, 'ENM-020');
+        const p = projection();
+        expect(p.context.selectedVersionOrNull).toEqual(id);
+        expect(id).toMatchObject({
+          kind,
+          version: i + 1,
+          templateId: identities[0]?.templateId,
+          artSha256: expected[i]?.sha256,
+        });
+        expect(p.art).toEqual(expected[i]);
+        expect(p.sheetOrNull?.artAssetKey).toBe(id.artAssetKey);
+      }
+      expect(h.f.db.prepare('SELECT count(*) AS n FROM campaign_enemy_art_upload').get()).toEqual({
+        n: 2,
+      });
+    } finally {
+      h.f.close();
+    }
+  },
+  // Comparable full AUTO authoring/reopen measured 183.251 s locally. This case opens four saved versions.
+  300_000,
+);
+
+it('CORE-193/201 keeps the uploaded monster art hash of the original roll across physical restart', () => {
+  const h = fixture('MANUAL');
+  try {
+    h.select(null);
+    h.nav('ENM-001::CTA::011');
+    const bytes = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xff]);
+    const sha256 = createHash('sha256').update(bytes).digest('hex');
+    h.patch('ART', {
+      operation: 'UPLOAD',
+      file: { kind: 'local-file', mediaType: 'image/png', bytesBase64: bytes.toString('base64') },
+    });
+    h.patch('MONSTER_IDENTITY', {
+      name: 'Зверь',
+      description: null,
+      creatureType: 'CUSTOM_MONSTER',
+    });
+    h.open('ENM-012::CTA::005');
+    const roll = h.rollRequest();
+    vi.mocked(randomInt).mockClear();
+    const result = h.app().command(roll);
+    expect(monsterStatRollReceiptValue(result.receipt.result.randomStatsReceipt).artSha256).toBe(
+      sha256,
+    );
+    h.f.restartFromDisk();
+    const current = enemyAuthoringProjectionValue(h.app().project().base.roleFilteredPayload);
+    expect(current.art).toEqual({
+      mediaType: 'image/png',
+      sha256,
+      bytesBase64: bytes.toString('base64'),
+    });
+    expect(h.app().command(roll)).toEqual({ ...result, replayed: true });
+    expect(randomInt).toHaveBeenCalledTimes(7);
+  } finally {
+    h.f.close();
+  }
+});
+
 // ADR 0088: clean02 AUTO recorded 183.251 s through cleanup at a 120 s deadline.
 // Give this AUTO case 300 s of finite headroom; retain MANUAL's 120 s budget.
 for (const mode of ['MANUAL', 'AUTO'] as const)
@@ -273,7 +437,7 @@ for (const mode of ['MANUAL', 'AUTO'] as const)
           W: null,
           C: null,
         });
-        expect(readAppliedMigrationVersion(f.db)).toBe(24);
+        expect(readAppliedMigrationVersion(f.db)).toBe(25);
         const initial = h.view().enemyAuthoring?.attemptOrNull;
         expect(initial?.kind === 'CUSTOM_MONSTER' && initial.statsOrNull).toBeNull();
         vi.mocked(randomInt).mockClear();
@@ -681,6 +845,10 @@ it('refuses stale and foreign AUTO requests before native RNG, rolls back reache
     ).toThrow('IDEMPOTENCY_CONFLICT');
     expect(f.db.serialize().equals(replayBytes)).toBe(true);
     expect(randomInt).toHaveBeenCalledTimes(expectedCalls);
+    expect(f.db.prepare('SELECT * FROM campaign_enemy_art_upload').all()).toEqual([]);
+    f.db.exec('DROP TABLE campaign_enemy_art_upload');
+    expect(f.db.prepare('DELETE FROM schema_migration WHERE version=25').run().changes).toBe(1);
+    expect(readAppliedMigrationVersion(f.db)).toBe(24);
     f.db.prepare('DELETE FROM schema_migration WHERE version=24').run();
     expect(readAppliedMigrationVersion(f.db)).toBe(23);
     const missing24 = f.db.serialize();

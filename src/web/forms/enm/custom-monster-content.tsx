@@ -1053,12 +1053,6 @@ export function CustomMonsterContent({
       {p.formId === 'ENM-020' && p.versionConfigurationSummaryOrNull === null ? (
         <p>У этой сохранённой версии нет отдельного подтверждения конфигурации N+1.</p>
       ) : null}
-      <img
-        alt="Заглушка произвольного монстра"
-        src={`data:image/png;base64,${p.art.bytesBase64}`}
-        width={220}
-      />
-      <p>Этот поставленный портрет закрепится в V1. Загрузка другого арта недоступна.</p>
       {p.validationErrors.map((error) => (
         <p role="alert" key={error}>
           {error}
