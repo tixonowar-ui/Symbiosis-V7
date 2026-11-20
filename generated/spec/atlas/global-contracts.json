@@ -1416,5 +1416,162 @@
       },
       "sourceFile": "Symbiosis_V7_Soundtrack_Playback_Registry_v1.1.xlsx"
     }
+  },
+  {
+    "contractId": "localOwnerBinding",
+    "value": {
+      "admission": {
+        "candidateChecksumEvidence": "candidateSnapshotChecksum equals immutable descriptor.sourceChecksum; exportBytesSha256 is separate private evidence.",
+        "copyMapping": "Match the accepted proposal by proposalChecksum and proposalRevision. Resolve fullCampaignCopyDiffs[].sourceUuid to campaignCharacterIdOrNull; join receipt.copies[].campaignCharacterId to its controllerBindingOrNull and verify deviceId, localControllerSeatId and inputLaneId. An absent acceptance receipt, missing confirmed copy or null controllerBindingOrNull yields no player tab and preserves the original membership.",
+        "currentMembershipCheck": "HOST_LOCAL_CANDIDATE: listing, direct open, NET-003 reselection and NET-004 submit each recheck the current acknowledged targetLocalOwnerId and durable membership for every exact sourceUuid before reading or writing. A foreign UUID or stale grant is rejected.",
+        "maximumActiveContexts": 1,
+        "maximumAdmittedLocalPlayerTabs": 3,
+        "receiptMapping": [
+          "sourceUuid",
+          "targetLocalOwnerId",
+          "proposalChecksum",
+          "proposalRevision",
+          "receiptId",
+          "campaignCharacterId",
+          "localControllerSeatId"
+        ],
+        "repeatForEachLocalOwner": true,
+        "requestFormId": "NET-003",
+        "workflow": "EXISTING_171_172"
+      },
+      "binding": {
+        "assignment": "UNASSIGNED_TO_EXACT_OWNER_ONCE",
+        "commandId": "UI-CMD-LOCAL-OWNER-BIND-FINALS",
+        "envelopeFields": [
+          "commandId",
+          "installationId",
+          "deviceId",
+          "targetLocalOwnerId",
+          "targetProfileLabel",
+          "selectorHandoffReceiptId",
+          "signedReturnContext",
+          "selectionRevision",
+          "stateRevision",
+          "projectionRevision",
+          "selectedFinals"
+        ],
+        "formId": "APP-003",
+        "maximum": 3,
+        "membershipKey": [
+          "installationId",
+          "deviceId",
+          "sourceUuid"
+        ],
+        "minimum": 1,
+        "receiptFields": [
+          "bindingReceiptId",
+          "grantId",
+          "targetLocalOwnerId",
+          "targetProfileLabel",
+          "selectedFinals",
+          "pendingContinuationId"
+        ],
+        "selectionFields": [
+          "sourceUuid",
+          "finalSnapshotVersion",
+          "metadataRevision",
+          "candidateSnapshotChecksum"
+        ]
+      },
+      "boundaries": {
+        "ackCreatesMembership": false,
+        "bindAllocatesSeat": false,
+        "bindCreatesCampaignCopy": false,
+        "libraryMembershipIsCampaignAuthority": false,
+        "mayReassign": false,
+        "mayUndo": false,
+        "ordinaryDevicePartitioning": false,
+        "ordinaryNullAccessAfterBinding": "UNASSIGNED_ONLY; assigned originals require the exact current acknowledged membership across campaign end and restart"
+      },
+      "continuation": {
+        "allowLaterBeforeTargetAck": true,
+        "identity": "pendingContinuationId",
+        "neutralMetadataFields": [
+          "targetProfileLabel",
+          "targetLocalOwnerId",
+          "pendingContinuationId"
+        ],
+        "requiresCurrentSignedHandoff": true,
+        "resumeFormIds": [
+          "CMP-009",
+          "PLY-030"
+        ],
+        "targetLibrary": "ACTIVE_OWNER_MEMBERSHIPS_ONLY"
+      },
+      "curtains": {
+        "authenticateHuman": false,
+        "explicitCooperativeAcknowledgement": true,
+        "metadataFields": [
+          "targetProfileLabel",
+          "targetLocalOwnerId"
+        ],
+        "requirePriorProjectionErased": true,
+        "selector": "DEVICE_LIBRARY_SELECTOR",
+        "target": "HOST_LOCAL_CANDIDATE"
+      },
+      "modeActions": {
+        "DEVICE_LIBRARY_SELECTOR": [
+          "APP-004::CTA::009",
+          "APP-004::CTA::010"
+        ],
+        "NEUTRAL_PROFILE_SETUP": [
+          "APP-003::CTA::007",
+          "APP-003::CTA::011",
+          "APP-003::CTA::012",
+          "APP-003::CTA::013",
+          "APP-003::CTA::010"
+        ],
+        "PENDING_NEUTRAL_RESUME": [
+          "PLY-030::CTA::007"
+        ],
+        "SELECTOR_BIND_CONFIRM": [
+          "APP-003::CTA::008",
+          "APP-003::CTA::010"
+        ],
+        "SELECTOR_CURTAIN": [
+          "PLY-030::CTA::003",
+          "PLY-030::CTA::008"
+        ],
+        "SIGNED_GM_RETURN": [
+          "PLY-030::CTA::006"
+        ],
+        "TARGET_CURTAIN": [
+          "PLY-030::CTA::004",
+          "PLY-030::CTA::005",
+          "PLY-030::CTA::008"
+        ],
+        "TARGET_OWNER_ADMISSION": [
+          "APP-003::CTA::009"
+        ]
+      },
+      "profile": {
+        "createCommandId": "UI-CMD-LOCAL-OWNER-PROFILE-CREATE",
+        "key": [
+          "installationId",
+          "deviceId",
+          "targetLocalOwnerId"
+        ],
+        "label": "targetProfileLabel",
+        "lifetime": "INSTALLATION_LOCAL_CROSS_CAMPAIGN",
+        "selection": "EXPLICIT_EXACT_ID"
+      },
+      "selector": {
+        "allowedActionKeys": [
+          "APP-004::CTA::009",
+          "APP-004::CTA::010"
+        ],
+        "authority": "SELECTION_ONLY",
+        "formId": "APP-004",
+        "handoffType": "DEVICE_LIBRARY_SELECTOR",
+        "localOwnerIdOrNull": null,
+        "visibility": "UNASSIGNED_IMMUTABLE_FINAL_ONLY"
+      },
+      "source": "ADR 0095 / #249 / B18"
+    }
   }
 ]

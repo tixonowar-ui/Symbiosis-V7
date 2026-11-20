@@ -29,6 +29,11 @@ import {
 } from './atlas.js';
 import { validateQuestionRefs } from './question-refs.js';
 import { validateNpcInitialStateContracts } from './npc-initial-contract.js';
+import { generatedAtlasContractSnapshot } from './atlas-contract-snapshot.js';
+import {
+  assertAdr0095LocalOwnerBinding,
+  assertAdr0095LocalOwnerMarkdown,
+} from '../import/local-owner-binding-atlas-contract.js';
 import {
   assertAdr0071Admission,
   assertAdr0071AdmissionMarkdown,
@@ -347,20 +352,21 @@ try {
     cause instanceof Error ? cause.message : 'invalid admission source',
   );
 }
+const generatedAtlas = {
+  counts: atlasMeta?.['counts'],
+  forms: formRows,
+  transitions: transitionRows,
+  journeys: journeyRows,
+  coverageRequirements: requirementRows,
+  qaScenarios: qaScenarioRows,
+  workflowCommands: workflowRows,
+  globalContracts: rows('atlas/global-contracts.json'),
+} as unknown as ImportJsonObject;
 try {
   if (suppliedAtlas === undefined) throw new Error('Atlas source could not be loaded');
   validateNpcInitialStateContracts(
     suppliedAtlas,
-    {
-      counts: atlasMeta?.['counts'],
-      forms: formRows,
-      transitions: transitionRows,
-      journeys: journeyRows,
-      coverageRequirements: requirementRows,
-      qaScenarios: qaScenarioRows,
-      workflowCommands: workflowRows,
-      globalContracts: rows('atlas/global-contracts.json'),
-    } as unknown as ImportJsonObject,
+    generatedAtlas,
     readFileSync(ARTIFACT.atlasMd, 'utf8'),
   );
 } catch (cause) {
@@ -368,6 +374,18 @@ try {
     'atlas NPC initial-state contract',
     'ADR 0085/0086',
     cause instanceof Error ? cause.message : 'invalid initial-state source or generated output',
+  );
+}
+try {
+  if (suppliedAtlas === undefined) throw new Error('Atlas source could not be loaded');
+  assertAdr0095LocalOwnerBinding(suppliedAtlas);
+  assertAdr0095LocalOwnerBinding(generatedAtlasContractSnapshot(suppliedAtlas, generatedAtlas));
+  assertAdr0095LocalOwnerMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));
+} catch (cause) {
+  report(
+    'atlas local owner binding',
+    'ADR 0095',
+    cause instanceof Error ? cause.message : 'invalid source or generated output',
   );
 }
 if (rendererFormsById !== null) {

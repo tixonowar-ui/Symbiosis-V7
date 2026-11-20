@@ -852,11 +852,15 @@
   {
     "alternatives": [
       "Четвёртый персонаж запрещён с человеческим объяснением.",
-      "Manual switching blocked во время команды/реакции/серии, кроме предусмотренной безопасной отмены."
+      "Manual switching blocked во время команды/реакции/серии, кроме предусмотренной безопасной отмены.",
+      "Отмена до привязки возвращает через подписанную GM-завесу с нулём grant. «Позже» после привязки сохраняет grant и адресное продолжение.",
+      "Пустой профиль открывает обычную APP-004 через адресный HOST_LOCAL_CANDIDATE ACK; известный owner-safe batch и импортированный claim сохраняют отдельные signed пути.",
+      "До commit из NEUTRAL_PROFILE_SETUP, SELECTOR_BIND_CONFIRM, непринятой SELECTOR_CURTAIN или свежей TARGET_CURTAIN можно отменить без выбора/создания профиля, ACK селектора/адресата или открытия библиотеки. Стереть private buffers и вернуться к точной signedReturnContext через нейтральную завесу. GM-проекция выдаётся только после своего адресного ACK. Отмена не пишет профиль, membership, grant, binding/selector/target receipt, character/copy, seat или reserve; ранее явно созданный пустой профиль сохраняется."
     ],
     "coverageStatus": "COVERED",
     "errorOfflineReconnect": [
-      "Reconnect восстанавливает только server-confirmed tabs, active seat, projection и pending command."
+      "Reconnect восстанавливает только server-confirmed tabs, active seat, projection и pending command.",
+      "После commit селектор и его буферы стираются до адресной завесы HOST_LOCAL_CANDIDATE. «Позже» сохраняет тот же grant и pendingContinuationId и ведёт через подписанный возврат к GM. В CMP-009 и нейтральной завесе доступны только метка, идентификатор адресата и непрозрачный pendingContinuationId. После restart продолжение требует нового текущего подписанного контекста и отдельного ACK адресата. Replay возвращает прежнюю квитанцию без повторной записи и активации исторического контекста."
     ],
     "formIds": [
       "APP-003",
@@ -1020,6 +1024,65 @@
         "guards": "Consent/predicate/reactive prompt адресату; до ответа ресурсов нет; после ответа возврат инициатору.",
         "result": "Pending request resolved.",
         "state": "SYSTEM_HANDOFF"
+      },
+      {
+        "formIds": [
+          "CMP-009",
+          "APP-003"
+        ],
+        "guards": "isHostDevice=true; active master at safe signed boundary, including GM_ONLY with zero PCs; erase all GM payload, DOM, a11y, hotkeys, cache before neutral profile metadata; no FINAL rows",
+        "result": "Профиль с явно введённой непустой меткой получает постоянный локальный идентификатор. Профиль, привязка и точная пара метки с идентификатором сохраняются на этой установке и устройстве после закрытия сессии, перезапуска и смены кампании. Одноимённые профили различаются по targetLocalOwnerId. Метку вводит человек; имя персонажа и сама метка не удостоверяют владельца. Сброс installation/device identity не передаёт прежние права.",
+        "state": "NEUTRAL_PROFILE_SETUP"
+      },
+      {
+        "formIds": [
+          "APP-003",
+          "PLY-030",
+          "APP-004"
+        ],
+        "guards": "neutral curtain; all private projections erased; address exact targetProfileLabel + targetLocalOwnerId; no FINAL/candidate metadata",
+        "result": "После очистки GM-проекции человек за доверенным устройством явно подтверждает кооперативную роль DEVICE_LIBRARY_SELECTOR. Только этот контекст с localOwnerIdOrNull=null видит неназначенные неизменяемые FINAL этой установки. Чужие строки, UUID, имена, artwork, счётчики, поисковые результаты и команды отсутствуют в payload, DOM, accessibility tree, hotkeys и cache. Секрет, loopback/listener/origin и подпись удостоверяют устройство и контекст, личность человека не проверяется. Тот же человек вправе подтвердить обе разные завесы последовательно.",
+        "state": "SELECTOR_CURTAIN"
+      },
+      {
+        "formIds": [
+          "APP-004",
+          "APP-003",
+          "PLY-030"
+        ],
+        "guards": "signed selector context and selectorHandoffReceiptId current; exact durable targetLocalOwnerId + targetProfileLabel; 1..3 distinct unassigned immutable FINAL from this installation and device; exact sourceUuid/finalSnapshotVersion/metadataRevision/candidateSnapshotChecksum and selectionRevision",
+        "result": "Одна транзакция повторно проверяет текущий подписанный контекст селектора, прежнюю квитанцию ACK, installationId/deviceId, точный профиль и метку, ревизии и весь набор из 1–3 разных неназначенных immutable FINAL по sourceUuid, finalSnapshotVersion, metadataRevision и candidateSnapshotChecksum (исходный descriptor.sourceChecksum). При успехе для всего набора сохраняются membership, grantId, bindingReceiptId и pendingContinuationId. UUID, байты FINAL и создания, исходные ревизии, device provenance и игровой журнал сохраняются. Конфликт любой строки, иной адресат, другая установка, устаревший контекст, четвертая или повторная строка дают zero write для всего набора. Undo/reassign отсутствуют.",
+        "state": "SELECTOR_BIND_CONFIRM"
+      },
+      {
+        "formIds": [
+          "PLY-030",
+          "APP-004"
+        ],
+        "guards": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority",
+        "result": "Владелец устройства выбирает точный профиль либо вводит метку и явно создаёт профиль. Обе адресные завесы показывают targetProfileLabel вместе с targetLocalOwnerId. На подтверждении рядом с этой парой перечислены выбранные листы; передача меняет будущий доступ к библиотеке. Экран GM и нейтральное продолжение показывают только служебные данные назначения.",
+        "state": "TARGET_CURTAIN"
+      },
+      {
+        "formIds": [
+          "PLY-030",
+          "CMP-009"
+        ],
+        "guards": "same installation/device; trusted safe current boundary; exact retained pendingContinuationId and targetLocalOwnerId with targetProfileLabel; fresh signed HOST_LOCAL_CANDIDATE target; no target projection before new ACK",
+        "result": "После commit селектор и его буферы стираются до адресной завесы HOST_LOCAL_CANDIDATE. «Позже» сохраняет тот же grant и pendingContinuationId и ведёт через подписанный возврат к GM. В CMP-009 и нейтральной завесе доступны только метка, идентификатор адресата и непрозрачный pendingContinuationId. После restart продолжение требует нового текущего подписанного контекста и отдельного ACK адресата. Replay возвращает прежнюю квитанцию без повторной записи и активации исторического контекста.",
+        "state": "PENDING_NEUTRAL_RESUME"
+      },
+      {
+        "formIds": [
+          "APP-004",
+          "APP-003",
+          "NET-003",
+          "NET-004",
+          "NET-017"
+        ],
+        "guards": "isHostDevice=true; current HOST_LOCAL_CANDIDATE ACK identifies exact target owner; only that owner’s permitted sourceUuid subset, 1..3, current revisions, ordinary #171/#172 admission; no pre-admission seat HOST_LOCAL_CANDIDATE: listing, direct open, NET-003 reselection and NET-004 submit each recheck the current acknowledged targetLocalOwnerId and durable membership for every exact sourceUuid before reading or writing. A foreign UUID or stale grant is rejected.",
+        "result": "После ACK адресат видит только собственную библиотеку, в том числе точный предоставленный набор. В APP-003 выбирает свои конкретные листы и через NET-003/NET-004 проходит обычный #171/#172 с рассмотрением GM. Реальный ACCEPT receiptId связан с proposalChecksum и proposalRevision. В fullCampaignCopyDiffs запись sourceUuid → campaignCharacterIdOrNull связывает membership владельца с принятой copies[].campaignCharacterId, затем с controllerBindingOrNull.{deviceId,localControllerSeatId,inputLaneId}. Без квитанции, подтверждённой копии или привязки контроллера вкладка не создаётся; membership оригинала сохраняется. Общий максимум три допущенные PC-вкладки и один активный контекст GM или PC. Для другого профиля требуется отдельная передача. Пустой профиль сохраняет создание CHR-001 через обычную APP-004; GM_ONLY с нулём PC, обычный ПК и известный owner-safe batch сохраняют свои ветки.",
+        "state": "TARGET_OWNER_ADMISSION"
       }
     ],
     "title": "0–3 локальных игрока и игрок на компьютере мастера",
@@ -1029,7 +1092,9 @@
       "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK",
       "UI-CMD-MASTER-PREDICATE-RESPOND",
       "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
-      "UI-CMD-DEVICE-REQUEST-REJECT"
+      "UI-CMD-DEVICE-REQUEST-REJECT",
+      "UI-CMD-LOCAL-OWNER-PROFILE-CREATE",
+      "UI-CMD-LOCAL-OWNER-BIND-FINALS"
     ]
   },
   {

@@ -90,7 +90,7 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-009',
-    sha256: 'ab1b20157b90b487dbdc76ba9dd0201c6d83985f343860e0997376ee43833f16',
+    sha256: 'c4553925c86d2a48705a5e8796bf3d63502499c483167ff3ba6c6cd05674778f',
   },
   {
     target: 'coverageRequirements',
@@ -186,11 +186,11 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '6caf5d80dedc0ec96dc45f1f0bf07ee70aa2d202734e3f6ed191bbcfdce680cb',
+    sha256: '112d9088e4909ed884f0df25e4657d8eb3643c788a7587d21827d4c7c7664978',
   },
   {
     key: 'transitions',
-    sha256: '76d2cf3f7b0e93adaffd28e06efc23883ff19863c023c8530ef003a92abf5c6c',
+    sha256: '30f85a6bbbebfeb833050b2c472b44e5872545ca1633e85f30fa4ce36d940248',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -247,7 +247,7 @@ const MARKDOWN_LINES = [
   {
     prefix:
       '| REQ-009 | 0–3 local players, вход из активной мирной/боевой сцены и отдельная GM-tab только на host |',
-    sha256: '7976e40c2b2d29c972d2873570006d217066d65778218a442375ffdd00e8b8da',
+    sha256: 'fafe8a7f839bf2d0f3d1206777d0ee2e181e9a17f5e0788b11a80eb72260ba14',
   },
   {
     prefix:

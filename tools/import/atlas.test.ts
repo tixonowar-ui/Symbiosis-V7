@@ -95,12 +95,12 @@ const workflowCommand = (overrides: ImportJsonObject = {}): ImportJsonObject => 
   guards: 'Guard contract.',
   atomicity: 'Atomic contract.',
   reconnect: 'Reconnect contract.',
-  qa: 'QA-WORKFLOW-TEST',
+  qa: 'QA-WORKFLOW-UI-CMD-TEST',
   ...overrides,
 });
 
 const workflowQa = (overrides: ImportJsonObject = {}): ImportJsonObject => ({
-  qaId: 'QA-WORKFLOW-TEST',
+  qaId: 'QA-WORKFLOW-UI-CMD-TEST',
   scope: 'UI-CMD-TEST',
   expected: 'Atomic contract. Reconnect contract.',
   ...overrides,
@@ -193,10 +193,10 @@ describe('generated atlas spec', () => {
   });
 
   it('matches the counts the audit states about the atlas', () => {
-    expect(spec('transitions.json')).toHaveLength(1721);
+    expect(spec('transitions.json')).toHaveLength(1738);
     expect(spec('journeys.json')).toHaveLength(66);
     expect(spec('requirements.json')).toHaveLength(91);
-    expect(spec('qa-scenarios.json')).toHaveLength(2452);
+    expect(spec('qa-scenarios.json')).toHaveLength(2460);
     expect(spec('lifecycles.json')).toHaveLength(19);
     expect(spec('diagrams.json')).toHaveLength(11);
   });
@@ -254,7 +254,7 @@ describe('generated atlas spec', () => {
     ).toEqual(source);
   });
 
-  it('pins the historical base-v1.2 semantic digests carried by Atlas v1.22', () => {
+  it('pins the historical base-v1.2 semantic digests carried by Atlas v1.23', () => {
     const meta = spec('meta.json') as { graphDigest: string; contentDigest: string };
     expect(meta.graphDigest).toBe(
       '693910e40ffca85b30d9eafd05c2bb7d59934da966c10afdafa5afe6e51fe7df',
@@ -420,7 +420,7 @@ describe('generated atlas types', () => {
     const known: ActionKey = 'APP-002::CTA::007';
     // @ts-expect-error Exact Atlas union excludes a well-formed but absent key.
     const absent: ActionKey = 'APP-002::CTA::999';
-    expect(members).toHaveLength(1_283);
+    expect(members).toHaveLength(1_300);
     expect(members).toEqual(extractActionKeys(clonedForms()));
     expect(members).toContain(known);
     expect(members).not.toContain(absent);
@@ -439,8 +439,8 @@ describe('action key export guards', () => {
     [rows[0], rows[1]] = [rows[1]!, rows[0]!];
     const actionKeys = extractActionKeys(forms);
 
-    expect(actionKeys).toHaveLength(1_283);
-    expect(new Set(actionKeys).size).toBe(1_283);
+    expect(actionKeys).toHaveLength(1_300);
+    expect(new Set(actionKeys).size).toBe(1_300);
     expect(actionKeys.slice(0, 4)).toEqual([
       'APP-001::CTA::002',
       'APP-001::CTA::001',
@@ -488,7 +488,7 @@ describe('action key export guards', () => {
     const forms = clonedForms();
     firstFormActionRows(forms).pop();
 
-    expect(() => extractActionKeys(forms)).toThrow(/expected 1283 action keys, got 1282/u);
+    expect(() => extractActionKeys(forms)).toThrow(/expected 1300 action keys, got 1299/u);
   });
 });
 
@@ -596,9 +596,38 @@ describe('workflow command export guards', () => {
   });
 
   it('requires exactly one linked QA scenario', () => {
+    expect(() => extractSyntheticWorkflowCommands([workflowCommand()], [])).toThrow(
+      /matches 0 QA scenarios, expected 1/u,
+    );
+  });
+
+  it.each(['QA-WORKFLOW-TEST', 'QA-WORKFLOW-UI-CMD-OTHER', 'QA-TEST'])(
+    'rejects %s even when command, QA scope and QA behavior agree',
+    (qa) => {
+      expect(() =>
+        extractSyntheticWorkflowCommands([workflowCommand({ qa })], [workflowQa({ qaId: qa })]),
+      ).toThrow(/qa must be "QA-WORKFLOW-UI-CMD-TEST"/u);
+    },
+  );
+
+  it('rejects a workflow QA with an unregistered wire command', () => {
     expect(() =>
-      extractSyntheticWorkflowCommands([workflowCommand({ qa: 'QA-WORKFLOW-MISSING' })]),
-    ).toThrow(/matches 0 QA scenarios, expected 1/u);
+      extractSyntheticWorkflowCommands(
+        [workflowCommand()],
+        [workflowQa(), workflowQa({ qaId: 'QA-WORKFLOW-UI-CMD-EXTRA', scope: 'UI-CMD-EXTRA' })],
+      ),
+    ).toThrow(/does not name a registered workflow command/u);
+  });
+
+  it('rejects a command ID outside the host grammar even with an exact QA ID', () => {
+    const commandId = 'UI-CMD-invalid';
+    const qa = 'QA-WORKFLOW-' + commandId;
+    expect(() =>
+      extractSyntheticWorkflowCommands(
+        [workflowCommand({ commandId, qa })],
+        [workflowQa({ qaId: qa, scope: commandId })],
+      ),
+    ).toThrow(/invalid workflow command ID/u);
   });
 
   it('requires the linked QA scope to name the command', () => {
@@ -658,7 +687,7 @@ describe('ADR 0049 missing decision channels', () => {
     expect(() => assertAdr0049MissingChannels(root)).toThrow();
   };
 
-  it('accepts the exact v1.22 delivery', () => {
+  it('accepts the exact v1.23 delivery', () => {
     expect(() => assertAdr0049MissingChannels(clonedAtlas())).not.toThrow();
   });
 
@@ -1100,7 +1129,7 @@ describe('ADR 0052 advisor intelligence floor channel', () => {
     expect(() => assertAdr0052AdvisorIntelligenceFloor(root)).toThrow();
   };
 
-  it('accepts the exact v1.22 delivery', () => {
+  it('accepts the exact v1.23 delivery', () => {
     expect(() => assertAdr0052AdvisorIntelligenceFloor(clonedAtlas())).not.toThrow();
   });
 
@@ -1246,7 +1275,7 @@ describe('ADR 0069 request-level review source boundary', () => {
       });
     }
   }
-  it('accepts the complete real v1.22 delivery and preserves both older semantic guards', () => {
+  it('accepts the complete real v1.23 delivery and preserves both older semantic guards', () => {
     const root = clonedAtlas();
     expect(() => {
       assertAdr0069RequestReview(root);

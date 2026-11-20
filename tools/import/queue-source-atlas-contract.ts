@@ -36,7 +36,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'PLY-030',
-    sha256: 'b54d89dd2b58491ef338424c7095dadb3caa4676ab699e9ad6d58af467473cd6',
+    sha256: 'd672645e2d901274d1e84716857868e784ea679a1faa488cc27b8792c27911a4',
   },
   {
     target: 'forms',
@@ -108,13 +108,13 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-006',
-    sha256: '7c51e510d6406614166d3bcf3a8b70f05b805c4feb8a7d11bfa7db51d5d7343c',
+    sha256: '253fb042ddd15f43965016fc16393c5a9be92a5e2171acfa2c8f6e93508e74af',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-009',
-    sha256: 'ab1b20157b90b487dbdc76ba9dd0201c6d83985f343860e0997376ee43833f16',
+    sha256: 'c4553925c86d2a48705a5e8796bf3d63502499c483167ff3ba6c6cd05674778f',
   },
   {
     target: 'coverageRequirements',
@@ -162,7 +162,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-PLY-030',
-    sha256: 'fa3c258500d56c9b5eb4315d7cb8ebb771e25ee9899b48c1dbe9ef9cd1c6edec',
+    sha256: '0c0db3e03bfc0194ddceab93aec0fb1745662277ddc09d657089448599190903',
   },
   {
     target: 'qaScenarios',
@@ -234,7 +234,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-REQ-006',
-    sha256: '41423d4e10045a4f4e015d2616f7e3757b75e7c82afaec6106cdd2e0779f2e3f',
+    sha256: '5325030e32c78bd69143f2625437cae32103fca07fb01ec58b709fcc43ef5104',
   },
   {
     target: 'qaScenarios',
@@ -282,7 +282,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-WORKFLOW-UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK',
-    sha256: 'd32e272aec15e637e151c2e80c3b55dd43d87a580583f7048e5a57dc1b6bc032',
+    sha256: 'ed2332c0e68e664fdfb27fe81c0237bfa3821cb188c8d3cb7f96f86388cfba5d',
   },
   {
     target: 'qaScenarios',
@@ -312,7 +312,7 @@ const OBJECT_SEALS = [
     target: 'workflowCommands',
     key: 'commandId',
     id: 'UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK',
-    sha256: '369df38729e4cb1b90117a21cc1c5867d9bc316da9f315021ca7b1d64b33c2d9',
+    sha256: 'a807fd2e6621b6bd6d97c12091afeb8ce12ca763db35f5bca955e76bafdb55cb',
   },
   {
     target: 'workflowCommands',
@@ -324,17 +324,17 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '6caf5d80dedc0ec96dc45f1f0bf07ee70aa2d202734e3f6ed191bbcfdce680cb',
+    sha256: '112d9088e4909ed884f0df25e4657d8eb3643c788a7587d21827d4c7c7664978',
   },
   {
     key: 'transitions',
-    sha256: '76d2cf3f7b0e93adaffd28e06efc23883ff19863c023c8530ef003a92abf5c6c',
+    sha256: '30f85a6bbbebfeb833050b2c472b44e5872545ca1633e85f30fa4ce36d940248',
   },
   {
     // ADR 0092 / #284 changes only the intersecting SENTIENT PATCH witness.
     // ADR0094 / #288 changes only intersecting ENM017 PATCH/NEW-VERSION witnesses.
     key: 'registryCoverage',
-    sha256: 'd7ec2e4d9d8f4bbb1d969bb829486f536d2e4420bb28648a13d540e0168cfcb7',
+    sha256: 'e5f3b0aa4ee0c2d332bb9ece3be4997ee6172714a2347fedca1ccf45a04dd686',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -352,7 +352,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### PLY-030 —',
-    sha256: 'a36ee4bcace06a0f0e65dbdd74510f6810162c54d7fe2f97c3fa83c23f3a44aa',
+    sha256: '8c40db93fd643386f857190a0a284731c4a3e7c20165c85053139caaa95b5a5b',
   },
   {
     prefix: '### NPC-003 —',
@@ -402,11 +402,11 @@ const MARKDOWN_SECTIONS = [
 const MARKDOWN_LINES = [
   {
     prefix: '| REQ-006 |',
-    sha256: '2a77c4df115db3955ab92425de612c9416617a3a514b0c0285a995c638e309f6',
+    sha256: 'c1a0114f7e02a130ad5db0b79553bc97f13803aae6717c9b075544196d803bac',
   },
   {
     prefix: '| REQ-009 |',
-    sha256: '7976e40c2b2d29c972d2873570006d217066d65778218a442375ffdd00e8b8da',
+    sha256: 'fafe8a7f839bf2d0f3d1206777d0ee2e181e9a17f5e0788b11a80eb72260ba14',
   },
   {
     prefix: '| REQ-011 |',
@@ -438,7 +438,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-PLY-030 |',
-    sha256: '55bba95ad3e8b6d3e06ca06c2f883f775df218942d2e1227c906db10766e99b3',
+    sha256: '4959514d817c5357ee27bd493c7a9ce7f6ee8dc49c0c194c98d0d2e72d06486e',
   },
   {
     prefix: '| QA-CHANGE-PLY-030 |',
@@ -486,7 +486,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-REQ-006 |',
-    sha256: '0e5adefeff7dc996b5aaab5a83f078d1ac3f9b5313441bdd278689d2a996e8ae',
+    sha256: 'e4c2b7b72f63e58c3989c83d753cc26ebfe4daa3724c9abcd8721df3020e5aaa',
   },
   {
     prefix: '| QA-REQ-009 |',
@@ -518,7 +518,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK |',
-    sha256: '4fc05362a346dfcd85278d8722182a90bc3ec4b90f75a1ad8f6daebeb657165c',
+    sha256: 'cd1b27468e1e33c303192c1fd016498acd8e74fa13945d1e20556fdecc550dfb',
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-CAMPAIGN-INITIAL-TIME-SET |',
@@ -539,7 +539,7 @@ const MARKDOWN_LINES = [
   {
     prefix:
       '| UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK | Подтвердить локальную privacy-передачу активного контекста |',
-    sha256: '030aa99f511173f3893a7ced1b7b311dc7884509d45e093bfb2e53a9f3b06956',
+    sha256: 'ff3733826637a5a66141a08205773c532d1dc16ff9be5eec8db3d35f244a96f0',
   },
   {
     prefix: '| UI-CMD-CAMPAIGN-INITIAL-TIME-SET | Сохранить начальное виртуальное время кампании |',

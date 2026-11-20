@@ -24,7 +24,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'NET-003',
-    sha256: 'b72d15abed1dbca729e4663327d99882094fc5167843712d2fac008b2d9093d8',
+    sha256: '152b78134a44ce40a990c581293402c014fb5effaa2a27b8c328df13725c745f',
   },
   {
     target: 'forms',
@@ -96,7 +96,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'PLY-030',
-    sha256: 'b54d89dd2b58491ef338424c7095dadb3caa4676ab699e9ad6d58af467473cd6',
+    sha256: 'd672645e2d901274d1e84716857868e784ea679a1faa488cc27b8792c27911a4',
   },
   {
     target: 'forms',
@@ -132,13 +132,13 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-006',
-    sha256: '7c51e510d6406614166d3bcf3a8b70f05b805c4feb8a7d11bfa7db51d5d7343c',
+    sha256: '253fb042ddd15f43965016fc16393c5a9be92a5e2171acfa2c8f6e93508e74af',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-010',
-    sha256: '4bfa7b10e7c02e9d721ff843c33284dbcb7289eafa2a17d44d109a46672b0c12',
+    sha256: '31758668abea13b7a70a6f22e3041ffb4a75e3d96bd17f3c1ac55a3ea02298a1',
   },
   {
     target: 'coverageRequirements',
@@ -258,11 +258,11 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '6caf5d80dedc0ec96dc45f1f0bf07ee70aa2d202734e3f6ed191bbcfdce680cb',
+    sha256: '112d9088e4909ed884f0df25e4657d8eb3643c788a7587d21827d4c7c7664978',
   },
   {
     key: 'transitions',
-    sha256: '76d2cf3f7b0e93adaffd28e06efc23883ff19863c023c8530ef003a92abf5c6c',
+    sha256: '30f85a6bbbebfeb833050b2c472b44e5872545ca1633e85f30fa4ce36d940248',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -272,7 +272,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### NET-003 —',
-    sha256: 'd887986e75119810dd94cb6713b2cda7acbc31c6087f1444d782e538194f4b64',
+    sha256: '7d10455c77c4f3fd9e198685f8169469d8d5ad67b2ff000192edc89354f1d5a8',
   },
   {
     prefix: '### NET-005 —',
@@ -320,7 +320,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### PLY-030 —',
-    sha256: 'a36ee4bcace06a0f0e65dbdd74510f6810162c54d7fe2f97c3fa83c23f3a44aa',
+    sha256: '8c40db93fd643386f857190a0a284731c4a3e7c20165c85053139caaa95b5a5b',
   },
   {
     prefix: '### GM-019 —',
@@ -346,11 +346,11 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| REQ-006 | Master-import требует owner/device/seat link |',
-    sha256: '2a77c4df115db3955ab92425de612c9416617a3a514b0c0285a995c638e309f6',
+    sha256: 'c1a0114f7e02a130ad5db0b79553bc97f13803aae6717c9b075544196d803bac',
   },
   {
     prefix: '| REQ-010 | Первоначальное заявление local player на host до player tab |',
-    sha256: 'd43c4822fc780a48672e813443170ee5149f01c5b1909e07cf7a2cd7ec879ebd',
+    sha256: '88ddfb4b86ff3198e00c02d14e8f8741460f24495b9b7c3f3bb9479c94dc6a1e',
   },
   {
     prefix: '| REQ-021 | GM inventory give/remove/edit/weapon/story/repair/consumables |',
