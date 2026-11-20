@@ -1,13 +1,13 @@
 import type { JsonObject, RevisionVector } from './wire-protocol.js';
 import type { EnemyStats } from './enemy-authoring.js';
 import { enemyAuthoringContextValue, enemyMonsterStatRollBinding } from './enemy-authoring.js';
+import { enemyArtProjectionValue, enemyAttemptArt, type EnemyArtProjection } from './enemy-art.js';
 import { enemyCompositionCatalogShape } from './enemy-composition-presentation.js';
 import { enemyCompositionReaders as r } from './enemy-composition-codec.js';
 import { wireCodecPrimitives as w } from './wire-codec.js';
 import { admissionJsonEqual } from './campaign-admission-codec.js';
 import {
   CUSTOM_MONSTER_PLACEHOLDER,
-  CUSTOM_MONSTER_PLACEHOLDER_SHA256,
   CUSTOM_MONSTER_STATS,
   customMonsterIdentityValue,
   customMonsterStatsValue,
@@ -77,7 +77,7 @@ export interface CustomMonsterProjection extends RevisionVector {
     capacity: number;
     initialFilled: boolean;
   }> | null;
-  readonly art: Readonly<{ mediaType: 'image/png'; sha256: string; bytesBase64: string }>;
+  readonly art: EnemyArtProjection;
 }
 function stats(value: unknown): void {
   const row = r.exact(value, CUSTOM_MONSTER_STATS.join(' '), '$.monster.permanentStats');
@@ -132,7 +132,11 @@ export function customMonsterSheetValue(value: unknown): CustomMonsterSheet {
   if (row['currentHP'] !== row['effectiveMaxHP'])
     r.invalid('$.currentHP', 'CORE-202 full health', null);
   w.literal(row['progressionPolicy'], 'NO_XP_PROGRESSION', '$.progressionPolicy');
-  w.literal(row['artAssetKey'], CUSTOM_MONSTER_PLACEHOLDER, '$.artAssetKey');
+  if (
+    row['artAssetKey'] !== CUSTOM_MONSTER_PLACEHOLDER &&
+    !/^enemy-upload:[a-f0-9]{64}$/u.test(r.text(row['artAssetKey'], '$.artAssetKey'))
+  )
+    r.invalid('$.artAssetKey', 'monster placeholder or content-addressed enemy upload', null);
   if (row['symbiontOrNull'] !== null) {
     const sym = r.exact(
       row['symbiontOrNull'],
@@ -414,17 +418,15 @@ export function customMonsterProjectionValue(value: unknown): CustomMonsterProje
     (form !== 'ENM-015' && form !== 'ENM-017' && required.length !== 0)
   )
     r.invalid('$.requiredRolls', 'own distinct preparation only', null);
-  const art = r.exact(row['art'], 'mediaType sha256 bytesBase64', '$.art');
-  w.literal(art['mediaType'], 'image/png', '$.mediaType');
-  w.literal(art['sha256'], CUSTOM_MONSTER_PLACEHOLDER_SHA256, '$.sha256');
-  if (
-    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(
-      r.text(art['bytesBase64'], '$.bytesBase64'),
-    )
-  )
-    r.invalid('$.art', 'canonical PNG base64', null);
+  const selected = context.selectedVersionOrNull;
+  const expectedArt =
+    selected === null
+      ? enemyAttemptArt(attempt ?? r.invalid('$.attempt', 'own art context', null))
+      : { assetKey: selected.artAssetKey, sha256: selected.artSha256 };
+  enemyArtProjectionValue(row['art'], expectedArt);
   if (row['sheetOrNull'] !== null) {
     const sheet = customMonsterSheetValue(row['sheetOrNull']);
+    w.literal(sheet.artAssetKey, expectedArt.assetKey, '$.artAssetKey');
     if (form === 'ENM-020' && row['statGeneration'] != null) {
       const generation = monsterStatGenerationValue(row['statGeneration']);
       if (

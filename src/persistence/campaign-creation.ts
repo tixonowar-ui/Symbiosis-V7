@@ -673,7 +673,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 21 ||
     version === 22 ||
     version === 23 ||
-    version === 24
+    version === 24 ||
+    version === 25
       ? ([
           ['local_network_application_event', ['event_id', 'receipt_id']],
           ['hosted_network_command', ['command_id', 'receipt_id']],
@@ -698,7 +699,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 21 ||
     version === 22 ||
     version === 23 ||
-    version === 24
+    version === 24 ||
+    version === 25
       ? ([
           ['hosted_device_request_decision', ['command_id', 'receipt_id']],
           ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
@@ -719,7 +721,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 21 ||
     version === 22 ||
     version === 23 ||
-    version === 24
+    version === 24 ||
+    version === 25
       ? CAMPAIGN_ADMISSION_IDENTITIES
       : [];
   if (
@@ -734,7 +737,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 21 ||
     version === 22 ||
     version === 23 ||
-    version === 24
+    version === 24 ||
+    version === 25
   )
     for (const [table, columns] of [
       ...CAMPAIGN_LOBBY_IDENTITIES,
@@ -3106,7 +3110,8 @@ function queueSchema(db: Database.Database): void {
     row['version'] !== 21 &&
     row['version'] !== 22 &&
     row['version'] !== 23 &&
-    row['version'] !== 24
+    row['version'] !== 24 &&
+    row['version'] !== 25
   )
     return fail();
   for (const table of DEVICE_REQUEST_REVIEW_TABLES)
@@ -3124,7 +3129,8 @@ function queueSchema(db: Database.Database): void {
     row['version'] === 21 ||
     row['version'] === 22 ||
     row['version'] === 23 ||
-    row['version'] === 24
+    row['version'] === 24 ||
+    row['version'] === 25
   )
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();

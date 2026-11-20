@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { createHash } from 'node:crypto';
 import type { JsonObject } from '../../src/shared/wire-protocol.js';
 import { wireCodecPrimitives as w } from '../../src/shared/wire-codec.js';
 import {
@@ -26,8 +27,20 @@ const rows = (value: unknown): JsonObject[] => {
 };
 const button = (page: Page, name: string) => page.getByRole('button', { name, exact: true });
 
+async function portrait(page: Page, mediaType: 'image/png' | 'image/jpeg') {
+  const bytes = await page.screenshot({
+    type: mediaType === 'image/png' ? 'png' : 'jpeg',
+    clip: { x: 0, y: 0, width: 16, height: 16 },
+  });
+  return {
+    mediaType,
+    bytesBase64: bytes.toString('base64'),
+    sha256: createHash('sha256').update(bytes).digest('hex'),
+  };
+}
+
 for (const kind of ['SENTIENT', 'CUSTOM_MONSTER'] as const) {
-  test(`GM explicitly replaces the full ${kind} N+1 configuration through real controls and preserves history, lost ACK, restart and PLAYER privacy`, async ({
+  test(`GM replaces the full ${kind} N+1 configuration and edits version portraits through real controls, preserving history, lost ACK, restart and PLAYER privacy`, async ({
     page,
     browser,
   }, testInfo) => {
@@ -152,6 +165,52 @@ for (const kind of ['SENTIENT', 'CUSTOM_MONSTER'] as const) {
         return body;
       };
       const current = () => enemyAuthoringProjectionValue(payload());
+      type Art = ReturnType<typeof current>['art'];
+      const assertPortrait = async (art: Art) => {
+        const image = page.getByRole('region', { name: 'Портрет шаблона' }).getByRole('img');
+        await expect
+          .poll(
+            () =>
+              image.evaluate(async (element: unknown) => {
+                if (
+                  element === null ||
+                  typeof element !== 'object' ||
+                  !('complete' in element) ||
+                  element.complete !== true ||
+                  !('naturalWidth' in element) ||
+                  typeof element.naturalWidth !== 'number' ||
+                  element.naturalWidth <= 0 ||
+                  !('src' in element) ||
+                  typeof element.src !== 'string'
+                )
+                  return null;
+                const src = element.src;
+                const header = /^data:(image\/(?:png|jpeg));base64,/.exec(src);
+                if (header === null) return null;
+                const bytes = Uint8Array.from(atob(src.slice(header[0].length)), (c) =>
+                  c.charCodeAt(0),
+                );
+                const digest = await crypto.subtle.digest('SHA-256', bytes);
+                return {
+                  mediaType: header[1],
+                  sha256: Array.from(new Uint8Array(digest), (byte) =>
+                    byte.toString(16).padStart(2, '0'),
+                  ).join(''),
+                };
+              }),
+            { timeout: 30_000 },
+          )
+          .toEqual({ mediaType: art.mediaType, sha256: art.sha256 });
+        expect(current().art).toEqual(art);
+      };
+      const upload = async (art: Art) => {
+        await page.getByLabel('Выберите портрет', { exact: false }).setInputFiles({
+          name: art.mediaType === 'image/png' ? 'portrait.png' : 'portrait.jpg',
+          mimeType: art.mediaType,
+          buffer: Buffer.from(art.bytesBase64, 'base64'),
+        });
+        await assertPortrait(art);
+      };
       const attempt = () => {
         const value = current().context.attemptOrNull;
         if (value === null) throw Error('Actual enemy attempt absent');
@@ -225,6 +284,9 @@ for (const kind of ['SENTIENT', 'CUSTOM_MONSTER'] as const) {
       };
       await enterNpcLibrary(page, host.baseURL, 'ENEMY');
       const campaignBefore = host.inspect();
+      const firstArt = await portrait(page, 'image/jpeg');
+      const secondArt = await portrait(page, 'image/png');
+      let placeholder: Art;
       if (kind === 'SENTIENT') {
         await npcAction(page, 'ENM-001::CTA::003', 'ENM-005');
         await page.getByLabel('Имя врага', { exact: true }).fill(name);
@@ -234,6 +296,9 @@ for (const kind of ['SENTIENT', 'CUSTOM_MONSTER'] as const) {
         await page.getByLabel('Происхождение', { exact: true }).fill('Застава');
         await page.getByLabel('Принадлежность', { exact: true }).fill('Дозор');
         await page.getByLabel('Масса, кг', { exact: true }).fill('80');
+        placeholder = current().art;
+        await upload(firstArt);
+        await expect(page.getByLabel('Имя врага', { exact: true })).toHaveValue(name);
         await npcAction(page, 'ENM-005::CTA::003', 'ENM-006');
         for (const stat of ['S', 'D', 'M', 'Z', 'I', 'W', 'C'])
           await page.getByLabel(`Базовая ${stat}`, { exact: true }).fill('20');
@@ -255,6 +320,9 @@ for (const kind of ['SENTIENT', 'CUSTOM_MONSTER'] as const) {
         await page
           .getByLabel('Описание монстра', { exact: true })
           .fill('Личность Советника сохраняется между версиями');
+        placeholder = current().art;
+        await upload(firstArt);
+        await expect(page.getByLabel('Имя монстра', { exact: true })).toHaveValue(name);
         await npcAction(page, 'ENM-011::CTA::002', 'ENM-012');
         for (const stat of ['S', 'D', 'M', 'Z', 'I', 'W', 'C'])
           await page.getByLabel(`Базовая ${stat}`, { exact: true }).fill('20');
@@ -276,6 +344,7 @@ for (const kind of ['SENTIENT', 'CUSTOM_MONSTER'] as const) {
         await npcAction(page, 'ENM-016::CTA::002', 'ENM-020', 30_000);
       }
       const v1Rows = host.inspectEnemy();
+      await assertPortrait(firstArt);
       expect(v1Rows.versions).toHaveLength(1);
       const v1 = object(JSON.parse(text(v1Rows.versions[0]!['record_json'])));
       const v1Attempt = object(v1['attempt']);
@@ -300,7 +369,25 @@ for (const kind of ['SENTIENT', 'CUSTOM_MONSTER'] as const) {
       await npcAction(page, 'ENM-020::CTA::002', 'ENM-001');
       await npcAction(page, 'ENM-001::CTA::008', 'ENM-017');
       expect(current().versionEditor?.baseSnapshot).toMatchObject({ kind });
+      await assertPortrait(firstArt);
       await page.getByLabel('Причина новой версии', { exact: true }).fill(reason);
+      await upload(secondArt);
+      const secondKey = attempt().artOverride?.assetKey;
+      if (secondKey === undefined) throw Error('Uploaded portrait binding missing');
+      const privateArtValues = [
+        firstArt.sha256,
+        firstArt.bytesBase64,
+        text(object(v1['identity'])['artAssetKey']),
+        secondArt.sha256,
+        secondArt.bytesBase64,
+        secondKey,
+      ];
+      if (kind === 'CUSTOM_MONSTER') {
+        await button(page, 'Использовать заглушку').click();
+        await assertPortrait(placeholder);
+      }
+      const savedArt = kind === 'CUSTOM_MONSTER' ? placeholder : secondArt;
+      await expect(page.getByLabel('Причина новой версии', { exact: true })).toHaveValue(reason);
       await publish('Сохранить причину');
       if (kind === 'SENTIENT') {
         await page.getByLabel('Новая базовая S', { exact: true }).fill('21');
@@ -419,12 +506,15 @@ for (const kind of ['SENTIENT', 'CUSTOM_MONSTER'] as const) {
         (command) => object(command['payload'])['stage'] === 'VERSION_CONFIGURATION',
       );
       if (cfgCommand === undefined) throw Error('Actual private configuration command absent');
-      await player.refuseEnemyAuthoringAccess([cfgCommand]);
+      const artCommand = commands.find((command) => object(command['payload'])['stage'] === 'ART');
+      if (artCommand === undefined) throw Error('Actual private art command absent');
+      await player.refuseEnemyAuthoringAccess([cfgCommand, artCommand]);
       await player.assertHidden([
         name,
         reason,
         preview.previewCommandId,
         complete.attemptId,
+        ...privateArtValues,
         'versionAttempt',
         'replacementPreviewOrNull',
         'inputSummary',
@@ -440,6 +530,7 @@ for (const kind of ['SENTIENT', 'CUSTOM_MONSTER'] as const) {
         frames.findLast((value) => value['messageType'] === 'command.replay')?.['receipt'],
       ).toEqual(transport.lostReceipt);
       const saved = host.inspectEnemy();
+      await assertPortrait(savedArt);
       expect(saved.versions).toHaveLength(2);
       expect(saved.history).toHaveLength(2);
       expect(saved.pointers).toHaveLength(1);
@@ -454,6 +545,7 @@ for (const kind of ['SENTIENT', 'CUSTOM_MONSTER'] as const) {
         .toBe(1);
       expect(current().versionHistory?.current.version).toBe(2);
       expect(current().sheetOrNull).toEqual(v1['sheet']);
+      await assertPortrait(firstArt);
       expect(host.inspectEnemy()).toEqual(saved);
       await testInfo.attach(`${kind}-history-current`, {
         body: await page
@@ -466,6 +558,7 @@ for (const kind of ['SENTIENT', 'CUSTOM_MONSTER'] as const) {
         .poll(() => current().versionHistory?.selected.version, { timeout: 30_000 })
         .toBe(2);
       expect(current().sheetOrNull).toEqual(v2['sheet']);
+      await assertPortrait(savedArt);
       await button(page, 'Просмотреть версию 1').click();
       await expect
         .poll(() => current().versionHistory?.selected.version, { timeout: 30_000 })
@@ -475,16 +568,25 @@ for (const kind of ['SENTIENT', 'CUSTOM_MONSTER'] as const) {
       await npcAction(page, 'ENM-001::CTA::008', 'ENM-017');
       expect(current().context.versionAttempt?.origin.base.version).toBe(2);
       expect(current().versionEditor?.baseSnapshot).toEqual(v2['attempt']);
+      await assertPortrait(savedArt);
+      await upload(firstArt);
       await npcAction(page, 'ENM-017::CTA::005', 'ENM-020');
+      await assertPortrait(savedArt);
       await host.restart();
       await page.reload();
       await expect(npcForm(page, 'ENM-020')).toBeVisible({ timeout: 30_000 });
       expect(current().versionHistory?.current.version).toBe(2);
       expect(current().sheetOrNull).toEqual(v2['sheet']);
+      await assertPortrait(savedArt);
+      await button(page, 'Просмотреть версию 1').click();
+      await assertPortrait(firstArt);
+      await button(page, 'Просмотреть версию 2').click();
+      await assertPortrait(savedArt);
       expect(host.inspectEnemy()).toEqual(saved);
       await player.refreshPlayer();
       const v2Identity = object(v2['identity']);
       await player.assertHidden([
+        ...privateArtValues,
         name,
         reason,
         preview.previewCommandId,

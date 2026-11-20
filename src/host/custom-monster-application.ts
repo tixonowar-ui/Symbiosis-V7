@@ -8,7 +8,8 @@ import type {
   EnemyAuthoringContext,
 } from '@shared/enemy-authoring.js';
 import { enemyAuthoringActions, enemyMonsterStatRollBinding } from '@shared/enemy-authoring.js';
-import { CUSTOM_MONSTER_PLACEHOLDER, customMonsterStatsValue } from '@shared/custom-monster.js';
+import { customMonsterStatsValue } from '@shared/custom-monster.js';
+import { enemyAttemptArt, type EnemyArtProjection } from '@shared/enemy-art.js';
 import {
   CUSTOM_MONSTER_STAGE_FORMS,
   customMonsterCompositionPatchValue,
@@ -66,7 +67,7 @@ export function prepareCustomMonsterCommand(
     request.workflowCommandId === 'UI-CMD-MONSTER-STATS-ROLL-ONCE' ||
     request.payload.stage === 'MONSTER_STAT_DRAFT'
   ) {
-    if (readAppliedMigrationVersion(db) !== 24) return s.fail('SOURCE_CHANGED');
+    if (![24, 25].includes(readAppliedMigrationVersion(db))) return s.fail('SOURCE_CHANGED');
     const prepared = prepareMonsterStatRollCommand(
       source.viewOrNull?.enemyAuthoring ?? s.fail('UNAVAILABLE'),
       form ?? s.fail('UNAVAILABLE'),
@@ -79,7 +80,7 @@ export function prepareCustomMonsterCommand(
           authorMasterProfileId: source.context.masterProfileId,
           timestamp: new Date().toISOString(),
           sourceBaselineVersion,
-          artSha256: catalog.monsterArt.sha256,
+          artSha256: enemyAttemptArt(attempt).sha256,
         }),
         newSeed: () => randomBytes(32).toString('hex'),
         sampleNaturalR20: () => randomInt(1, 21),
@@ -168,8 +169,8 @@ export function prepareCustomMonsterCommand(
         versionId: randomUUID(),
         version: base === null ? 1 : base.version + 1,
         kind: 'CUSTOM_MONSTER' as const,
-        artAssetKey: CUSTOM_MONSTER_PLACEHOLDER,
-        artSha256: catalog.monsterArt.sha256,
+        artAssetKey: enemyAttemptArt(attempt).assetKey,
+        artSha256: enemyAttemptArt(attempt).sha256,
       }
     : null;
   const mutation: EnemyAuthoringMutation = {
@@ -236,6 +237,7 @@ export function projectCustomMonster(
   source: GmRequestReviewSource,
   context: EnemyAuthoringContext,
   version: EnemyStoredVersion | null,
+  art: EnemyArtProjection,
   diceMode: 'AUTO' | 'MANUAL',
   versionHistory?: EnemyVersionHistory,
   versionEditor?: EnemyVersionEditor,
@@ -357,7 +359,7 @@ export function projectCustomMonster(
       (view.formId === 'ENM-015' || view.formId === 'ENM-017') && attempt?.kind === 'CUSTOM_MONSTER'
         ? customMonsterRequiredRolls(attempt)
         : [],
-    art: catalog.monsterArt,
+    art,
   };
   return {
     revisions,

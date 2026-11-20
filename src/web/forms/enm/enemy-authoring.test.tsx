@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { enemyLibraryActions, type EnemyLibraryProjection } from '@shared/enemy-library.js';
 import { enemyVersionEditorValue } from '@shared/enemy-version-editor.js';
 import { loadEnemyVersionClientSnapshots } from '../../../../tests/fixtures/enemy-version-client.js';
@@ -24,6 +25,8 @@ import {
 } from '../../ws-client.js';
 import { GM_CONTEXT_STORAGE_KEY } from '../cmp/campaign-create.js';
 import { EnemyAuthoringContent, VersionChanges } from './enemy-authoring-content.js';
+import { EnemyArtContent } from './enemy-art-content.js';
+import * as characterArt from '../../character-art.js';
 import { diffEnemyVersionValues } from '../../../domain/entities/enemy-template/version-configuration.js';
 import { presentedFormDefinition } from '../index.js';
 import { App } from '../../app.js';
@@ -76,7 +79,7 @@ function fixture(): EnemyAuthoringProjection {
       skills: [],
       items: [],
     },
-    art: { mediaType: 'image/png', sha256: ENEMY_PLACEHOLDER_SHA256, bytesBase64: 'cG5n' },
+    art: { mediaType: 'image/png', sha256: ENEMY_PLACEHOLDER_SHA256, bytesBase64: 'iVBORw0KGgo=' },
   };
 }
 /** Closed wire/render fixture; game arithmetic is proved by the source-backed host suite. */
@@ -402,6 +405,208 @@ function historyFixture(): EnemyAuthoringProjection {
     },
   };
 }
+it('shows distinct upload fingerprints in the before and after columns of an art replacement', () => {
+  const art = (sha256: string) => ({ art: { sha256, assetKey: 'enemy-upload:' + sha256 } });
+  const changes = diffEnemyVersionValues(art('a'.repeat(64)), art('b'.repeat(64)));
+  const html = renderToStaticMarkup(createElement(VersionChanges, { changes, catalog: {} }));
+  const table = document.createElement('div');
+  table.innerHTML = html;
+  const cells = table.querySelectorAll('tbody tr:first-child td');
+  expect(Array.from(cells, (cell) => cell.textContent)).toEqual(
+    expect.arrayContaining([
+      expect.stringContaining('Загруженный файл · SHA-256 aaaaaaaaaaaa'),
+      expect.stringContaining('Загруженный файл · SHA-256 bbbbbbbbbbbb'),
+    ]),
+  );
+});
+
+it('binds an asynchronous portrait read to the displayed attempt and shows only the host preview', async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+  const p: EnemyAuthoringProjection = { ...fixture(), formId: 'ENM-005' };
+  const edit = vi.fn(() => ({ ok: true }));
+  const busy = vi.fn();
+  const container = document.createElement('div');
+  const root = createRoot(container);
+  const read = vi.spyOn(characterArt, 'characterArtFromFile');
+  let finish!: (result: characterArt.CharacterArtFileResult) => void;
+  read.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const upload = { kind: 'local-file', mediaType: 'image/jpeg', bytesBase64: '/9j/2Q==' } as const;
+  const render = (projection: EnemyAuthoringProjection) =>
+    act(() =>
+      root.render(
+        createElement(EnemyArtContent, {
+          projection,
+          enabled: true,
+          onReadPending: busy,
+          onEdit: edit,
+        }),
+      ),
+    );
+  const select = (type: string) => {
+    const input = container.querySelector('input');
+    if (input === null) throw Error('Missing portrait file input');
+    Object.defineProperty(input, 'files', {
+      configurable: true,
+      value: [new File(['image'], 'portrait', { type })],
+    });
+    act(() => {
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+  };
+  const finishRead = () =>
+    act(() => {
+      finish({ ok: true, value: upload });
+      return Promise.resolve();
+    });
+  try {
+    render(p);
+    select('image/jpeg');
+    expect(busy).toHaveBeenLastCalledWith(true);
+    act(() => container.querySelector('button')?.click());
+    expect(edit).not.toHaveBeenCalled();
+    render({ ...p, projectionRevision: p.projectionRevision + 1 });
+    await finishRead();
+    expect(edit).not.toHaveBeenCalled();
+    expect(busy).toHaveBeenLastCalledWith(false);
+    select('image/png');
+    await finishRead();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain('типа файла');
+    expect(edit).not.toHaveBeenCalled();
+    select('image/jpeg');
+    await finishRead();
+    expect(edit).toHaveBeenCalledExactlyOnceWith({ operation: 'UPLOAD', file: upload });
+    expect(container.querySelector('img')?.src).toBe(`data:image/png;base64,${p.art.bytesBase64}`);
+  } finally {
+    act(() => root.unmount());
+    read.mockRestore();
+  }
+});
+it.each([
+  ['upload', 'live', false],
+  ['clear', 'live', false],
+  ['upload', 'reconnect', false],
+  ['upload', 'reconnect', true],
+] as const)(
+  'confirms only the requested ART after %s, %s delivery, matching=%s',
+  async (operation, delivery, matching) => {
+    const source: EnemyAuthoringProjection = { ...fixture(), formId: 'ENM-005' };
+    const { connection, socket, states } = await connect(source);
+    const ready = states.at(-1);
+    if (ready?.kind !== 'ready') throw Error('Missing connected enemy projection');
+    const file = { kind: 'local-file', mediaType: 'image/jpeg', bytesBase64: '/9j/2Q==' } as const;
+    const patch: JsonObject =
+      operation === 'upload' ? { operation: 'UPLOAD', file } : { operation: 'CLEAR' };
+    expect(connection.submitEnemyStage('ART', patch, ready.snapshot.projection)).toEqual({
+      ok: true,
+    });
+    const command = w.jsonObject(JSON.parse(socket.sent.at(-1) ?? ''), '$.command');
+    const commandId = w.string(command['commandId'], '$.commandId');
+    const attempt = source.context.attemptOrNull!;
+    const revisions = {
+      stateRevision: source.stateRevision + 1,
+      projectionRevision: source.projectionRevision + 1,
+      actorVisibilityRevision: source.actorVisibilityRevision,
+    };
+    const receipt = {
+      commandId,
+      receiptId: id(90),
+      revisions,
+      result: {
+        campaignId: source.campaignId,
+        creationAttemptId: attempt.attemptId,
+        timestamp: '2026-11-20T00:00:00.000Z',
+        workflowCommandId: 'UI-CMD-ENEMY-DRAFT-PATCH',
+        sourceFormId: 'ENM-005',
+        stageOrNull: 'ART',
+        attemptRevision: attempt.revision + 1,
+        committedVersionOrNull: null,
+      },
+    };
+    const bytesBase64 = matching ? file.bytesBase64 : '/9j/ANk=';
+    const sha256 = createHash('sha256').update(Buffer.from(bytesBase64, 'base64')).digest('hex');
+    const next: EnemyAuthoringProjection = {
+      ...source,
+      ...revisions,
+      art: { mediaType: file.mediaType, bytesBase64, sha256 },
+      context: {
+        ...source.context,
+        attemptOrNull: {
+          ...attempt,
+          revision: attempt.revision + 1,
+          artOverride: {
+            assetKey: 'enemy-upload:' + sha256,
+            sha256,
+            uploadCommandIdOrNull: operation === 'clear' ? id(91) : commandId,
+          },
+        },
+      },
+    };
+    // The stand-alone projection is valid. Only the pending command distinguishes a swapped file.
+    expect(() => anyEnemyProjection(next)).not.toThrow();
+    socket.message({
+      messageType: 'command.result',
+      protocolVersion: 1,
+      lifecycleState: 'COMMITTED',
+      receipt,
+    });
+    expect(states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { availableActionKeys: [], projection: { art: source.art } },
+    });
+    if (delivery === 'live') {
+      socket.message(frame(next, 'COMMAND_DESTINATION', commandId));
+    } else {
+      socket.close();
+      socket.onclose?.call(socket as unknown as WebSocket, new CloseEvent('close', { code: 1012 }));
+      expect(connection.reconnect()).toEqual({ ok: true });
+      const resumed = Socket.instances.at(-1)!;
+      resumed.open();
+      const request = w.jsonObject(JSON.parse(resumed.sent[0]!), '$.reconnect');
+      expect(request['unacknowledgedCommandIds']).toEqual([commandId]);
+      const reconnectId = w.string(request['reconnectRequestId'], '$.reconnectId');
+      resumed.message({
+        messageType: 'command.replay',
+        protocolVersion: 1,
+        lifecycleState: 'IDEMPOTENT_REPLAY',
+        receipt,
+      });
+      resumed.message({
+        messageType: 'session.reconnect.capabilities',
+        protocolVersion: 2,
+        reconnectRequestId: reconnectId,
+        executableWorkflowCommandIds: ENEMY_AUTHORING_WORKFLOWS,
+        revisions,
+      });
+      resumed.message(frame(next, 'RECONNECT', reconnectId));
+      // A mismatched destination emits only the terminal protocol refusal after the reconnect.
+      expect(resumed.sent.slice(1).map((raw) => w.jsonObject(JSON.parse(raw), '$.reply'))).toEqual(
+        matching
+          ? []
+          : [
+              {
+                messageType: 'protocol.refusal',
+                protocolVersion: 1,
+                relatedCommandId: null,
+                refusal: {
+                  code: 'UNRECOGNIZED',
+                  path: '$.presentation.base.roleFilteredPayload',
+                  value: null,
+                },
+              },
+            ],
+      );
+    }
+    expect(states.at(-1)).toMatchObject({
+      kind: matching ? 'ready' : 'protocol-error',
+      snapshot: { projection: { art: matching ? next.art : source.art } },
+    });
+  },
+);
 it('shows the actual selected/current history and sends only the clicked immutable version intent', () => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
   const source = historyFixture(),

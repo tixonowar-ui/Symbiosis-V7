@@ -159,7 +159,8 @@ function requireSchema(db: Database.Database): void {
     row?.version !== 21 &&
     row?.version !== 22 &&
     row?.version !== 23 &&
-    row?.version !== 24
+    row?.version !== 24 &&
+    row?.version !== 25
   )
     return fail('CORRUPT_STORAGE');
   if (row.version >= 9) {
@@ -183,7 +184,8 @@ function requireSchema(db: Database.Database): void {
     row.version === 21 ||
     row.version === 22 ||
     row.version === 23 ||
-    row.version === 24
+    row.version === 24 ||
+    row.version === 25
   )
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
@@ -200,7 +202,8 @@ function requireSchema(db: Database.Database): void {
     row.version === 21 ||
     row.version === 22 ||
     row.version === 23 ||
-    row.version === 24
+    row.version === 24 ||
+    row.version === 25
   )
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
@@ -216,7 +219,8 @@ function requireSchema(db: Database.Database): void {
     row.version === 21 ||
     row.version === 22 ||
     row.version === 23 ||
-    row.version === 24
+    row.version === 24 ||
+    row.version === 25
   )
     for (const table of CAMPAIGN_LOBBY_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   if (db.prepare('SELECT 1 FROM schema_migration WHERE version=14').get() !== undefined)
@@ -232,7 +236,8 @@ function requireSchema(db: Database.Database): void {
     row.version === 21 ||
     row.version === 22 ||
     row.version === 23 ||
-    row.version === 24
+    row.version === 24 ||
+    row.version === 25
   )
     for (const table of NPC_TABLES) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
 }

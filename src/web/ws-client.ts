@@ -10,6 +10,8 @@ import {
   type EnemyVersionIdentity,
 } from '@shared/enemy-authoring.js';
 import {
+  enemyArtDeliveryMatches,
+  enemyArtPatchAction,
   enemyBrowserWorkflow,
   enemyBrowserReceipt,
   enemyBrowserDestination,
@@ -1999,8 +2001,12 @@ type ConfirmedSymbiontProjectionSnapshot<
     }
   : never;
 
-export type ConfirmedProjectionSnapshot =
-  ConfirmedProjectionSnapshotBase | ConfirmedSymbiontProjectionSnapshot<SymbiontPresentationFormId>;
+export type ConfirmedProjectionSnapshot = (
+  ConfirmedProjectionSnapshotBase | ConfirmedSymbiontProjectionSnapshot<SymbiontPresentationFormId>
+) & {
+  /** An acknowledged ART-only edit leaves the user's other unsubmitted fields intact. */
+  readonly enemyEditorRevision?: number;
+};
 
 interface ConfirmedAbandonmentLayer {
   readonly availableActionKeys: readonly ActionKey[];
@@ -2066,7 +2072,11 @@ export interface ProjectionConnection {
   stageNpcInput(edit: NpcStageEdit): FormActionRequestResult;
   applyNpcInput(): FormActionRequestResult;
   discardNpcInput(): FormActionRequestResult;
-  submitEnemyStage(stage: EnemyPatchStage, data: JsonObject): FormActionRequestResult;
+  submitEnemyStage(
+    stage: EnemyPatchStage,
+    data: JsonObject,
+    artSource?: JsonObject,
+  ): FormActionRequestResult;
   selectEnemyLibrary(
     activeTab: EnemyLibraryTab,
     selectionOrNull: EnemyLibrarySelection | null,
@@ -9398,13 +9408,19 @@ export function gmDecisionDestination(
   source: ConfirmedProjectionSnapshot,
   receipt: CommandReceipt,
   replay: boolean,
+  request?: GmBrowserRequest,
 ): boolean {
   const workflow = receipt.result['workflowCommandId'];
   if (ENEMY_AUTHORING_WORKFLOWS.some((id) => id === workflow)) {
     try {
       return (
         gmQueueMonotonic(next, source) &&
-        enemyBrowserDestination(next, enemyAuthoringProjectionValue(source.projection), receipt)
+        enemyBrowserDestination(next, enemyAuthoringProjectionValue(source.projection), receipt) &&
+        (receipt.result['stageOrNull'] !== 'ART' ||
+          !sameCampaignRevisions(next.revisions, receipt.revisions) ||
+          (request?.workflowCommandId === 'UI-CMD-ENEMY-DRAFT-PATCH' &&
+            request.payload.stage === 'ART' &&
+            enemyArtDeliveryMatches(next.projection, request)))
       );
     } catch {
       return false;
@@ -12080,6 +12096,7 @@ export function connectProjection(
                   pendingGmCommand.source,
                   pendingGmCommand.receipt,
                   true,
+                  pendingGmCommand.request,
                 ))
             )
               snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
@@ -12292,9 +12309,27 @@ export function connectProjection(
                     pendingGmCommand.source,
                     pendingGmCommand.receipt,
                     pendingGmCommand.replay,
+                    pendingGmCommand.request,
                   ))))
           )
             snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
+          else if (
+            snapshot.ok &&
+            pendingGmCommand?.request.workflowCommandId === 'UI-CMD-ENEMY-DRAFT-PATCH' &&
+            pendingGmCommand.request.payload.stage === 'ART' &&
+            snapshot.value.formId === pendingGmCommand.source.formId &&
+            pendingGmCommand.receipt?.revisions.projectionRevision ===
+              snapshot.value.revisions.projectionRevision
+          )
+            snapshot = {
+              ok: true,
+              value: {
+                ...snapshot.value,
+                enemyEditorRevision:
+                  pendingGmCommand.source.enemyEditorRevision ??
+                  pendingGmCommand.source.revisions.projectionRevision,
+              },
+            };
         } else if (pendingNetworkRefusal !== null) {
           snapshot = decodeConfirmedSnapshot(
             message,
@@ -12970,12 +13005,13 @@ export function connectProjection(
         return { ok: false, detail: 'Идентификатор запроса НПС недоступен.' };
       }
     },
-    submitEnemyStage: (stage, data) => {
+    submitEnemyStage: (stage, data, artSource) => {
       if (
         disposed ||
         terminal ||
         lastSnapshot === null ||
         !isEnemyAuthoringForm(lastSnapshot.formId) ||
+        (stage === 'ART' && artSource !== lastSnapshot.projection) ||
         socket?.readyState !== WebSocket.OPEN ||
         stagedCapabilities !== null ||
         commandPending() ||
@@ -12990,20 +13026,23 @@ export function connectProjection(
         const p = enemyAuthoringProjectionValue(lastSnapshot.projection),
           statDraft = stage === 'MONSTER_STAT_DRAFT' ? monsterStatDraftPatchValue(data) : null,
           actionKey =
-            statDraft?.sourceActionKey ??
-            (p.formId === 'ENM-017' ? 'ENM-017::CTA::004' : ENEMY_STAGE_FORMS[stage][2]),
-          request = enemyBrowserWorkflow(
-            p,
-            actionKey,
-            commandId,
-            data,
-            statDraft !== null || p.formId === 'ENM-017' ? stage : undefined,
-          );
+            stage === 'ART'
+              ? enemyArtPatchAction(p.formId)
+              : (statDraft?.sourceActionKey ??
+                (p.formId === 'ENM-017' ? 'ENM-017::CTA::004' : ENEMY_STAGE_FORMS[stage][2]));
+        if (actionKey === null) return { ok: false, detail: 'Изменение портрета недоступно.' };
+        const request = enemyBrowserWorkflow(
+          p,
+          actionKey,
+          commandId,
+          data,
+          stage === 'ART' || statDraft !== null || p.formId === 'ENM-017' ? stage : undefined,
+        );
         if (
           request === null ||
           (statDraft !== null
             ? !lastSnapshot.availableActionKeys.includes(actionKey)
-            : !lastSnapshot.availableActionKeys.includes(ENEMY_STAGE_FORMS[stage][2]) &&
+            : !lastSnapshot.availableActionKeys.includes(actionKey) &&
               !(p.formId === 'ENM-017' && p.versionEditor !== undefined) &&
               !(
                 stage === 'SENTIENT_SYMBIONTS' &&

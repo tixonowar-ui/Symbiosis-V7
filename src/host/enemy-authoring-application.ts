@@ -3,16 +3,19 @@ import type Database from 'better-sqlite3';
 import type { JsonObject, JsonValue } from '@shared/wire-protocol.js';
 import type { PresentedBaseForm } from '@shared/wire-v2-protocol.js';
 import {
-  ENEMY_PLACEHOLDER,
   enemyAuthoringActions,
   enemyMonsterStatRollBinding,
   enemyWorkflowRequestValue,
   isEnemyAuthoringForm,
   isSentientEnemyAuthoringForm,
   type EnemyAttempt,
+  type EnemyAuthoringAttempt,
   type EnemyAuthoringMutation,
   type EnemyAuthoringProjection,
 } from '@shared/enemy-authoring.js';
+import { enemyAttemptArt } from '@shared/enemy-art.js';
+import { bindEnemyUpload, prepareEnemyArt, projectEnemyArt } from './enemy-art.js';
+import { validateEnemyArtUploads } from '../persistence/enemy-art-store.js';
 import {
   enemyAttemptValue,
   deriveSentientEnemySheet,
@@ -90,6 +93,13 @@ import { collectEnemyVersionMandatoryFacts } from '../persistence/enemy-version-
 import { enemyVersionLegacyEffectRequiresUpgrade } from '../domain/entities/enemy-template/version-configuration.js';
 import { monsterStatGeneration } from '@shared/monster-stat-roll-presentation.js';
 
+function versionDiffData(attempt: EnemyAuthoringAttempt) {
+  const { attemptId: _id, revision: _revision, artOverride: _art, ...full } = attempt;
+  // Reuploading identical bytes changes their owning request, not the GM's template.
+  const { assetKey, sha256 } = enemyAttemptArt(attempt);
+  return structuredClone(w.jsonObject({ ...full, art: { assetKey, sha256 } }, '$.candidate'));
+}
+
 function validateAttempt(catalog: EnemyAuthoringSourceCatalog, value: EnemyAttempt): void {
   const attempt = enemyAttemptValue(value);
   if (attempt.buildOrNull !== null) {
@@ -150,7 +160,8 @@ export function validateEnemyAuthoringSource(
             event.mutation.cause.committedVersionOrNull?.kind === 'CUSTOM_MONSTER')),
     );
   if (monsterRelevant) {
-    if (![22, 23, 24].includes(readAppliedMigrationVersion(db))) return s.fail('SOURCE_CHANGED');
+    if (![22, 23, 24, 25].includes(readAppliedMigrationVersion(db)))
+      return s.fail('SOURCE_CHANGED');
     catalog.assertMonsterCurrent();
   }
   const versionRelevant =
@@ -160,7 +171,7 @@ export function validateEnemyAuthoringSource(
         event.view.enemyAuthoring?.versionAttempt !== undefined ||
         (event.mutation.kind === 'NAV' && event.mutation.request.actionKey === 'ENM-001::CTA::008'),
     );
-  if (versionRelevant && ![23, 24].includes(readAppliedMigrationVersion(db)))
+  if (versionRelevant && ![23, 24, 25].includes(readAppliedMigrationVersion(db)))
     return s.fail('SOURCE_CHANGED');
   const statRollRelevant =
     source.viewOrNull?.enemyAuthoring?.monsterStatRoll !== undefined ||
@@ -170,7 +181,9 @@ export function validateEnemyAuthoringSource(
         (event.mutation.kind === 'ENEMY_AUTHORING' &&
           event.mutation.cause.preparedMonsterStatRoll !== undefined),
     );
-  if (statRollRelevant && readAppliedMigrationVersion(db) !== 24) return s.fail('SOURCE_CHANGED');
+  if (statRollRelevant && ![24, 25].includes(readAppliedMigrationVersion(db)))
+    return s.fail('SOURCE_CHANGED');
+  validateEnemyArtUploads(db, source.scope, state.events);
   validateEnemyCompositionReservations(db, source.scope, state.events);
   const versions = readEnemyVersions(db, source.scope, state.events);
   for (const [index, event] of state.events.entries()) {
@@ -185,7 +198,14 @@ export function validateEnemyAuthoringSource(
           : undefined;
       if (mutation.versionPatchSourceFormId !== expectedPatchSource)
         return s.fail('SOURCE_CHANGED');
-      if (mutation.request.payload.stage === 'VERSION_CONFIGURATION') {
+      if (mutation.request.payload.stage === 'ART') {
+        const expected = prepareEnemyArt(catalog, original.kind, mutation.request.payload.data);
+        if (
+          mutation.artSourceFormId !== state.events[index - 1]?.view.formId ||
+          !s.same(mutation.preparedArt, expected)
+        )
+          return s.fail('SOURCE_CHANGED');
+      } else if (mutation.request.payload.stage === 'VERSION_CONFIGURATION') {
         const metadata =
           state.events[index - 1]?.view.enemyAuthoring?.versionAttempt ?? s.fail('SOURCE_CHANGED');
         if (
@@ -227,7 +247,7 @@ export function validateEnemyAuthoringSource(
                 authorMasterProfileId: mutation.authorMasterProfileId,
                 timestamp: mutation.timestamp,
                 sourceBaselineVersion: mutation.sourceBaselineVersion,
-                artSha256: catalog.monsterArt.sha256,
+                artSha256: enemyAttemptArt(original).sha256,
               }),
               newSeed: () => prepared.generationSeed,
               sampleNaturalR20: () =>
@@ -412,12 +432,8 @@ export function validateEnemyAuthoringSource(
             ? deriveCustomMonsterSheet(catalog.monster, original)
             : deriveSentientEnemySheet(catalog, original),
         ) ||
-        saved.identity.artSha256 !==
-          (original.kind === 'CUSTOM_MONSTER' ? catalog.monsterArt : catalog.art).sha256 ||
-        saved.identity.artAssetKey !==
-          (original.kind === 'CUSTOM_MONSTER'
-            ? 'symbiosis_placeholder_monster'
-            : ENEMY_PLACEHOLDER) ||
+        saved.identity.artSha256 !== enemyAttemptArt(original).sha256 ||
+        saved.identity.artAssetKey !== enemyAttemptArt(original).assetKey ||
         !s.same(saved.identity, mutation.committedVersionOrNull)
       )
         return s.fail('SOURCE_CHANGED');
@@ -450,244 +466,276 @@ export function createEnemyAuthoringApplication(d: {
     });
   return {
     command(value: unknown) {
-      const request = enemyWorkflowRequestValue(value);
-      return commitEnemyAuthoring(d.database, d.scope, request, d.validateOwner, {
-        observe(source) {
-          if (!s.same(current(), source)) return s.fail('SOURCE_CHANGED');
-        },
-        prepare(source) {
-          const view = source.viewOrNull ?? s.fail('UNAVAILABLE'),
-            attempt = view.enemyAuthoring?.attemptOrNull ?? s.fail('UNAVAILABLE');
-          if (
-            request.payload.campaignId !== d.scope.campaignId ||
-            request.payload.creationAttemptId !== attempt.attemptId
-          )
-            return s.fail('FOREIGN_OWNER');
-          if (
-            request.payload.expectedAttemptRevision !== attempt.revision ||
-            !s.same(request.expectedRevisions, {
-              stateRevision: view.stateRevision,
-              projectionRevision: view.projectionRevision,
-              actorVisibilityRevision: view.actorVisibilityRevision,
-            })
-          )
-            return s.fail('STALE_REVISION');
-          if (
-            attempt.kind !== 'CUSTOM_MONSTER' &&
-            (request.workflowCommandId === 'UI-CMD-MONSTER-STATS-ROLL-ONCE' ||
-              request.payload.stage === 'MONSTER_STAT_DRAFT')
-          )
-            return s.fail('INVALID_INPUT');
-          if (request.payload.stage === 'VERSION_CONFIGURATION') {
-            const state = view.enemyAuthoring?.versionAttempt ?? s.fail('UNAVAILABLE');
-            return {
-              mutation: {
-                versionPatchSourceFormId: 'ENM-017',
-                authorMasterProfileId: source.context.masterProfileId,
-                sourceBaselineVersion: d.baseline.baselineVersion,
-                request,
-                itemTemplateKeys: [],
-                committedVersionOrNull: null,
-                receiptId: randomUUID(),
-                timestamp: new Date().toISOString(),
-                preparedVersionConfiguration: (() => {
-                  let result: ReturnType<typeof prepareEnemyVersionConfiguration> | undefined;
-                  d.readCurrent((checked, prefix) => {
-                    if (!s.same(checked, source)) return s.fail('SOURCE_CHANGED');
-                    result = prepareEnemyVersionConfiguration(
-                      d.catalog,
-                      attempt,
-                      state,
-                      request,
-                      collectEnemyVersionMandatoryFacts(prefix.events, state.origin.base),
-                    );
-                  });
-                  return result ?? s.fail('SOURCE_CHANGED');
-                })(),
-              },
-              versionOrNull: null,
-            };
-          }
-          if (attempt.kind === 'CUSTOM_MONSTER') {
-            let result: ReturnType<typeof prepareCustomMonsterCommand> | undefined;
-            d.readCurrent((currentSource, state) => {
-              if (!s.same(currentSource, source)) return s.fail('SOURCE_CHANGED');
-              result = prepareCustomMonsterCommand(
-                d.database,
-                d.catalog,
-                source,
-                attempt,
-                request,
-                d.baseline.baselineVersion,
-                state.events,
-              );
-            });
-            return result ?? s.fail('SOURCE_CHANGED');
-          }
-          const timestamp = new Date().toISOString();
-          const append = request.workflowCommandId === 'UI-CMD-ENEMY-NEW-VERSION';
-          const versionState = view.enemyAuthoring?.versionAttempt;
-          const base = append ? (versionState?.origin.base ?? s.fail('UNAVAILABLE')) : null;
-          if (
-            append &&
-            versionState !== undefined &&
-            enemyVersionLegacyEffectRequiresUpgrade(attempt, versionState.retainedMandatoryFacts)
-          )
-            return s.fail('UNAVAILABLE');
-          const commit = request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1' || append;
-          const identity = commit
-            ? {
-                campaignId: d.scope.campaignId,
-                templateId: base?.templateId ?? randomUUID(),
-                versionId: randomUUID(),
-                version: base === null ? 1 : base.version + 1,
-                kind: 'SENTIENT' as const,
-                artAssetKey: ENEMY_PLACEHOLDER,
-                artSha256: d.catalog.art.sha256,
-              }
-            : null;
-          const itemCount =
-            request.payload.stage === 'SENTIENT_INVENTORY' &&
-            Array.isArray(request.payload.data?.['inventoryItems'])
-              ? request.payload.data['inventoryItems'].length
-              : 0;
-          const compositionPreparation =
-            request.payload.stage === 'SENTIENT_SYMBIONTS' &&
-            (attempt.schemaVersion === 2 || Object.hasOwn(request.payload.data ?? {}, 'operation'))
-              ? (() => {
-                  const patch = Object.hasOwn(request.payload.data ?? {}, 'operation')
-                    ? enemyCompositionPatchValue(request.payload.data)
-                    : null;
-                  const observed: {
-                    diceSource?: ReturnType<typeof readEnemyCompositionDiceSource>;
-                  } = {};
-                  d.readCurrent((currentSource, state) => {
-                    if (!s.same(currentSource, source)) return s.fail('SOURCE_CHANGED');
-                    observed.diceSource = readEnemyCompositionDiceSource(
-                      d.database,
-                      source,
-                      state.events,
-                    );
-                  });
-                  const dice = observed.diceSource ?? s.fail('SOURCE_CHANGED');
-                  const previous =
-                    attempt.compositionOrNull !== null &&
-                    'schemaVersion' in attempt.compositionOrNull
-                      ? attempt.compositionOrNull
+      const { request, bytes } = bindEnemyUpload(enemyWorkflowRequestValue(value));
+      return commitEnemyAuthoring(
+        d.database,
+        d.scope,
+        request,
+        d.validateOwner,
+        {
+          observe(source) {
+            if (!s.same(current(), source)) return s.fail('SOURCE_CHANGED');
+          },
+          prepare(source) {
+            const view = source.viewOrNull ?? s.fail('UNAVAILABLE'),
+              attempt = view.enemyAuthoring?.attemptOrNull ?? s.fail('UNAVAILABLE');
+            if (
+              request.payload.campaignId !== d.scope.campaignId ||
+              request.payload.creationAttemptId !== attempt.attemptId
+            )
+              return s.fail('FOREIGN_OWNER');
+            if (
+              request.payload.expectedAttemptRevision !== attempt.revision ||
+              !s.same(request.expectedRevisions, {
+                stateRevision: view.stateRevision,
+                projectionRevision: view.projectionRevision,
+                actorVisibilityRevision: view.actorVisibilityRevision,
+              })
+            )
+              return s.fail('STALE_REVISION');
+            if (
+              attempt.kind !== 'CUSTOM_MONSTER' &&
+              (request.workflowCommandId === 'UI-CMD-MONSTER-STATS-ROLL-ONCE' ||
+                request.payload.stage === 'MONSTER_STAT_DRAFT')
+            )
+              return s.fail('INVALID_INPUT');
+            if (request.payload.stage === 'ART') {
+              const form =
+                view.enemyAuthoring?.versionAttempt !== undefined
+                  ? 'ENM-017'
+                  : attempt.kind === 'SENTIENT'
+                    ? 'ENM-005'
+                    : 'ENM-011';
+              if (view.formId !== form) return s.fail('UNAVAILABLE');
+              return {
+                mutation: {
+                  ...(form === 'ENM-017' ? { versionPatchSourceFormId: form } : {}),
+                  artSourceFormId: form,
+                  preparedArt: prepareEnemyArt(d.catalog, attempt.kind, request.payload.data),
+                  authorMasterProfileId: source.context.masterProfileId,
+                  sourceBaselineVersion: d.baseline.baselineVersion,
+                  request,
+                  itemTemplateKeys: [],
+                  committedVersionOrNull: null,
+                  receiptId: randomUUID(),
+                  timestamp: new Date().toISOString(),
+                },
+                versionOrNull: null,
+              };
+            }
+            if (request.payload.stage === 'VERSION_CONFIGURATION') {
+              const state = view.enemyAuthoring?.versionAttempt ?? s.fail('UNAVAILABLE');
+              return {
+                mutation: {
+                  versionPatchSourceFormId: 'ENM-017',
+                  authorMasterProfileId: source.context.masterProfileId,
+                  sourceBaselineVersion: d.baseline.baselineVersion,
+                  request,
+                  itemTemplateKeys: [],
+                  committedVersionOrNull: null,
+                  receiptId: randomUUID(),
+                  timestamp: new Date().toISOString(),
+                  preparedVersionConfiguration: (() => {
+                    let result: ReturnType<typeof prepareEnemyVersionConfiguration> | undefined;
+                    d.readCurrent((checked, prefix) => {
+                      if (!s.same(checked, source)) return s.fail('SOURCE_CHANGED');
+                      result = prepareEnemyVersionConfiguration(
+                        d.catalog,
+                        attempt,
+                        state,
+                        request,
+                        collectEnemyVersionMandatoryFacts(prefix.events, state.origin.base),
+                      );
+                    });
+                    return result ?? s.fail('SOURCE_CHANGED');
+                  })(),
+                },
+                versionOrNull: null,
+              };
+            }
+            if (attempt.kind === 'CUSTOM_MONSTER') {
+              let result: ReturnType<typeof prepareCustomMonsterCommand> | undefined;
+              d.readCurrent((currentSource, state) => {
+                if (!s.same(currentSource, source)) return s.fail('SOURCE_CHANGED');
+                result = prepareCustomMonsterCommand(
+                  d.database,
+                  d.catalog,
+                  source,
+                  attempt,
+                  request,
+                  d.baseline.baselineVersion,
+                  state.events,
+                );
+              });
+              return result ?? s.fail('SOURCE_CHANGED');
+            }
+            const timestamp = new Date().toISOString();
+            const append = request.workflowCommandId === 'UI-CMD-ENEMY-NEW-VERSION';
+            const versionState = view.enemyAuthoring?.versionAttempt;
+            const base = append ? (versionState?.origin.base ?? s.fail('UNAVAILABLE')) : null;
+            if (
+              append &&
+              versionState !== undefined &&
+              enemyVersionLegacyEffectRequiresUpgrade(attempt, versionState.retainedMandatoryFacts)
+            )
+              return s.fail('UNAVAILABLE');
+            const commit = request.workflowCommandId === 'UI-CMD-ENEMY-COMMIT-V1' || append;
+            const identity = commit
+              ? {
+                  campaignId: d.scope.campaignId,
+                  templateId: base?.templateId ?? randomUUID(),
+                  versionId: randomUUID(),
+                  version: base === null ? 1 : base.version + 1,
+                  kind: 'SENTIENT' as const,
+                  artAssetKey: enemyAttemptArt(attempt).assetKey,
+                  artSha256: enemyAttemptArt(attempt).sha256,
+                }
+              : null;
+            const itemCount =
+              request.payload.stage === 'SENTIENT_INVENTORY' &&
+              Array.isArray(request.payload.data?.['inventoryItems'])
+                ? request.payload.data['inventoryItems'].length
+                : 0;
+            const compositionPreparation =
+              request.payload.stage === 'SENTIENT_SYMBIONTS' &&
+              (attempt.schemaVersion === 2 ||
+                Object.hasOwn(request.payload.data ?? {}, 'operation'))
+                ? (() => {
+                    const patch = Object.hasOwn(request.payload.data ?? {}, 'operation')
+                      ? enemyCompositionPatchValue(request.payload.data)
                       : null;
-                  const card = attempt.compositionAcquisitions?.advisorCards[0];
-                  const instanceIds =
-                    patch === null
-                      ? []
-                      : patch.operation === 'PREVIEW'
-                        ? patch.selection.monsterOrNull === null
-                          ? patch.selection.ordinarySymbiontInstances.map((row) =>
-                              row.speciesKey === 'ADVISER' && card !== undefined
-                                ? card.symbiontInstanceId
-                                : randomUUID(),
-                            )
-                          : [randomUUID()]
-                        : (previous?.instanceIds ?? s.fail('UNAVAILABLE'));
-                  const advisorCardIdOrNull =
-                    patch === null
-                      ? null
-                      : patch.operation === 'PREVIEW'
-                        ? patch.selection.ordinarySymbiontInstances.some(
-                            (row) => row.speciesKey === 'ADVISER',
-                          )
-                          ? (card?.cardId ?? null)
-                          : null
-                        : patch.operation === 'CONFIRM'
-                          ? previous?.ordinarySymbiontInstances.some(
+                    const observed: {
+                      diceSource?: ReturnType<typeof readEnemyCompositionDiceSource>;
+                    } = {};
+                    d.readCurrent((currentSource, state) => {
+                      if (!s.same(currentSource, source)) return s.fail('SOURCE_CHANGED');
+                      observed.diceSource = readEnemyCompositionDiceSource(
+                        d.database,
+                        source,
+                        state.events,
+                      );
+                    });
+                    const dice = observed.diceSource ?? s.fail('SOURCE_CHANGED');
+                    const previous =
+                      attempt.compositionOrNull !== null &&
+                      'schemaVersion' in attempt.compositionOrNull
+                        ? attempt.compositionOrNull
+                        : null;
+                    const card = attempt.compositionAcquisitions?.advisorCards[0];
+                    const instanceIds =
+                      patch === null
+                        ? []
+                        : patch.operation === 'PREVIEW'
+                          ? patch.selection.monsterOrNull === null
+                            ? patch.selection.ordinarySymbiontInstances.map((row) =>
+                                row.speciesKey === 'ADVISER' && card !== undefined
+                                  ? card.symbiontInstanceId
+                                  : randomUUID(),
+                              )
+                            : [randomUUID()]
+                          : (previous?.instanceIds ?? s.fail('UNAVAILABLE'));
+                    const advisorCardIdOrNull =
+                      patch === null
+                        ? null
+                        : patch.operation === 'PREVIEW'
+                          ? patch.selection.ordinarySymbiontInstances.some(
                               (row) => row.speciesKey === 'ADVISER',
                             )
-                            ? (previous.advisorCardIdOrNull ?? randomUUID())
+                            ? (card?.cardId ?? null)
                             : null
-                          : (previous?.advisorCardIdOrNull ?? null);
-                  const rolls =
-                    patch?.operation === 'CONFIRM'
-                      ? issueEnemyCompositionRolls(
-                          d.catalog,
-                          attempt,
-                          request,
-                          dice.diceModeSnapshot,
-                          (sides) => randomInt(1, sides + 1),
-                        )
-                      : [];
-                  return prepareEnemyComposition(d.catalog, attempt, request, dice, {
-                    instanceIds,
-                    advisorCardIdOrNull,
-                    rolls,
-                  });
-                })()
-              : undefined;
-          const itemTemplateKeys = Array.from({ length: itemCount }, () => randomUUID());
-          if (versionState !== undefined && request.payload.stage === 'SENTIENT_INVENTORY')
-            d.readCurrent((checked, prefix) => {
-              if (!s.same(checked, source)) return s.fail('SOURCE_CHANGED');
-              assertSentientVersionOwnChoices(
-                attempt,
-                versionState,
-                collectEnemyVersionMandatoryFacts(prefix.events, versionState.origin.base),
-                request,
-              );
-            });
-          const preparedSkillState = prepareEnemySkillPlanState(
-            d.catalog,
-            attempt,
-            request,
-            itemTemplateKeys,
-            compositionPreparation,
-          );
-          const mutation: EnemyAuthoringMutation = {
-            ...(versionState !== undefined && !commit
-              ? { versionPatchSourceFormId: 'ENM-017' as const }
-              : {}),
-            authorMasterProfileId: source.context.masterProfileId,
-            sourceBaselineVersion: d.baseline.baselineVersion,
-            request,
-            itemTemplateKeys,
-            committedVersionOrNull: identity,
-            receiptId: randomUUID(),
-            timestamp,
-            ...(compositionPreparation === undefined
-              ? {}
-              : { preparedComposition: compositionPreparation }),
-            ...(preparedSkillState === undefined ? {} : { preparedSkillState }),
-          };
-          const versionOrNull: EnemyStoredVersion | null =
-            identity === null
-              ? null
-              : {
-                  identity,
-                  actorId: source.context.masterProfileId,
-                  operation: append
-                    ? 'APPEND_SENTIENT_ENEMY_TEMPLATE_VERSION'
-                    : 'CREATE_SENTIENT_ENEMY_TEMPLATE',
+                          : patch.operation === 'CONFIRM'
+                            ? previous?.ordinarySymbiontInstances.some(
+                                (row) => row.speciesKey === 'ADVISER',
+                              )
+                              ? (previous.advisorCardIdOrNull ?? randomUUID())
+                              : null
+                            : (previous?.advisorCardIdOrNull ?? null);
+                    const rolls =
+                      patch?.operation === 'CONFIRM'
+                        ? issueEnemyCompositionRolls(
+                            d.catalog,
+                            attempt,
+                            request,
+                            dice.diceModeSnapshot,
+                            (sides) => randomInt(1, sides + 1),
+                          )
+                        : [];
+                    return prepareEnemyComposition(d.catalog, attempt, request, dice, {
+                      instanceIds,
+                      advisorCardIdOrNull,
+                      rolls,
+                    });
+                  })()
+                : undefined;
+            const itemTemplateKeys = Array.from({ length: itemCount }, () => randomUUID());
+            if (versionState !== undefined && request.payload.stage === 'SENTIENT_INVENTORY')
+              d.readCurrent((checked, prefix) => {
+                if (!s.same(checked, source)) return s.fail('SOURCE_CHANGED');
+                assertSentientVersionOwnChoices(
                   attempt,
-                  sheet: deriveSentientEnemySheet(d.catalog, attempt),
-                  sourceBaselineVersion: d.baseline.baselineVersion,
-                  operationId: request.commandId,
-                  timestamp,
-                  historyId: randomUUID(),
-                  ...(append && versionState !== undefined
-                    ? {
-                        versionSource: {
-                          origin: versionState.origin,
-                          reason: versionState.reason,
-                          retainedMandatoryFacts: versionState.retainedMandatoryFacts,
-                          ...(versionState.configurationConfirmation === undefined
-                            ? {}
-                            : {
-                                configurationConfirmation: versionState.configurationConfirmation,
-                              }),
-                        },
-                      }
-                    : {}),
-                };
-          return { mutation, versionOrNull };
+                  versionState,
+                  collectEnemyVersionMandatoryFacts(prefix.events, versionState.origin.base),
+                  request,
+                );
+              });
+            const preparedSkillState = prepareEnemySkillPlanState(
+              d.catalog,
+              attempt,
+              request,
+              itemTemplateKeys,
+              compositionPreparation,
+            );
+            const mutation: EnemyAuthoringMutation = {
+              ...(versionState !== undefined && !commit
+                ? { versionPatchSourceFormId: 'ENM-017' as const }
+                : {}),
+              authorMasterProfileId: source.context.masterProfileId,
+              sourceBaselineVersion: d.baseline.baselineVersion,
+              request,
+              itemTemplateKeys,
+              committedVersionOrNull: identity,
+              receiptId: randomUUID(),
+              timestamp,
+              ...(compositionPreparation === undefined
+                ? {}
+                : { preparedComposition: compositionPreparation }),
+              ...(preparedSkillState === undefined ? {} : { preparedSkillState }),
+            };
+            const versionOrNull: EnemyStoredVersion | null =
+              identity === null
+                ? null
+                : {
+                    identity,
+                    actorId: source.context.masterProfileId,
+                    operation: append
+                      ? 'APPEND_SENTIENT_ENEMY_TEMPLATE_VERSION'
+                      : 'CREATE_SENTIENT_ENEMY_TEMPLATE',
+                    attempt,
+                    sheet: deriveSentientEnemySheet(d.catalog, attempt),
+                    sourceBaselineVersion: d.baseline.baselineVersion,
+                    operationId: request.commandId,
+                    timestamp,
+                    historyId: randomUUID(),
+                    ...(append && versionState !== undefined
+                      ? {
+                          versionSource: {
+                            origin: versionState.origin,
+                            reason: versionState.reason,
+                            retainedMandatoryFacts: versionState.retainedMandatoryFacts,
+                            ...(versionState.configurationConfirmation === undefined
+                              ? {}
+                              : {
+                                  configurationConfirmation: versionState.configurationConfirmation,
+                                }),
+                          },
+                        }
+                      : {}),
+                  };
+            return { mutation, versionOrNull };
+          },
         },
-      });
+        bytes,
+      );
     },
     project(): {
       base: PresentedBaseForm;
@@ -739,11 +787,6 @@ export function createEnemyAuthoringApplication(d: {
                     .filter((row) => row.identity.templateId === selected.templateId)
                     .sort((a, b) => a.identity.version - b.identity.version);
                   const last = chain.at(-1) ?? s.fail('SOURCE_CHANGED');
-                  const candidate = (row: EnemyStoredVersion) => {
-                    const { attemptId: _id, revision: _revision, ...full } = row.attempt;
-                    // The wire reader uses null-prototype maps; the strict diff accepts plain JSON data.
-                    return structuredClone(w.jsonObject(full, '$.historyCandidate'));
-                  };
                   return enemyVersionHistoryValue({
                     current: last.identity,
                     selected,
@@ -755,8 +798,10 @@ export function createEnemyAuthoringApplication(d: {
                         index === 0
                           ? []
                           : diffEnemyVersionValues(
-                              candidate(chain[index - 1] ?? s.fail('SOURCE_CHANGED')),
-                              candidate(row),
+                              versionDiffData(
+                                (chain[index - 1] ?? s.fail('SOURCE_CHANGED')).attempt,
+                              ),
+                              versionDiffData(row.attempt),
                             ),
                       configurationSummaryOrNull:
                         row.versionSource?.configurationConfirmation ?? null,
@@ -779,16 +824,15 @@ export function createEnemyAuthoringApplication(d: {
                       .filter((row) => row.identity.templateId === origin.base.templateId)
                       .sort((a, b) => b.identity.version - a.identity.version)[0] ??
                     s.fail('SOURCE_CHANGED');
-                  const data = (value: typeof attempt) => {
-                    const { attemptId: _id, revision: _revision, ...full } = value;
-                    return structuredClone(w.jsonObject(full, '$.candidate'));
-                  };
                   return enemyVersionEditorValue(
                     {
                       schemaVersion: 1,
                       baseSnapshot: base.attempt,
                       currentVersion: current.identity,
-                      changeSet: diffEnemyVersionValues(data(base.attempt), data(attempt)),
+                      changeSet: diffEnemyVersionValues(
+                        versionDiffData(base.attempt),
+                        versionDiffData(attempt),
+                      ),
                       activeCombatPins: [],
                       replacementSummaryOrNull:
                         context.versionAttempt?.replacementPreviewOrNull?.inputSummary ?? null,
@@ -797,6 +841,12 @@ export function createEnemyAuthoringApplication(d: {
                   );
                 })()
               : undefined;
+          const art = projectEnemyArt(
+            d.database,
+            d.catalog,
+            context.attemptOrNull ?? version?.attempt ?? s.fail('SOURCE_CHANGED'),
+            owningEvents,
+          );
           if (
             context.attemptOrNull?.kind === 'CUSTOM_MONSTER' ||
             context.selectedVersionOrNull?.kind === 'CUSTOM_MONSTER'
@@ -806,6 +856,7 @@ export function createEnemyAuthoringApplication(d: {
               source,
               context,
               version,
+              art,
               monsterDiceMode ?? s.fail('SOURCE_CHANGED'),
               versionHistory,
               versionEditor,
@@ -988,7 +1039,7 @@ export function createEnemyAuthoringApplication(d: {
                   }
                 })()
               : {}),
-            art: d.catalog.art,
+            art,
           };
           return {
             revisions,

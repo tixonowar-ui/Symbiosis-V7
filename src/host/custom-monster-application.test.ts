@@ -35,6 +35,7 @@ import type { CommandReceipt } from '@shared/wire-protocol.js';
 import { migration0022 } from '../persistence/migrations/0022-custom-monster-v1.js';
 import { migration0023 } from '../persistence/migrations/0023-enemy-template-versions.js';
 import { migration0024 } from '../persistence/migrations/0024-monster-stat-roll-once.js';
+import { migration0025 } from '../persistence/migrations/0025-enemy-art-upload.js';
 import { sentientEnemyAuthoringProjectionValue } from '@shared/enemy-authoring.js';
 import {
   createLocalGmContext,
@@ -334,7 +335,7 @@ it('commits a closed manual NONE V1, retains literal definitions and full HP thr
   }
 });
 
-it('refuses a corrupted schema24 prefix missing mandatory22 after an unpatched monster NAV and cancelled attempt', () => {
+it('refuses a corrupted schema25 prefix missing mandatory22 after an unpatched monster NAV and cancelled attempt', () => {
   const f = fixture();
   try {
     f.selectTab('MONSTERS');
@@ -347,7 +348,7 @@ it('refuses a corrupted schema24 prefix missing mandatory22 after an unpatched m
         .prepare("SELECT COUNT(*) n FROM gm_request_queue_event WHERE kind='ENEMY_AUTHORING'")
         .get(),
     ).toEqual({ n: 0 });
-    // With23/24 still present, deleting22 corrupts the full prefix at the private read boundary.
+    // With23/24/25 still present, deleting22 corrupts the full prefix at the private read boundary.
     f.db.prepare('DELETE FROM schema_migration WHERE version=22').run();
     const bytes = f.db.serialize();
     expect(() => f.checked()).toThrow('network application storage: CORRUPT_STORAGE');
@@ -771,7 +772,7 @@ it('binds Adviser losses to accepted graph/body changes, ignores speculative pre
   // ADR 0088: clean02 confirmed 68.535 s at 60 s; give only this case finite 120 s headroom.
 }, 120_000);
 
-it('physically migrates genuine old257 composed SENTIENT V1 and open plan through24 and preserves all old bytes and original receipt', () => {
+it('physically migrates genuine old257 composed SENTIENT V1 and open plan through25 and preserves all old bytes and original receipt', () => {
   const root = join(process.cwd(), 'tests/fixtures/enemy-composed-v1');
   const metadata = JSON.parse(readFileSync(join(root, 'metadata.json'), 'utf8')) as {
     sourceCommit: string;
@@ -797,7 +798,7 @@ it('physically migrates genuine old257 composed SENTIENT V1 and open plan throug
   expect(createHash('sha256').update(compressed).digest('hex')).toBe(metadata.gzipSha256);
   const bytes = gunzipSync(compressed);
   expect(createHash('sha256').update(bytes).digest('hex')).toBe(metadata.inflatedPreOpenSha256);
-  const directory = mkdtempSync(join(tmpdir(), 'symbiosis-old257-through24-')),
+  const directory = mkdtempSync(join(tmpdir(), 'symbiosis-old257-through25-')),
     filename = join(directory, 'history.sqlite');
   writeFileSync(filename, bytes);
   const rows = (db: Database.Database): Record<string, unknown[]> =>
@@ -823,6 +824,7 @@ it('physically migrates genuine old257 composed SENTIENT V1 and open plan throug
     expect(registry).toHaveLength(21);
     const expected = {
       ...original,
+      campaign_enemy_art_upload: [],
       schema_migration: [
         ...registry,
         {
@@ -839,6 +841,11 @@ it('physically migrates genuine old257 composed SENTIENT V1 and open plan throug
           version: migration0024.version,
           name: migration0024.name,
           checksum_sha256: createHash('sha256').update(migration0024.sql).digest('hex'),
+        },
+        {
+          version: migration0025.version,
+          name: migration0025.name,
+          checksum_sha256: createHash('sha256').update(migration0025.sql).digest('hex'),
         },
       ],
     };

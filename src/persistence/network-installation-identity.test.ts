@@ -126,7 +126,7 @@ describe('durable private installation identity', () => {
     ensureDeviceInstallationIdentity(db, input, validateRealKeyPair);
     expect(readDeviceInstallationIdentity(db, device)).toEqual(input);
     const before = raw(db);
-    expect(applyMigrations(db)).toBe(24);
+    expect(applyMigrations(db)).toBe(25);
     expect(raw(db)).toEqual(before);
     expect(readDeviceInstallationIdentity(db, device)).toEqual(input);
   });
@@ -541,14 +541,14 @@ describe('durable private installation identity', () => {
         .prepare<[], { version: number }>('SELECT * FROM schema_migration ORDER BY version')
         .all();
       expect(registry.map((row) => row.version)).toEqual(
-        Array.from({ length: 24 }, (_, index) => index + 1),
+        Array.from({ length: 25 }, (_, index) => index + 1),
       );
-      db.prepare('INSERT INTO schema_migration VALUES(?,?,?)').run(25, 'future', 'f'.repeat(64));
+      db.prepare('INSERT INTO schema_migration VALUES(?,?,?)').run(26, 'future', 'f'.repeat(64));
       expect(
-        db.prepare('SELECT * FROM schema_migration WHERE version<=24 ORDER BY version').all(),
+        db.prepare('SELECT * FROM schema_migration WHERE version<=25 ORDER BY version').all(),
       ).toEqual(registry);
       expect(db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
-        version: 25,
+        version: 26,
       });
     }
     const before = db.serialize();
@@ -571,7 +571,7 @@ describe('durable private installation identity', () => {
     const oldRegistry = db.prepare('SELECT * FROM schema_migration ORDER BY version').all();
     const local = db.prepare('SELECT * FROM local_character').all();
     const campaign = db.prepare('SELECT * FROM campaign').all();
-    expect(applyMigrations(db)).toBe(24);
+    expect(applyMigrations(db)).toBe(25);
     expect(
       db.prepare('SELECT * FROM schema_migration WHERE version<8 ORDER BY version').all(),
     ).toEqual(oldRegistry);
@@ -581,7 +581,7 @@ describe('durable private installation identity', () => {
     for (const table of ['campaign_character_copy', 'campaign_checkpoint', 'local_gm_context'])
       expect(db.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
     const before = db.serialize();
-    expect(applyMigrations(db)).toBe(24);
+    expect(applyMigrations(db)).toBe(25);
     expect(db.serialize().equals(before)).toBe(true);
   });
 });

@@ -2682,6 +2682,7 @@ export function App(): ReactElement {
   );
   const [networkQrScanSequence, setNetworkQrScanSequence] = useState(0);
   const [networkImageReadPending, setNetworkImageReadPending] = useState(false);
+  const [enemyArtReadPending, setEnemyArtReadPending] = useState(false);
   const [creationChoiceDraft, setCreationChoiceDraft] =
     useState<CharacterCreationChoiceDraft | null>(null);
   const [creationRollDraft, setCreationRollDraft] = useState<CharacterCreationRollDraft | null>(
@@ -2864,7 +2865,13 @@ export function App(): ReactElement {
             />
           )}
           <fieldset
-            disabled={!interactive || peerBlocked || layers.length > 0 || networkImageReadPending}
+            disabled={
+              !interactive ||
+              peerBlocked ||
+              layers.length > 0 ||
+              networkImageReadPending ||
+              enemyArtReadPending
+            }
           >
             <legend>AtlasForm {snapshot.formId}</legend>
             <NpcInputBufferControls
@@ -2874,10 +2881,23 @@ export function App(): ReactElement {
             />
             {isEnemyAuthoringForm(snapshot.formId) ? (
               <EnemyAuthoringContent
-                key={snapshot.formId + String(snapshot.revisions.projectionRevision)}
+                key={
+                  snapshot.formId +
+                  String(snapshot.enemyEditorRevision ?? snapshot.revisions.projectionRevision)
+                }
                 projection={snapshot.projection}
+                artEditingEnabled={
+                  interactive &&
+                  snapshot.availableActionKeys.length > 0 &&
+                  snapshot.executableWorkflowCommandIds.includes('UI-CMD-ENEMY-DRAFT-PATCH')
+                }
+                onArtReadPending={setEnemyArtReadPending}
                 onStage={(stage, data) => {
-                  const result = connectionRef.current?.submitEnemyStage(stage, data) ?? {
+                  const result = connectionRef.current?.submitEnemyStage(
+                    stage,
+                    data,
+                    snapshot.projection,
+                  ) ?? {
                     ok: false,
                     detail: 'Редактирование недоступно.',
                   };

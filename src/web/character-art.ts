@@ -1,14 +1,13 @@
 import type { IdentityDraftArtValue } from '@shared/index.js';
+import { LOCAL_IMAGE_MAX_BYTES, localImageMediaType } from '@shared/local-image.js';
 
 type LocalCharacterArt = Extract<IdentityDraftArtValue, { readonly kind: 'local-file' }>;
 
-const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a] as const;
-const JPEG_SIGNATURE = [0xff, 0xd8, 0xff] as const;
 const BASE64_CHUNK_BYTES = 0x8000;
 
 export const CHARACTER_ART_ACCEPT = 'image/png,image/jpeg';
 /** Existing ADR 0033 §2 host ceiling; this browser check is only an early user-facing hint. */
-export const MAX_CHARACTER_ART_BYTES = 12 * 1024 * 1024;
+export const MAX_CHARACTER_ART_BYTES = LOCAL_IMAGE_MAX_BYTES;
 
 export type CharacterArtFileResult =
   | { readonly ok: true; readonly value: LocalCharacterArt }
@@ -16,16 +15,6 @@ export type CharacterArtFileResult =
       readonly ok: false;
       readonly reason: 'FILE_TOO_LARGE' | 'UNSUPPORTED_MEDIA_SIGNATURE';
     };
-
-function startsWith(bytes: Uint8Array, signature: readonly number[]): boolean {
-  return signature.every((byte, index) => bytes[index] === byte);
-}
-
-function mediaTypeFromBytes(bytes: Uint8Array): LocalCharacterArt['mediaType'] | null {
-  if (startsWith(bytes, PNG_SIGNATURE)) return 'image/png';
-  if (startsWith(bytes, JPEG_SIGNATURE)) return 'image/jpeg';
-  return null;
-}
 
 function canonicalBase64(bytes: Uint8Array): string {
   let binary = '';
@@ -68,7 +57,7 @@ function readBytes(file: File): Promise<Uint8Array> {
 export async function characterArtFromFile(file: File): Promise<CharacterArtFileResult> {
   if (file.size > MAX_CHARACTER_ART_BYTES) return { ok: false, reason: 'FILE_TOO_LARGE' };
   const bytes = await readBytes(file);
-  const mediaType = mediaTypeFromBytes(bytes);
+  const mediaType = localImageMediaType(bytes);
   if (mediaType === null) return { ok: false, reason: 'UNSUPPORTED_MEDIA_SIGNATURE' };
   return {
     ok: true,

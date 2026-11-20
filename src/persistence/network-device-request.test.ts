@@ -1,4 +1,5 @@
 import { migration0023 } from './migrations/0023-enemy-template-versions.js';
+import { migration0024 } from './migrations/0024-monster-stat-roll-once.js';
 import { migration0011 } from './migrations/0011-device-request-review.js';
 import { migration0012 } from './migrations/0012-campaign-admission.js';
 import { migration0013 } from './migrations/0013-campaign-lobby.js';
@@ -116,7 +117,7 @@ function withBatchHash(value: Omit<NetworkPreparedBatch, 'batchSha256'>): Networ
   };
   return { ...body, batchSha256: sha(canonical(body)) };
 }
-const open = (filename = ':memory:', legacy: boolean | 'SCHEMA22' | 'SCHEMA23' = false) => {
+const open = (filename = ':memory:', legacy: boolean | 22 | 23 | 24 = false) => {
   const db = legacy ? new Database(filename) : openPersistenceDatabase(filename);
   if (legacy) {
     configurePersistenceDatabase(db);
@@ -131,7 +132,7 @@ const open = (filename = ':memory:', legacy: boolean | 'SCHEMA22' | 'SCHEMA23' =
       migration0008,
       migration0009,
       migration0010,
-      ...(legacy === 'SCHEMA22' || legacy === 'SCHEMA23'
+      ...(typeof legacy === 'number'
         ? [
             migration0011,
             migration0012,
@@ -145,7 +146,8 @@ const open = (filename = ':memory:', legacy: boolean | 'SCHEMA22' | 'SCHEMA23' =
             migration0020,
             migration0021,
             migration0022,
-            ...(legacy === 'SCHEMA23' ? [migration0023] : []),
+            ...(legacy >= 23 ? [migration0023] : []),
+            ...(legacy === 24 ? [migration0024] : []),
           ]
         : []),
     ]);
@@ -155,7 +157,7 @@ const open = (filename = ':memory:', legacy: boolean | 'SCHEMA22' | 'SCHEMA23' =
 };
 function setup(
   filename = ':memory:',
-  legacy: boolean | 'SCHEMA22' | 'SCHEMA23' = false,
+  legacy: boolean | 22 | 23 | 24 = false,
   existing?: { db: Database.Database; draftId: string },
 ) {
   const db = existing?.db ?? open(filename, legacy),
@@ -375,7 +377,8 @@ function submission(
     schemaVersion === 21 ||
     schemaVersion === 22 ||
     schemaVersion === 23 ||
-    schemaVersion === 24
+    schemaVersion === 24 ||
+    schemaVersion === 25
       ? { schemaVersion: 2 as const, localControllerSeatId: randomUUID() }
       : {}),
     requestId,
@@ -2276,26 +2279,29 @@ describe('hosted network session and addressed request journal', () => {
       ),
     ).toThrow('STALE_REVISION');
   });
-  it.each([22, 23, 24] as const)('rejects a v1 batch on schema %s without writes', (version) => {
-    const p = setup(':memory:', version === 22 ? 'SCHEMA22' : version === 23 ? 'SCHEMA23' : false),
-      opening = connect(p),
-      request = submission(p, opening);
-    expect(p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
-      version,
-    });
-    const { schemaVersion: _version, localControllerSeatId: _seat, ...legacy } = request.batch;
-    const before = p.db.serialize();
-    expect(() =>
-      commitHostedNetworkCommand(
-        p.db,
-        p.principal,
-        { ...request, batch: withBatchHash(legacy) },
-        allow,
-        allow,
-      ),
-    ).toThrow('INVALID_INPUT');
-    expect(p.db.serialize().equals(before)).toBe(true);
-  });
+  it.each([22, 23, 24, 25] as const)(
+    'rejects a v1 batch on schema %s without writes',
+    (version) => {
+      const p = setup(':memory:', version === 25 ? false : version),
+        opening = connect(p),
+        request = submission(p, opening);
+      expect(p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
+        version,
+      });
+      const { schemaVersion: _version, localControllerSeatId: _seat, ...legacy } = request.batch;
+      const before = p.db.serialize();
+      expect(() =>
+        commitHostedNetworkCommand(
+          p.db,
+          p.principal,
+          { ...request, batch: withBatchHash(legacy) },
+          allow,
+          allow,
+        ),
+      ).toThrow('INVALID_INPUT');
+      expect(p.db.serialize().equals(before)).toBe(true);
+    },
+  );
   it('allows a replacement submission after a reviewed rejection on schema 15', () => {
     const p = setup(),
       opening = connect(p),

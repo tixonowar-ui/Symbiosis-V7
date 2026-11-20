@@ -1,5 +1,6 @@
 import { migration0022 } from './migrations/0022-custom-monster-v1.js';
 import { migration0023 } from './migrations/0023-enemy-template-versions.js';
+import { migration0025 } from './migrations/0025-enemy-art-upload.js';
 import { migration0024 } from './migrations/0024-monster-stat-roll-once.js';
 import { migration0021 } from './migrations/0021-sentient-enemy-v1.js';
 import { migration0020 } from './migrations/0020-enemy-library.js';
@@ -156,7 +157,8 @@ function schema(db: Database.Database): boolean {
     version !== 21 &&
     version !== 22 &&
     version !== 23 &&
-    version !== 24
+    version !== 24 &&
+    version !== 25
   )
     return s.fail();
   const expectedMigration =
@@ -178,7 +180,9 @@ function schema(db: Database.Database): boolean {
                     ? migration0022
                     : version === 23
                       ? migration0023
-                      : migration0024;
+                      : version === 24
+                        ? migration0024
+                        : migration0025;
   const row = db
     .prepare(
       'SELECT version,name,checksum_sha256 FROM schema_migration ORDER BY version DESC LIMIT 1',

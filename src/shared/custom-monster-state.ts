@@ -1,4 +1,5 @@
 import type { EnemyWorkflowRequest, EnemyStats } from './enemy-authoring.js';
+import { enemyArtOverrideValue, type EnemyArtOverride } from './enemy-art.js';
 import {
   enemySymbiontChoiceValue,
   type EnemyCompositionRoll,
@@ -8,7 +9,6 @@ import { enemyCompositionReaders as r } from './enemy-composition-codec.js';
 import { admissionJsonEqual } from './campaign-admission-codec.js';
 import { wireCodecPrimitives as w } from './wire-codec.js';
 import {
-  type CUSTOM_MONSTER_PLACEHOLDER,
   type CustomMonsterIdentity,
   type CustomMonsterStatsInput,
   type CustomMonsterPhysics,
@@ -44,6 +44,7 @@ export interface CustomMonsterComposition {
 }
 /** No optional legacy fields or SENTIENT accounting can enter this kind's durable input. */
 export interface CustomMonsterAttempt {
+  readonly artOverride?: EnemyArtOverride;
   readonly schemaVersion: 1;
   readonly kind: 'CUSTOM_MONSTER';
   readonly attemptId: string;
@@ -63,7 +64,7 @@ export interface CustomMonsterVersionIdentity {
   readonly versionId: string;
   readonly version: number;
   readonly kind: 'CUSTOM_MONSTER';
-  readonly artAssetKey: typeof CUSTOM_MONSTER_PLACEHOLDER;
+  readonly artAssetKey: string;
   readonly artSha256: string;
 }
 export type CustomMonsterCompositionPatch =
@@ -131,7 +132,7 @@ export interface CustomMonsterSheet {
     }>[];
   }> | null;
   readonly progressionPolicy: 'NO_XP_PROGRESSION';
-  readonly artAssetKey: typeof CUSTOM_MONSTER_PLACEHOLDER;
+  readonly artAssetKey: string;
 }
 
 function skillList(value: unknown): void {
@@ -241,13 +242,17 @@ export function customMonsterCompositionPatchValue(value: unknown): CustomMonste
   return w.validated(structuredClone(raw));
 }
 export function customMonsterAttemptValue(value: unknown): CustomMonsterAttempt {
+  const raw = r.record(value, '$.monsterAttempt');
   const row = r.exact(
-    value,
-    'schemaVersion kind attemptId campaignId revision identityOrNull statsOrNull physicsOrNull attackOrNull compositionOrNull advisorCards activeAdvisorCardIdOrNull',
+    raw,
+    'schemaVersion kind attemptId campaignId revision identityOrNull statsOrNull physicsOrNull attackOrNull compositionOrNull advisorCards activeAdvisorCardIdOrNull' +
+      (Object.hasOwn(raw, 'artOverride') ? ' artOverride' : ''),
     '$.monsterAttempt',
   );
   w.literal(row['schemaVersion'], 1, '$.schemaVersion');
   w.literal(row['kind'], 'CUSTOM_MONSTER', '$.kind');
+  if (Object.hasOwn(row, 'artOverride'))
+    enemyArtOverrideValue('CUSTOM_MONSTER', row['artOverride']);
   r.uuid(row['attemptId'], '$.attemptId');
   r.uuid(row['campaignId'], '$.campaignId');
   r.integer(row['revision'], '$.revision', 0);

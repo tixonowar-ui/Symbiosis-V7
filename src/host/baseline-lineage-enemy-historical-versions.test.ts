@@ -13,6 +13,7 @@ import { openPersistenceDatabase } from '../persistence/database.js';
 import { migration0022 } from '../persistence/migrations/0022-custom-monster-v1.js';
 import { migration0023 } from '../persistence/migrations/0023-enemy-template-versions.js';
 import { migration0024 } from '../persistence/migrations/0024-monster-stat-roll-once.js';
+import { migration0025 } from '../persistence/migrations/0025-enemy-art-upload.js';
 import type { GmRequestReviewScope } from '../persistence/campaign-creation.js';
 import { readGmRequestReviewSourceWith } from '../persistence/network-device-request.js';
 import { loadLocalCharacterExportBaseline } from './local-character-export.js';
@@ -111,7 +112,7 @@ it.each([
               ...table,
               rows: [
                 ...table.rows,
-                ...[migration0022, migration0023, migration0024]
+                ...[migration0022, migration0023, migration0024, migration0025]
                   .filter((migration) => migration.version > fixture.schema)
                   .map((migration) => ({
                     version: migration.version,
@@ -120,6 +121,10 @@ it.each([
                   })),
               ],
             },
+      );
+      expected.push({ name: 'campaign_enemy_art_upload', rows: [] });
+      expected.sort((left, right) =>
+        Buffer.compare(Buffer.from(left.name), Buffer.from(right.name)),
       );
       db = openPersistenceDatabase(filename);
       const database = () => {

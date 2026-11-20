@@ -12,6 +12,7 @@ import { openPersistenceDatabase } from '../persistence/database.js';
 import { migration0022 } from '../persistence/migrations/0022-custom-monster-v1.js';
 import { migration0023 } from '../persistence/migrations/0023-enemy-template-versions.js';
 import { migration0024 } from '../persistence/migrations/0024-monster-stat-roll-once.js';
+import { migration0025 } from '../persistence/migrations/0025-enemy-art-upload.js';
 import type { GmRequestReviewScope } from '../persistence/campaign-creation.js';
 import { readGmRequestReviewSourceWith } from '../persistence/network-device-request.js';
 import { loadLocalCharacterExportBaseline } from './local-character-export.js';
@@ -95,8 +96,17 @@ it('physically opens genuine B15 schema21 empty V1 and open attempt under B17 an
                 name: migration0024.name,
                 checksum_sha256: createHash('sha256').update(migration0024.sql).digest('hex'),
               },
+              {
+                version: migration0025.version,
+                name: migration0025.name,
+                checksum_sha256: createHash('sha256').update(migration0025.sql).digest('hex'),
+              },
             ],
           },
+    );
+    expectedRows.push({ name: 'campaign_enemy_art_upload', rows: [] });
+    expectedRows.sort((left, right) =>
+      Buffer.compare(Buffer.from(left.name), Buffer.from(right.name)),
     );
     db = openPersistenceDatabase(filename);
     const database = () => {
@@ -138,11 +148,11 @@ it('physically opens genuine B15 schema21 empty V1 and open attempt under B17 an
         validateOwner: () => undefined,
         readCurrent,
       });
-    expect(rows(database())).toEqual(expectedRows); // Only the explicit0022/0023/0024 registry appends differ from the raw pre-open snapshot.
+    expect(rows(database())).toEqual(expectedRows); // Old rows stay intact; the new upload table starts empty.
     expect(database().memory).toBe(false);
     expect(
       database().prepare('SELECT MAX(version) version,COUNT(*) count FROM schema_migration').get(),
-    ).toEqual({ version: 24, count: 24 });
+    ).toEqual({ version: 25, count: 25 });
     expect(database().pragma('user_version', { simple: true })).toBe(0);
     const view = enemyAuthoringProjectionValue(app().project().base.roleFilteredPayload);
     expect(storedBaselines).toEqual([BASELINE_FIXTURE_IDS.B15]);
