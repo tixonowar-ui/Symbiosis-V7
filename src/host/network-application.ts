@@ -1,5 +1,5 @@
 import { readGmRequestReviewSourceWith } from '../persistence/network-device-request.js';
-import { createOrdinarySeatRuntime } from './ordinary-seat-runtime.js';
+import { confirmOrdinaryRosterSource, createOrdinarySeatRuntime } from './ordinary-seat-runtime.js';
 import { createOrdinaryCandidateLibrary } from './ordinary-candidate-library.js';
 import {
   ENEMY_AUTHORING_NAV_TARGETS,
@@ -516,6 +516,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     c: LocalNetworkConnection,
     force = false,
     verifiedSource?: LocalNetworkDeliverySnapshot,
+    reconciliation: 'RECOVER' | 'REQUIRE_CURRENT' = 'RECOVER',
   ) {
     const s = verifiedSource?.current ?? current(c),
       bound = scope(c),
@@ -542,6 +543,11 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       out?.intent.operation !== 'OPEN' && s.requestOrNull !== null
         ? readLocalCampaignConnection(db, bound)
         : null;
+    if (
+      reconciliation === 'REQUIRE_CURRENT' &&
+      (s.pendingCommandIdOrNull !== null || savedConnection?.pendingOrNull !== null)
+    )
+      return unavailable();
     const address =
       out?.intent.operation === 'OPEN'
         ? out.intent.canonicalOrigin
@@ -553,6 +559,8 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     if (s.requestOrNull !== null) {
       verify();
       const continuation = readLocalCampaignConnection(db, bound);
+      if (reconciliation === 'REQUIRE_CURRENT' && continuation.pendingOrNull !== null)
+        return unavailable();
       const status =
         continuation.pendingOrNull === null
           ? await d.peer.readConnection(bound, guard(c))
@@ -566,7 +574,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     // before it can issue another command against that session's generation.
     if (out?.intent.operation !== 'OPEN' && s.requestOrNull !== null) {
       verify();
-      await refreshRequest(c);
+      await refreshRequest(c, undefined, undefined, reconciliation);
     } else if (out?.intent.operation !== 'OPEN' && s.sessionOrNull !== null) {
       verify();
       const opening = readLocalNetworkOpenOutboxByAttempt(db, scope(c), s.sessionOrNull.attemptId);
@@ -780,6 +788,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     c: LocalNetworkConnection,
     verifiedBefore?: LocalNetworkDeliverySnapshot,
     consumeVerifiedCurrent?: (current: LocalNetworkApplication) => void,
+    reconciliation: 'RECOVER' | 'REQUIRE_CURRENT' = 'RECOVER',
   ): Promise<boolean> {
     const before = verifiedBefore ?? readLocalNetworkRequestDeliverySnapshot(db, scope(c)),
       s = before.current,
@@ -809,9 +818,13 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     exact(response.receipt.semanticBodySha256, submit.semanticBodySha256);
     exact(response.receipt.request, submit.acknowledgementOrNull.request);
     if (response.current.kind === 'REQUEST') exact(response.current.request, request);
-    else if (response.current.kind === 'REQUEST_REVIEW')
-      return applyRequestCurrent(c, response, after, consumeVerifiedCurrent);
-    else unavailable();
+    else if (response.current.kind === 'REQUEST_REVIEW') {
+      if (reconciliation === 'RECOVER')
+        return applyRequestCurrent(c, response, after, consumeVerifiedCurrent);
+      // The chooser can confirm its saved proof, but cannot settle a command on the owner's behalf.
+      const checked = requestProof(c, response, after) ?? unavailable();
+      exact(checked.proof, after.requestCurrentOrNull?.proof);
+    } else unavailable();
     return false;
   }
 
@@ -983,18 +996,13 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         refusal: { code: 'GUARD_REJECTED' },
       });
   }
-  async function refreshOwnerLobby(
+  function lobbyRootConnection(
     c: LocalNetworkConnection,
-    verifiedOwned?: NonNullable<ReturnType<typeof readLocalAdmissionPresentation>>,
-  ): Promise<LocalAdmissionRead | null> {
-    // Private callers may reuse a complete read only before any intervening await or write.
-    let owned = verifiedOwned ?? readLocalAdmissionPresentation(db, scope(c));
-    if (owned?.admission.receiptOrNull?.decision !== 'ACCEPT') return owned?.admission ?? null;
-    const bound = scope(c),
-      contextId = c.contextId,
-      root = owned.admission.record.scope;
-    // A prepared tab borrows its proved original transport; no session or controller is allocated.
-    const rootConnection: LocalNetworkConnection = {
+    bound: LocalNetworkScope,
+    root: LocalNetworkScope,
+  ): LocalNetworkConnection {
+    const contextId = c.contextId;
+    return {
       ...c,
       networkScopeId: root.networkScopeId,
       trusted: () => {
@@ -1004,8 +1012,20 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         return current !== null && isDeepStrictEqual(current.admission.record.scope, root);
       },
     };
+  }
+  async function refreshOwnerLobby(
+    c: LocalNetworkConnection,
+    verifiedOwned?: NonNullable<ReturnType<typeof readLocalAdmissionPresentation>>,
+  ): Promise<LocalAdmissionRead | null> {
+    // Private callers may reuse a complete read only before any intervening await or write.
+    let owned = verifiedOwned ?? readLocalAdmissionPresentation(db, scope(c));
+    if (owned?.admission.receiptOrNull?.decision !== 'ACCEPT') return owned?.admission ?? null;
+    const bound = scope(c),
+      verify = guard(c),
+      root = owned.admission.record.scope;
+    // A prepared tab borrows its proved original transport; no session or controller is allocated.
     if (d.peer.current(root.networkScopeId) === null) {
-      await reconnect(rootConnection, true);
+      await reconnect(lobbyRootConnection(c, bound, root), true);
       owned = readLocalAdmissionPresentation(db, bound)!;
     }
     guard(c)();
@@ -1049,42 +1069,56 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         );
       } else throw new LocalNetworkPeerError('UNCONFIRMED_OUTCOME');
     }
-    const observed = localLobbyState(owned.admission).observations.find(
-      (v) => v.selectedCopy.controller.localControllerSeatId === owned.tab.tabId,
-    );
-    if (pending === null && observed !== undefined) {
-      const checked = await d.peer.checkLobbyObservation(root, owned.tab.tabId, observed);
-      guard(c)();
-      if (c.contextId !== contextId || c.networkScopeId !== bound.networkScopeId) unavailable();
-      if (checked.outcome === 'UNCHANGED') {
-        const fresh = readLocalAdmissionPresentation(db, bound);
-        if (fresh === null || !isDeepStrictEqual(fresh.admission.record.scope, root)) unavailable();
-        return fresh.admission;
-      }
-      const verify = guard(c);
-      return commitLocalLobbyEvent(
-        db,
-        bound,
-        randomUUID(),
-        checked.hostIdentity,
-        { kind: 'LOBBY_OBSERVATION', observation: checked.observation },
-        (actual) => {
-          verify();
-          // The writer checks this same root against its full replay before and after append.
-          if (!isDeepStrictEqual(actual.record.scope, root)) unavailable();
-        },
+    const result = await observeOwnerLobby(owned, bound, verify, pending === null);
+    if (result !== 'UNCHANGED') return result;
+    verify();
+    const fresh = readLocalAdmissionPresentation(db, bound);
+    if (fresh === null || !isDeepStrictEqual(fresh.admission.record.scope, root)) unavailable();
+    return fresh.admission;
+  }
+
+  async function observeOwnerLobby(
+    owned: NonNullable<ReturnType<typeof readLocalAdmissionPresentation>>,
+    bound: LocalNetworkScope,
+    verify: () => void,
+    checkKnown: boolean,
+    checkHandoff?: (actual: LocalAdmissionRead) => void,
+    recoverRead?: (error: unknown) => Promise<typeof owned>,
+  ) {
+    const root = owned.admission.record.scope;
+    const handoffRead = checkHandoff === undefined ? undefined : 'HANDOFF_READ';
+    const read = (view: typeof owned) => {
+      const observed = localLobbyState(view.admission).observations.find(
+        (v) => v.selectedCopy.controller.localControllerSeatId === view.tab.tabId,
       );
-    }
-    const response = await d.peer.fetchAdmission(root, owned.tab.tabId);
-    guard(c)();
-    if (response.outcome !== 'LOBBY') throw new LocalNetworkPeerError('UNCONFIRMED_OUTCOME');
+      return checkKnown && observed !== undefined
+        ? d.peer.checkLobbyObservation(root, view.tab.tabId, observed, handoffRead)
+        : d.peer.fetchAdmission(root, view.tab.tabId, handoffRead);
+    };
+    const result = await read(owned).catch(async (error: unknown) => {
+      if (recoverRead === undefined) throw error;
+      return read(await recoverRead(error));
+    });
+    verify();
+    if (result.outcome === 'UNCHANGED') return 'UNCHANGED' as const;
+    if (result.outcome !== 'CHANGED' && result.outcome !== 'LOBBY')
+      throw new LocalNetworkPeerError('UNCONFIRMED_OUTCOME');
+    let checkedHandoff = false;
     return commitLocalLobbyEvent(
       db,
       bound,
       randomUUID(),
-      response.hostIdentity,
-      { kind: 'LOBBY_OBSERVATION', observation: response.observation },
-      guard(c),
+      result.hostIdentity,
+      { kind: 'LOBBY_OBSERVATION', observation: result.observation },
+      (actual) => {
+        verify();
+        if (!isDeepStrictEqual(actual.record.scope, root)) unavailable();
+        // An IMMEDIATE transaction encloses both guard calls and only writes this observation.
+        if (checkHandoff !== undefined && !checkedHandoff) {
+          checkHandoff(actual);
+          checkedHandoff = true;
+        }
+      },
     );
   }
   async function ownerReady(
@@ -3160,6 +3194,81 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     db,
     owner,
     peek: snapshot,
+    confirmSource: async (c, expected, targetSeatId, id) => {
+      const bound = scope(c);
+      const verify = guard(c);
+      const original = readLocalAdmissionPresentation(db, bound) ?? unavailable();
+      const root = original.admission.record.scope;
+      const receipt = original.admission.receiptOrNull;
+      if (
+        receipt?.decision !== 'ACCEPT' ||
+        receipt.requestOwnerDeviceId !== bound.ownerDeviceId ||
+        receipt.campaignId !== expected.campaignId
+      )
+        return unavailable();
+      const tabId = original.tab.tabId;
+      const observed = localLobbyState(original.admission).observations.find(
+        (v) => v.selectedCopy.controller.localControllerSeatId === tabId,
+      );
+      if (observed === undefined || observed.peaceOrNull?.sceneId !== expected.sceneId)
+        return unavailable();
+      const checkBinding = (view: typeof original) => {
+        if (
+          view.tab.tabId !== expected.seatId ||
+          view.admission.events.length !== original.admission.events.length ||
+          !isDeepStrictEqual(vector(view.application), vector(original.application)) ||
+          view.admission.receiptOrNull?.receiptId !== receipt.receiptId ||
+          !isDeepStrictEqual(view.admission.record.scope, root) ||
+          view.admission.returnedOrNull !== null ||
+          view.admission.pendingDecisionOrNull !== null ||
+          view.application.pendingCommandIdOrNull !== null ||
+          localLobbyPendingCommandId(view.admission, tabId) !== null ||
+          readLocalCampaignConnection(db, root).pendingOrNull !== null
+        )
+          unavailable();
+      };
+      const reread = () => {
+        verify();
+        const fresh = readLocalAdmissionPresentation(db, bound) ?? unavailable();
+        checkBinding(fresh);
+        return fresh;
+      };
+      checkBinding(original);
+      const check = () => d.peer.checkLobbyObservation(root, tabId, observed, 'HANDOFF_READ');
+      const restore = async () => {
+        reread();
+        await reconnect(lobbyRootConnection(c, bound, root), true, undefined, 'REQUIRE_CURRENT');
+        reread();
+        return check();
+      };
+      const source = await confirmOrdinaryRosterSource(
+        expected,
+        snapshot(c, id, 'FORM_ACTION', original.application, original),
+        async () => {
+          const channel = d.peer.current(root.networkScopeId);
+          let checked: Awaited<ReturnType<typeof check>> | undefined;
+          if (channel !== null) {
+            try {
+              checked = await check();
+            } catch (error) {
+              if (!d.peer.lostReadChannel(root.networkScopeId, channel, error)) throw error;
+            }
+          }
+          checked ??= await restore();
+          if (checked.outcome !== 'UNCHANGED') return unavailable();
+          const fresh = reread();
+          return snapshot(c, id, 'FORM_ACTION', fresh.application, fresh);
+        },
+      );
+      if (source === null) return unavailable();
+      const sameReceipt = receipt.copies.some(
+        (copy) =>
+          copy.lifecycleState === 'ACTIVE' &&
+          copy.controllerBindingOrNull?.deviceId === bound.ownerDeviceId &&
+          copy.controllerBindingOrNull.localControllerSeatId === targetSeatId,
+      );
+      return { source, sameReceipt };
+    },
     selectedCount: (c) => current(c).selectedCandidates.length,
     resetEmptySetup: (c, nav) => {
       const bound = scope(c);
@@ -3198,10 +3307,84 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       zeroReturnConnections.set(bound.networkScopeId, c);
     },
     target: async (c, binding, contextId, id, reason) => {
-      const target = { ...c, networkScopeId: binding.networkScopeId, contextId };
-      await refreshOwnerLobby(target);
-      const owned = readLocalAdmissionPresentation(db, scope(target));
-      if (owned === null) return unavailable();
+      const deviceId = owner(c);
+      const originScopeId = c.networkScopeId;
+      const originContextId = c.contextId;
+      const target = {
+        ...c,
+        networkScopeId: binding.networkScopeId,
+        contextId,
+        trusted: () =>
+          c.trusted() && c.networkScopeId === originScopeId && c.contextId === originContextId,
+      };
+      const bound = scope(target);
+      const verify = guard(target);
+      const checkTarget = (admission: LocalAdmissionRead, application: LocalNetworkApplication) => {
+        const receipt = admission.receiptOrNull;
+        if (
+          receipt?.decision !== 'ACCEPT' ||
+          receipt.receiptId !== binding.admissionReceiptId ||
+          receipt.requestOwnerDeviceId !== deviceId ||
+          receipt.campaignId !== binding.campaignId ||
+          !receipt.copies.some(
+            (copy) =>
+              copy.lifecycleState === 'ACTIVE' &&
+              copy.campaignCharacterId === binding.campaignCharacterId &&
+              copy.controllerBindingOrNull?.deviceId === deviceId &&
+              copy.controllerBindingOrNull.localControllerSeatId === binding.localControllerSeatId,
+          ) ||
+          admission.returnedOrNull !== null ||
+          admission.pendingDecisionOrNull !== null ||
+          application.pendingCommandIdOrNull !== null ||
+          localLobbyState(admission).pendingOrNull !== null ||
+          readLocalCampaignConnection(db, admission.record.scope).pendingOrNull !== null
+        )
+          unavailable();
+      };
+      const readTarget = () => {
+        verify();
+        const owned = readLocalAdmissionPresentation(db, bound) ?? unavailable();
+        if (
+          owned.tab.tabId !== binding.localControllerSeatId ||
+          owned.tab.networkScopeId !== binding.networkScopeId
+        )
+          return unavailable();
+        checkTarget(owned.admission, owned.application);
+        return owned;
+      };
+      let owned = readTarget();
+      const root = owned.admission.record.scope;
+      const currentTarget = () => {
+        const fresh = readTarget();
+        if (!isDeepStrictEqual(fresh.admission.record.scope, root)) return unavailable();
+        return fresh;
+      };
+      const restore = async () => {
+        await reconnect(
+          lobbyRootConnection(target, bound, root),
+          true,
+          undefined,
+          'REQUIRE_CURRENT',
+        );
+        return currentTarget();
+      };
+      const channel = d.peer.current(root.networkScopeId);
+      if (channel === null) owned = await restore();
+      await observeOwnerLobby(
+        owned,
+        bound,
+        verify,
+        true,
+        (actual) => checkTarget(actual, readLocalNetworkApplication(db, root)),
+        channel === null
+          ? undefined
+          : async (error) => {
+              if (!d.peer.lostReadChannel(root.networkScopeId, channel, error)) throw error;
+              currentTarget();
+              return restore();
+            },
+      );
+      owned = currentTarget();
       return {
         connection: target,
         snapshot: snapshot(target, id, reason, owned.application, owned),

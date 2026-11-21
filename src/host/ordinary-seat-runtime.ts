@@ -142,17 +142,18 @@ export function peaceSource(message: Snapshot): Source | null {
   };
 }
 
-/** The neutral chooser has no owner watch. Its pinned peer may go idle while a person chooses a seat. */
+/** The neutral chooser has no owner watch. SELECT needs a current proof for the original sheet. */
 export async function confirmOrdinaryRosterSource(
   expected: Source,
   current: Snapshot,
-  restore: () => Promise<Snapshot>,
+  confirm: () => Promise<Snapshot>,
 ): Promise<Source | null> {
   const { base } = current.presentation;
   const payload = base.roleFilteredPayload;
   if (
     base.formId !== 'PLY-001' ||
     payload['projectionVariant'] !== 'PEACE_SNAPSHOT' ||
+    typeof payload['technicalSessionAvailable'] !== 'boolean' ||
     payload['pendingCommandIdOrNull'] !== null ||
     payload['networkScopeId'] !== expected.scopeId ||
     payload['controllerSeat'] !== expected.seatId ||
@@ -164,9 +165,12 @@ export async function confirmOrdinaryRosterSource(
     current.revisions.actorVisibilityRevision !== expected.actorVisibilityRevision
   )
     return null;
-  const verified = peaceSource(
-    payload['technicalSessionAvailable'] === false ? await restore() : current,
-  );
+  if (
+    payload['technicalSessionAvailable'] &&
+    peaceSource(current)?.contentHash !== expected.contentHash
+  )
+    return null;
+  const verified = peaceSource(await confirm());
   return verified?.contentHash === expected.contentHash &&
     verified.revision === expected.revision &&
     verified.stateRevision === expected.stateRevision &&
@@ -191,6 +195,12 @@ interface Dependencies {
     correlationId: string,
     reason: 'FORM_ACTION' | 'COMMAND_DESTINATION' | 'RECONNECT',
   ) => Snapshot;
+  confirmSource: (
+    connection: LocalNetworkConnection,
+    expected: Source,
+    targetSeatId: string,
+    correlationId: string,
+  ) => Promise<{ source: Source; sameReceipt: boolean }>;
   target: (
     connection: LocalNetworkConnection,
     binding: OrdinarySeatBinding,
@@ -862,22 +872,12 @@ export function createOrdinarySeatRuntime(dependencies: Dependencies) {
           connection.contextId !== previous.contextId
         )
           unavailable();
-        const source =
-          (await confirmOrdinaryRosterSource(
-            previous,
-            dependencies.peek(connection, control.requestId, 'FORM_ACTION'),
-            async () => {
-              const restored = await stageTarget(
-                connection,
-                previous.seatId,
-                previous.contextId,
-                previous.sceneId,
-                control.requestId,
-                'FORM_ACTION',
-              );
-              return restored.snapshot;
-            },
-          )) ?? unavailable();
+        const { source, sameReceipt } = await dependencies.confirmSource(
+          connection,
+          previous,
+          control.targetSeatId,
+          control.requestId,
+        );
         if (
           dependencies.owner(connection) !== owner ||
           connection.networkScopeId !== source.scopeId ||
@@ -888,14 +888,17 @@ export function createOrdinarySeatRuntime(dependencies: Dependencies) {
         )
           unavailable();
         const targetContextId = randomUUID();
-        await stageTarget(
-          connection,
-          control.targetSeatId,
-          targetContextId,
-          source.sceneId,
-          control.requestId,
-          'FORM_ACTION',
-        );
+        // One signed ACCEPT already binds both tabs to the verified Start roster.
+        // Independent admissions need their own scene proof before BEGIN.
+        if (!sameReceipt)
+          await stageTarget(
+            connection,
+            control.targetSeatId,
+            targetContextId,
+            source.sceneId,
+            control.requestId,
+            'FORM_ACTION',
+          );
         commitOrdinarySeatHandoff(
           dependencies.db,
           owner,
@@ -919,6 +922,10 @@ export function createOrdinarySeatRuntime(dependencies: Dependencies) {
               dependencies.owner(connection) !== owner ||
               now?.contentHash !== source.contentHash ||
               now.scopeId !== source.scopeId ||
+              (sameReceipt &&
+                (now.revision !== source.revision ||
+                  now.stateRevision !== source.stateRevision ||
+                  now.actorVisibilityRevision !== source.actorVisibilityRevision)) ||
               !readOrdinarySceneRoster(dependencies.db, owner, now).eligibleTargetSeatIds.includes(
                 control.targetSeatId,
               )

@@ -418,8 +418,8 @@ handoffTest(
                 entry.type === 'protocol.refusal' ||
                 entry.id === sent.id),
           );
-      // SELECT reauthenticates the source and then verifies the addressed PC on the peer.
-      // A committed BEGIN and its curtain share this deadline; a refusal ends the wait immediately.
+      // The host confirms the source with its peer before committing BEGIN.
+      // The journal entry and its curtain share a deadline so a refusal is immediately visible.
       const deadline = performance.now() + 2 * player.operationTimeoutMs;
       const remaining = () => ({ timeout: Math.max(1, Math.ceil(deadline - performance.now())) });
       await expect

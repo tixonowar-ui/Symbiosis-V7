@@ -46,12 +46,12 @@ describe('ordinary roster source after its technical session goes idle', () => {
   const source = peaceSource(snapshot())!;
   const disconnected = () => snapshot({ technicalSessionAvailable: false });
 
-  it('repins the original source before selecting another seat and keeps a live source local', async () => {
-    const restore = vi.fn(() => Promise.resolve(snapshot()));
+  it('checks the original sheet with the host on both a live and an idle channel', async () => {
+    const confirm = vi.fn(() => Promise.resolve(snapshot()));
     expect(peaceSource(disconnected())).toBeNull();
-    expect(await confirmOrdinaryRosterSource(source, disconnected(), restore)).toEqual(source);
-    expect(await confirmOrdinaryRosterSource(source, snapshot(), restore)).toEqual(source);
-    expect(restore).toHaveBeenCalledTimes(1);
+    expect(await confirmOrdinaryRosterSource(source, disconnected(), confirm)).toEqual(source);
+    expect(await confirmOrdinaryRosterSource(source, snapshot(), confirm)).toEqual(source);
+    expect(confirm).toHaveBeenCalledTimes(2);
   });
 
   it.each([
@@ -85,6 +85,9 @@ describe('ordinary roster source after its technical session goes idle', () => {
     }
     const failed = () => Promise.reject(new Error('Peer unavailable'));
     await expect(confirmOrdinaryRosterSource(source, disconnected(), failed)).rejects.toThrow(
+      'Peer unavailable',
+    );
+    await expect(confirmOrdinaryRosterSource(source, snapshot(), failed)).rejects.toThrow(
       'Peer unavailable',
     );
   });

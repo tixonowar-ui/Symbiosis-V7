@@ -2910,14 +2910,15 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
             assignment: { reason: 'RECONNECT', correlationId: randomUUID() },
           },
         };
-        const unexpected = (): never => {
+        const unexpected = vi.fn((): never => {
           throw new Error('Unexpected ordinary seat transition');
-        };
+        });
         const runtime: ReturnType<typeof createOrdinarySeatRuntime> = createOrdinarySeatRuntime({
           db,
           owner: () => device,
           ordinaryCampaign: () => true,
           peek: () => runtime.decorate(connection, initial),
+          confirmSource: unexpected,
           target: unexpected,
           selectedCount: unexpected,
           canSelectLibrary: unexpected,
@@ -2967,6 +2968,7 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
           refusal: { code: 'NAVIGATION_UNAVAILABLE' },
         });
         expect(runtime.locked(connection)).toBe(false);
+        expect(unexpected).not.toHaveBeenCalled();
         expect(db.serialize().equals(beforeNavigation)).toBe(true);
       });
     });

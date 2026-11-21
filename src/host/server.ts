@@ -4,9 +4,10 @@ import { loadNpcAuthoringSourceCatalog } from './npc-catalog.js';
 import { loadNpcArtCatalog } from './npc-art.js';
 import { createNpcHostSupport } from './npc-application.js';
 import { createCampaignGmScheduler } from './campaign-network-executor.js';
-import { confirmedHostedContext } from './ordinary-seat-hosted-context.js';
 import {
+  readActiveLocalGmContext,
   readCampaignCreationCursor,
+  readCampaignCreationOrigin,
   readHostedCampaignCreationOrigin,
   readCampaignOwnerBinding,
 } from '../persistence/campaign-creation.js';
@@ -6496,6 +6497,36 @@ function messageProtocolVersion(source: string): unknown {
     // The v1 codec below owns the canonical malformed-JSON diagnostic.
   }
   return undefined;
+}
+
+export function confirmedHostedContext(
+  database: HostServerConfig['database'],
+  connection: {
+    readonly gmLocalContextId: string | null;
+    readonly networkScopeId: string | null;
+    readonly ordinaryParticipant: boolean;
+  },
+): boolean {
+  const { gmLocalContextId, networkScopeId, ordinaryParticipant } = connection;
+  if (gmLocalContextId === null || networkScopeId !== null || ordinaryParticipant) return false;
+  try {
+    const owner = loadDeviceId(database);
+    if (readActiveLocalGmContext(database, owner)?.gmLocalContextId !== gmLocalContextId)
+      return false;
+    const cursor = readCampaignCreationCursor(database, gmLocalContextId);
+    if (
+      cursor.ownerDeviceId !== owner ||
+      (cursor.kind !== 'CAMPAIGN' && cursor.kind !== 'QUEUE' && cursor.kind !== 'ADMISSION')
+    )
+      return false;
+    // A resumed socket must prove that its own GM context created this campaign.
+    readCampaignCreationOrigin(database, gmLocalContextId, cursor.targetId, (binding) => {
+      validateMasterSecretVerifier(binding.verifier);
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function handleFrame(

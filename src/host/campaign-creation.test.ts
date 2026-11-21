@@ -27,7 +27,7 @@ import {
   createBaselineLineageFixture,
 } from '../../tests/fixtures/baseline-lineage.js';
 import { createCampaignBindManager } from './campaign-bind.js';
-import { confirmedHostedContext } from './ordinary-seat-hosted-context.js';
+import { confirmedHostedContext } from './server.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import {
   createCampaignCreationRuntime,

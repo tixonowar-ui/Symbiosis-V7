@@ -29,6 +29,7 @@ import {
   type AdmissionPeerResponse,
 } from '../../src/host/campaign-admission-peer-codec.js';
 import { campaignLifecycleGmAnchorValue } from '@shared/campaign-lifecycle.js';
+import * as admissionPeerCodec from '../../src/host/campaign-admission-peer-codec.js';
 import * as campaignSecretModule from '../../src/host/campaign-secret.js';
 import {
   CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
@@ -152,6 +153,7 @@ import {
   createDeviceAdmissionPeerRuntime,
   type DeviceAdmissionPeerRuntimeLimits,
 } from '../../src/host/device-admission-peer-runtime.js';
+import { ordinarySeatViewValue } from '../../src/shared/ordinary-seat.js';
 import { createLocalNetworkPeer } from '../../src/host/network-local-peer.js';
 import type { DeviceAdmissionPeerResponse } from '../../src/host/device-admission-peer-response.js';
 import {
@@ -2689,13 +2691,35 @@ function gmClient(h: Awaited<ReturnType<typeof host>>) {
   return { c, runtime, campaign, sent, scope, view, send, nav, select, resume, gmScheduler };
 }
 
-type AdmissionScenario = 'ACCEPT' | 'ACCEPT_WITH_BLOCKERS' | 'DECLINE' | 'REJECT' | 'MIXED';
+type AdmissionScenario =
+  'ACCEPT' | 'ACCEPT_WITH_BLOCKERS' | 'DECLINE' | 'REJECT' | 'MIXED' | 'TWO_ACTIVE';
 function createAdmissionScenario(scenario: AdmissionScenario) {
   let h: Awaited<ReturnType<typeof host>>,
     p: Awaited<ReturnType<typeof client>>,
     gm: Awaited<ReturnType<typeof gmClient>>,
     requestId: string;
+  const twoSources = scenario === 'MIXED' || scenario === 'TWO_ACTIVE';
   let sourceRows: unknown;
+  function approvedInputs(inputs: ReturnType<typeof admissionReviewInputsValue>) {
+    return {
+      ...inputs,
+      massReview: {
+        ...inputs.massReview,
+        decision:
+          scenario === 'ACCEPT_WITH_BLOCKERS'
+            ? ('PENDING_MASTER_APPROVAL' as const)
+            : ('APPROVED' as const),
+      },
+      inventoryReview: {
+        ...inputs.inventoryReview,
+        status: 'FINAL' as const,
+        unresolvedSourceEntryIds: [],
+      },
+      moneyReview: { status: 'FINAL' as const, amountOrNull: 42 },
+      groupAssignmentOrNull: { kind: 'START' as const },
+      locationAssignmentOrNull: { location: 'Лагерь', subLocationOrNull: null },
+    };
+  }
   const gmNav = async (
     sourceFormId: FormActionIntentV2Message['sourceFormId'],
     actionKey: FormActionIntentV2Message['actionKey'],
@@ -2738,7 +2762,7 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
     h = await host();
   });
   beforeEach(async () => {
-    p = await connectedPlayer(h, scenario === 'MIXED');
+    p = await connectedPlayer(h, twoSources);
   });
   beforeEach(async () => {
     const submitted = await submitConnectedPlayer(
@@ -2747,7 +2771,7 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
       false,
       false,
       undefined,
-      scenario === 'MIXED' ? 2 : 1,
+      twoSources ? 2 : 1,
     );
     requestId = submitted.batch.requestId;
     sourceRows = p.db.prepare('SELECT * FROM local_character').all();
@@ -2795,24 +2819,6 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
     const view = await gm.runtime.project(gm.c),
       q = view.base.roleFilteredPayload;
     const inputs = structuredClone(admissionReviewInputsValue(q['reviewDraft']));
-    const edited = {
-      ...inputs,
-      massReview: {
-        ...inputs.massReview,
-        decision:
-          scenario === 'ACCEPT_WITH_BLOCKERS'
-            ? ('PENDING_MASTER_APPROVAL' as const)
-            : ('APPROVED' as const),
-      },
-      inventoryReview: {
-        ...inputs.inventoryReview,
-        status: 'FINAL' as const,
-        unresolvedSourceEntryIds: [],
-      },
-      moneyReview: { status: 'FINAL' as const, amountOrNull: 42 },
-      groupAssignmentOrNull: { kind: 'START' as const },
-      locationAssignmentOrNull: { location: 'Лагерь', subLocationOrNull: null },
-    };
     await gm.send({
       messageType: 'network.admission-review.edit',
       protocolVersion: 3,
@@ -2823,12 +2829,16 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
       sourceFormId: 'NET-019',
       expectedRevisions: view.revisions,
       expectedReviewRevision: Number(q['reviewRevisionOrNull']!),
-      intent: { kind: 'EDIT', reviewCopyId: q['selectedReviewCopyId'] as string, inputs: edited },
+      intent: {
+        kind: 'EDIT',
+        reviewCopyId: q['selectedReviewCopyId'] as string,
+        inputs: approvedInputs(inputs),
+      },
     });
     expect(gm.sent[0]).toMatchObject({ messageType: 'network.admission-draft.result' });
   });
   beforeEach(async () => {
-    if (scenario !== 'MIXED') return;
+    if (!twoSources) return;
     const current = await gm.runtime.project(gm.c),
       first = current.base.roleFilteredPayload['selectedReviewCopyId'];
     const second = (current.base.roleFilteredPayload['batchReviewCopies'] as JsonObject[])[1]![
@@ -2871,11 +2881,14 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
       intent: {
         kind: 'EDIT',
         reviewCopyId: second as string,
-        inputs: {
-          ...inputs,
-          groupAssignmentOrNull: { kind: 'START' },
-          locationAssignmentOrNull: { location: 'Лагерь', subLocationOrNull: null },
-        },
+        inputs:
+          scenario === 'TWO_ACTIVE'
+            ? approvedInputs(inputs)
+            : {
+                ...inputs,
+                groupAssignmentOrNull: { kind: 'START' },
+                locationAssignmentOrNull: { location: 'Лагерь', subLocationOrNull: null },
+              },
       },
     });
     expect(gm.sent[0]?.messageType).toBe('network.admission-draft.result');
@@ -2903,12 +2916,11 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
           });
           expect(gm.sent[0]?.messageType).toBe('network.admission-draft.result');
         };
-        const copyIds =
-          scenario === 'MIXED'
-            ? (initial.base.roleFilteredPayload['batchReviewCopies'] as JsonObject[]).map(
-                (c) => c['reviewCopyId'] as string,
-              )
-            : [first as string];
+        const copyIds = twoSources
+          ? (initial.base.roleFilteredPayload['batchReviewCopies'] as JsonObject[]).map(
+              (c) => c['reviewCopyId'] as string,
+            )
+          : [first as string];
         for (const copyId of copyIds) {
           await select(copyId);
           const view = await gm.runtime.project(gm.c),
@@ -2976,7 +2988,7 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
         await select(first as string);
       }
     },
-    scenario === 'MIXED' ? 60000 : 30000,
+    twoSources ? 60000 : 30000,
   );
   beforeEach(async () => {
     await gmNav('NET-019', 'NET-019::CTA::002');
@@ -3036,9 +3048,12 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
     // Later recovery/fault assertions retain their separate 30s scenario budget.
     await p.restart();
   }, 30000);
-  const preparedTabs = () => {
-    if (scenario === 'MIXED')
-      describe('#173 prepared-tab authenticated transport', () => {
+  const preparedTabs = (firstTargetViewAtAck = false) => {
+    const suiteName = firstTargetViewAtAck
+      ? 'first target view at ACK'
+      : '#173 prepared-tab authenticated transport';
+    if (twoSources)
+      describe(suiteName, () => {
         let tabScope: string,
           child: Awaited<ReturnType<typeof p.additionalOwnerView>>,
           replayReady: () => Promise<void>;
@@ -3076,15 +3091,18 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
           const admission = readLocalAdmission(p.db, p.scope(), requestId)!;
           expect(admission.receiptOrNull!.copies.map((c) => c.lifecycleState)).toEqual([
             'ACTIVE',
-            'PROPOSED',
+            scenario === 'TWO_ACTIVE' ? 'ACTIVE' : 'PROPOSED',
           ]);
           tabScope = admission.additionalTabs[0]!.networkScopeId;
         }, 30000);
         beforeEach(async () => {
-          child = await p.additionalOwnerView(tabScope);
+          // In the fresh-recipient case Ready/Start is observed only on the original seat.
+          child = await p.additionalOwnerView(
+            firstTargetViewAtAck ? p.scope().networkScopeId : tabScope,
+          );
           expect(
             campaignLobbyPlayerProjectionValue(payload()).lobby.selectedCopy.lifecycleState,
-          ).toBe('PROPOSED');
+          ).toBe(scenario === 'TWO_ACTIVE' ? 'ACTIVE' : 'PROPOSED');
         }, 30000);
         beforeEach(() => {
           gm.c.executableReview = [
@@ -3198,12 +3216,562 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
           await expect
             .poll(() => p.payload()['projectionVariant'], { timeout: 10000 })
             .toBe('PEACE_SNAPSHOT');
-          await expect
-            .poll(() => campaignLobbyPlayerProjectionValue(payload()).lobby.campaignStarted, {
-              timeout: 10000,
-            })
-            .toBe(true);
+          if (scenario === 'TWO_ACTIVE') {
+            await expect
+              .poll(() => payload()['projectionVariant'], { timeout: 10000 })
+              .toBe('PEACE_SNAPSHOT');
+          } else {
+            await expect
+              .poll(() => campaignLobbyPlayerProjectionValue(payload()).lobby.campaignStarted, {
+                timeout: 10000,
+              })
+              .toBe(true);
+          }
         }, 30000);
+        if (scenario === 'TWO_ACTIVE') {
+          const events = () =>
+            p.db
+              .prepare(
+                'SELECT owner_device_id, command_id, kind FROM local_seat_handoff_event ORDER BY revision',
+              )
+              .all();
+          const openChooser = async (
+            target: Pick<
+              ReturnType<typeof campaignPeaceProjectionValue>,
+              'controllerSeat' | 'campaignCharacterId' | 'networkScopeId' | 'sceneId'
+            > = campaignPeaceProjectionValue(payload()),
+          ) => {
+            const scope = p.scope();
+            // Observing the second PC advances the shared admission journal. Request the source
+            // snapshot again on its own socket after both PEACE destinations have arrived.
+            const reconnectRequestId = randomUUID();
+            await p.send({
+              messageType: 'network.local-context.resume',
+              protocolVersion: 3,
+              networkScopeId: scope.networkScopeId,
+              reconnectRequestId,
+              knownRevisions: vector(p.state()),
+              supportedWorkflowCommandIds: NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS,
+              unacknowledgedCommandIds: [],
+            });
+            const snapshot = (id: string, frames = p.sent) => {
+              const frame = frames.find(
+                (m) =>
+                  m.messageType === 'projection.snapshot' &&
+                  m.protocolVersion === 2 &&
+                  m.presentation.assignment.correlationId === id,
+              );
+              if (frame?.messageType !== 'projection.snapshot' || frame.protocolVersion !== 2)
+                throw Error(
+                  'No correlated projection: ' +
+                    JSON.stringify(
+                      frames.map((m) =>
+                        m.messageType === 'navigation.form-action.refusal'
+                          ? { type: m.messageType, code: m.refusal.code, revisions: m.revisions }
+                          : { type: m.messageType },
+                      ),
+                    ),
+                );
+              return frame;
+            };
+            const restored = snapshot(reconnectRequestId);
+            expect(restored.presentation.base.formId).toBe('PLY-001');
+            expect(restored.presentation.base.availableActionKeys).toContain('PLY-001::CTA::015');
+            const source = campaignPeaceProjectionValue(
+              restored.presentation.base.roleFilteredPayload,
+            );
+            expect(source).toMatchObject({
+              sceneId: target.sceneId,
+              contextId: p.c.contextId,
+              networkScopeId: scope.networkScopeId,
+              technicalSessionAvailable: true,
+              pendingCommandIdOrNull: null,
+            });
+            expect(target.controllerSeat).not.toBe(source.controllerSeat);
+            const openRoster = randomUUID();
+            await p.send({
+              messageType: 'navigation.form-action',
+              protocolVersion: 2,
+              navigationRequestId: openRoster,
+              sourceFormId: 'PLY-001',
+              actionKey: 'PLY-001::CTA::015',
+              expectedProjectionRevision: restored.revisions.projectionRevision,
+            });
+            const roster = snapshot(openRoster);
+            expect(roster.presentation.layers).toMatchObject([
+              {
+                formId: 'PLY-027',
+                roleFilteredPayload: {
+                  activeSeatIdOrNull: source.controllerSeat,
+                  eligibleTargetSeatIds: [target.controllerSeat],
+                },
+              },
+            ]);
+            const previous = events();
+            expect(previous).toEqual([
+              { owner_device_id: scope.ownerDeviceId, command_id: openRoster, kind: 'ROSTER' },
+            ]);
+            child.messages.length = 0;
+            const select = {
+              messageType: 'ordinary.seat.control',
+              protocolVersion: 3,
+              operation: 'SELECT',
+              requestId: randomUUID(),
+              expectedProjectionRevision: roster.revisions.projectionRevision,
+              targetSeatId: target.controllerSeat,
+            } as const;
+            return { source, target, scope, previous, select, snapshot };
+          };
+          const curtainAck = (curtain: ProjectionSnapshotV2Message) => {
+            const proof = ordinarySeatViewValue(
+              curtain.presentation.layers[0]!.roleFilteredPayload,
+            );
+            if (proof.ordinarySeatView !== 'CURTAIN')
+              throw Error('Missing confirmed handoff curtain');
+            return {
+              messageType: 'command.request',
+              protocolVersion: 1,
+              commandKind: 'workflow-command',
+              role: 'player',
+              workflowCommandId: 'UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK',
+              commandId: randomUUID(),
+              expectedRevisions: curtain.revisions,
+              payload: {
+                handoffId: proof.handoffId,
+                signedReturnContext: proof.signedReturnContext,
+                targetSeatId: proof.targetSeatId,
+                decision: 'ACTIVATE_TARGET',
+                deliveryKey: 'a'.repeat(64),
+              },
+            } as const;
+          };
+          if (firstTargetViewAtAck) {
+            it('confirms a fresh receiver and delivers the first target PEACE only after its addressed ACK', async () => {
+              const scope = p.scope();
+              const targetScope = { ...scope, networkScopeId: tabScope };
+              const readTarget = () =>
+                localAdmissionStore.readLocalAdmissionPresentation(p.db, targetScope)!;
+              const owned = readTarget();
+              const seatId = owned.tab.tabId;
+              const copy = owned.admission.receiptOrNull?.copies.find(
+                (entry) => entry.controllerBindingOrNull?.localControllerSeatId === seatId,
+              );
+              if (copy?.lifecycleState !== 'ACTIVE') throw Error('Missing admitted ACTIVE target');
+              const targetObservation = () => {
+                return localAdmissionStore
+                  .localLobbyState(readTarget().admission)
+                  .observations.find(
+                    (observation) =>
+                      observation.selectedCopy.controller.localControllerSeatId === seatId,
+                  );
+              };
+              const sceneId = campaignPeaceProjectionValue(p.payload()).sceneId;
+              expect(targetObservation()).toBeUndefined();
+              const { source, previous, select, snapshot } = await openChooser({
+                controllerSeat: seatId,
+                campaignCharacterId: copy.campaignCharacterId,
+                networkScopeId: tabScope,
+                sceneId,
+              });
+              await p.send(select);
+              const senderCurtain = snapshot(select.requestId);
+              expect(events()).toEqual([
+                ...previous,
+                {
+                  owner_device_id: scope.ownerDeviceId,
+                  command_id: select.requestId,
+                  kind: 'BEGIN',
+                },
+              ]);
+
+              const receiver = await p.additionalOwnerView();
+              expect(receiver.connection).toMatchObject({ networkScopeId: null, contextId: null });
+              const curtain = receiver.messages.find(
+                (m): m is ProjectionSnapshotV2Message =>
+                  m.messageType === 'projection.snapshot' && m.protocolVersion === 2,
+              );
+              if (!curtain) throw Error('The fresh receiver did not get a curtain');
+              expect(curtain.presentation.layers).toEqual(senderCurtain.presentation.layers);
+              expect(curtain.presentation.base.formId).toBe('APP-003');
+              expect(JSON.stringify(receiver.messages)).not.toContain(copy.campaignCharacterId);
+              expect(targetObservation()).toBeUndefined();
+              expect(readLocalCampaignConnection(p.db, scope).pendingOrNull).toBeNull();
+              expect(
+                localAdmissionStore.localLobbyState(readTarget().admission).pendingOrNull,
+              ).toBeNull();
+
+              const ack = curtainAck(curtain);
+              const peer = p.peerForTest;
+              const submit = readLocalNetworkRequestDeliverySnapshot(p.db, scope).outbox;
+              if (submit?.intent.operation !== 'SUBMIT') throw Error('Missing original SUBMIT');
+              const pinTarget = async () => {
+                const channel = await peer.reconnect(
+                  scope,
+                  readLocalCampaignConnection(p.db, scope).lastAuthenticatedEndpoint,
+                  h.campaignId,
+                );
+                expect(await peer.recover(scope, submit)).toMatchObject({
+                  outcome: 'ACK',
+                  operation: 'DEVICE_REQUEST_RECOVER',
+                  receipt: { commandId: submit.intent.commandId },
+                });
+                return channel;
+              };
+              const fetch = peer.fetchAdmission.bind(peer);
+              const refusedChannel = await pinTarget();
+              const beforeRefusal = events();
+              const connectsBeforeRefusal = p.reconnectCount();
+              const refusedAck = curtainAck(curtain);
+              const foreignSeat = randomUUID();
+              const readRefusal = vi
+                .spyOn(peer, 'fetchAdmission')
+                .mockImplementationOnce((root, _seat, mode) => fetch(root, foreignSeat, mode));
+              const decode = admissionPeerCodec.decodeAdmissionPeerResponse;
+              const signedRefusals: AdmissionPeerResponse[] = [];
+              const replies = vi
+                .spyOn(admissionPeerCodec, 'decodeAdmissionPeerResponse')
+                .mockImplementation((...args) => {
+                  const reply = decode(...args);
+                  if (reply.operation === 'ADMISSION_LOBBY_BEGIN' && reply.outcome === 'REFUSED') {
+                    // Lose the transport only after the real GM reply has been authenticated and decoded.
+                    signedRefusals.push(reply);
+                    refusedChannel.close();
+                  }
+                  return reply;
+                });
+              try {
+                await receiver.send(refusedAck);
+                const request = owned.application.requestOrNull!;
+                expect(signedRefusals).toMatchObject([
+                  {
+                    operation: 'ADMISSION_LOBBY_BEGIN',
+                    outcome: 'REFUSED',
+                    code: 'FOREIGN_OWNER',
+                    requestId: request.requestId,
+                    technicalSessionId: request.technicalSessionId,
+                    submitCommandId: request.submitCommandId,
+                  },
+                ]);
+                expect(refusedChannel.closed).toBe(true);
+                expect(peer.current(scope.networkScopeId)).toBeNull();
+                expect(readRefusal.mock.calls).toEqual([[scope, seatId, 'HANDOFF_READ']]);
+                expect(p.reconnectCount()).toBe(connectsBeforeRefusal);
+                expect(receiver.messages).toMatchObject([
+                  {
+                    messageType: 'command.refusal',
+                    commandId: refusedAck.commandId,
+                    refusal: { code: 'GUARD_REJECTED' },
+                  },
+                ]);
+                const visible = JSON.stringify(receiver.messages);
+                expect(visible).not.toContain(copy.campaignCharacterId);
+                expect(visible).not.toContain(source.campaignCharacterId);
+                expect(receiver.connection).toMatchObject({
+                  networkScopeId: null,
+                  contextId: null,
+                });
+                expect(targetObservation()).toBeUndefined();
+                expect(events()).toEqual(beforeRefusal);
+              } finally {
+                replies.mockRestore();
+                readRefusal.mockRestore();
+              }
+
+              const pinned = await pinTarget();
+              const connects = p.reconnectCount();
+              let targetReads = 0;
+              let cut = false;
+              const reads = vi.spyOn(peer, 'fetchAdmission').mockImplementation((...args) => {
+                const [root, seat] = args;
+                if (seat !== seatId) return fetch(...args);
+                targetReads++;
+                if (cut) return fetch(...args);
+                expect(root).toEqual(scope);
+                expect(peer.current(root.networkScopeId)).toBe(pinned);
+                // The real admission RPC starts before the channel loses its reply.
+                const pending = fetch(...args);
+                pinned.close();
+                cut = true;
+                return pending;
+              });
+              try {
+                await receiver.send(ack);
+                expect(cut).toBe(true);
+                expect(pinned.closed).toBe(true);
+              } finally {
+                reads.mockRestore();
+              }
+              expect(receiver.messages).toMatchObject([
+                { messageType: 'command.result', receipt: { commandId: ack.commandId } },
+                {
+                  messageType: 'projection.snapshot',
+                  presentation: {
+                    assignment: { correlationId: ack.commandId, reason: 'COMMAND_DESTINATION' },
+                    base: { formId: 'PLY-001' },
+                    layers: [{ formId: 'PLY-029', roleFilteredPayload: { seatId } }],
+                  },
+                },
+              ]);
+              const sheet = campaignPeaceProjectionValue(
+                snapshot(ack.commandId, receiver.messages).presentation.base.roleFilteredPayload,
+              );
+              expect(targetReads).toBe(2);
+              expect(p.reconnectCount()).toBe(connects + 1);
+              expect(sheet).toMatchObject({
+                campaignCharacterId: copy.campaignCharacterId,
+                controllerSeat: seatId,
+                networkScopeId: tabScope,
+                sceneId,
+              });
+              expect(targetObservation()?.peaceOrNull?.sceneId).toBe(sceneId);
+              expect(JSON.stringify(receiver.messages)).not.toContain(source.campaignCharacterId);
+              for (const frames of [p.sent, child.messages]) {
+                expect(frames.at(-1)).toMatchObject({
+                  messageType: 'projection.snapshot',
+                  presentation: { base: { formId: 'APP-003' }, layers: [] },
+                });
+                expect(JSON.stringify(frames)).not.toContain(copy.campaignCharacterId);
+              }
+              expect(events()).toEqual([
+                ...previous,
+                {
+                  owner_device_id: scope.ownerDeviceId,
+                  command_id: select.requestId,
+                  kind: 'BEGIN',
+                },
+                { owner_device_id: scope.ownerDeviceId, command_id: ack.commandId, kind: 'ACK' },
+              ]);
+            }, 60000);
+            return;
+          }
+          it('recovers the source peer during SELECT and reads the same-batch target only for ACK', async () => {
+            const { source, target, scope, previous, select, snapshot } = await openChooser();
+            const session = p.state().sessionOrNull;
+            const scene = h.db.prepare('SELECT * FROM campaign_peace_scene').all();
+            const peer = p.peerForTest;
+            const check = peer.checkLobbyObservation.bind(peer);
+            const attempts: string[] = [];
+            const downloads = vi.spyOn(peer, 'fetchAdmission');
+            const reads = vi
+              .spyOn(peer, 'checkLobbyObservation')
+              .mockImplementation(async (...args) => {
+                const [root, seat, observation] = args;
+                expect(root).toEqual(scope);
+                expect(p.c.trusted()).toBe(true);
+                if (attempts.length === 0) {
+                  expect([source.controllerSeat, target.controllerSeat]).toContain(seat);
+                  expect(events()).toEqual(previous);
+                  const channel = peer.current(root.networkScopeId);
+                  if (!channel) throw Error('Expected the pinned channel before the first read');
+                  attempts.push(seat === source.controllerSeat ? 'closed source' : 'closed target');
+                  channel.close();
+                  return check(...args);
+                }
+                if (seat === target.controllerSeat) {
+                  attempts.push('target');
+                  // A receiver cannot acknowledge another seat's observation.
+                  return check(root, source.controllerSeat, observation);
+                }
+                expect(seat).toBe(source.controllerSeat);
+                expect(events()).toEqual(previous);
+                const result = await check(...args);
+                expect(result.outcome).toBe('UNCHANGED');
+                expect(events()).toEqual(previous);
+                attempts.push('confirmed');
+                return result;
+              });
+            try {
+              // Start the fault at the first read of a freshly pinned peer, after the setup folds.
+              await peer.reconnect(
+                scope,
+                readLocalCampaignConnection(p.db, scope).lastAuthenticatedEndpoint,
+                h.campaignId,
+              );
+              const connects = p.reconnectCount();
+              await p.send(select);
+              expect(p.sent, attempts.join(', ')).toMatchObject([
+                { messageType: 'projection.snapshot' },
+              ]);
+              expect(attempts).toEqual(['closed source', 'confirmed']);
+              expect(downloads.mock.calls.some(([, seat]) => seat === target.controllerSeat)).toBe(
+                false,
+              );
+              expect(p.reconnectCount()).toBe(connects + 1);
+              const curtain = snapshot(select.requestId);
+              expect(p.sent).toEqual([curtain]);
+              expect(curtain.presentation).toMatchObject({
+                assignment: { correlationId: select.requestId, reason: 'FORM_ACTION' },
+                base: { formId: 'APP-003', roleFilteredPayload: { ordinarySeatView: 'WAITING' } },
+                layers: [
+                  {
+                    formId: 'PLY-030',
+                    availableActionKeys: ['PLY-030::CTA::001'],
+                    roleFilteredPayload: {
+                      ordinarySeatView: 'CURTAIN',
+                      sourceSeatIdOrNull: source.controllerSeat,
+                      targetSeatId: target.controllerSeat,
+                      pendingCommandOwner: null,
+                    },
+                  },
+                ],
+              });
+              expect(child.messages).toMatchObject([
+                {
+                  messageType: 'projection.snapshot',
+                  presentation: { base: { formId: 'APP-003' }, layers: [] },
+                },
+              ]);
+              const assertPrivate = () => {
+                const wire = JSON.stringify([...p.sent, ...child.messages]);
+                for (const marker of [
+                  source.campaignCharacterId,
+                  target.campaignCharacterId,
+                  'mechanicalSheet',
+                  'PEACE_SNAPSHOT',
+                ])
+                  expect(wire).not.toContain(marker);
+              };
+              assertPrivate();
+              const pending = events();
+              expect(pending).toEqual([
+                ...previous,
+                {
+                  owner_device_id: scope.ownerDeviceId,
+                  command_id: select.requestId,
+                  kind: 'BEGIN',
+                },
+              ]);
+              const ack = curtainAck(curtain);
+              await p.send(ack);
+              expect(attempts).toEqual(['closed source', 'confirmed', 'target']);
+              expect(p.sent).toMatchObject([
+                {
+                  messageType: 'command.refusal',
+                  commandId: ack.commandId,
+                  refusal: { code: 'GUARD_REJECTED' },
+                },
+              ]);
+              expect(events()).toEqual(pending);
+              assertPrivate();
+              expect(p.scope()).toEqual(scope);
+              expect(p.c.contextId).toBe(source.contextId);
+              expect(p.state().sessionOrNull).toEqual(session);
+              expect(h.db.prepare('SELECT * FROM campaign_peace_scene').all()).toEqual(scene);
+            } finally {
+              reads.mockRestore();
+              downloads.mockRestore();
+            }
+          }, 60000);
+          it('refuses an addressed ACK while the target root has a pending reconnect', async () => {
+            const { source, target, scope, previous, select, snapshot } = await openChooser();
+            await p.send(select);
+            const peer = p.peerForTest;
+            const channel =
+              peer.current(scope.networkScopeId) ??
+              (await peer.reconnect(
+                scope,
+                readLocalCampaignConnection(p.db, scope).lastAuthenticatedEndpoint,
+                h.campaignId,
+              ));
+            channel.close();
+            expect(peer.current(scope.networkScopeId)).toBeNull();
+            const curtain = snapshot(select.requestId);
+            expect(curtain.presentation.layers).toMatchObject([
+              {
+                formId: 'PLY-030',
+                roleFilteredPayload: { targetSeatId: target.controllerSeat },
+              },
+            ]);
+            const before = events();
+            expect(before).toEqual([
+              ...previous,
+              { owner_device_id: scope.ownerDeviceId, command_id: select.requestId, kind: 'BEGIN' },
+            ]);
+            const addressed = localAdmissionStore.readLocalAdmissionPresentation(p.db, {
+              ownerDeviceId: scope.ownerDeviceId,
+              networkScopeId: target.networkScopeId,
+            });
+            expect(addressed?.admission.record.scope).toEqual(scope);
+            expect(addressed?.admission.receiptOrNull?.decision).toBe('ACCEPT');
+            const original = readLocalCampaignConnection(p.db, scope);
+            const intent = {
+              commandId: randomUUID(),
+              canonicalOrigin: original.lastAuthenticatedEndpoint,
+              expectedConnectionRevision: original.revision,
+              disconnectCommandIdOrNull: null,
+            };
+            // Persist exactly the interrupted reconnect that normal connection recovery would deliver.
+            prepareLocalCampaignReconnect(p.db, scope, intent, () => {
+              expect(p.c.trusted()).toBe(true);
+              expect(p.scope()).toEqual(scope);
+            });
+            const continuation = readLocalCampaignConnection(p.db, scope);
+            expect(continuation.pendingOrNull).toEqual(intent);
+            gm.runtime.close();
+            const retry = vi.spyOn(peer, 'retryConnection');
+            const playerBytes = p.db.serialize();
+            const hostBytes = h.db.serialize();
+            try {
+              const ack = curtainAck(curtain);
+              await p.send(ack);
+              expect(retry).not.toHaveBeenCalled();
+              expect(p.sent).toMatchObject([
+                {
+                  messageType: 'command.refusal',
+                  commandId: ack.commandId,
+                  refusal: { code: 'GUARD_REJECTED' },
+                },
+              ]);
+              expect(p.c.contextId).toBe(source.contextId);
+              expect(p.scope()).toEqual(scope);
+              expect(events()).toEqual(before);
+              expect(readLocalCampaignConnection(p.db, scope)).toEqual(continuation);
+              expect(p.db.serialize().equals(playerBytes)).toBe(true);
+              expect(h.db.serialize().equals(hostBytes)).toBe(true);
+            } finally {
+              retry.mockRestore();
+            }
+          }, 60000);
+          it('refuses SELECT from the open roster after the GM revokes its technical session', async () => {
+            const { scope, previous, select, source } = await openChooser();
+            gm.c.executableReview = [
+              ...(gm.c.executableReview ?? []),
+              ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
+            ];
+            await gmNav('GM-001', 'GM-001::CTA::013');
+            await gmNav('CMP-007', 'CMP-007::CTA::003');
+            await gmNav('CMP-008', 'CMP-008::CTA::007');
+            const command = campaignLifecycleGmRequest(
+              lifecycleProjection(await gm.runtime.project(gm.c)),
+              'NET-023::CTA::002',
+              randomUUID(),
+              {
+                deviceId: scope.ownerDeviceId,
+                selectedControllerSeatOrNull: null,
+                reason: 'Session closed by the GM during seat selection',
+              },
+            );
+            await gm.send(command);
+            expect(gm.sent[0]).toMatchObject({
+              messageType: 'command.result',
+              receipt: { commandId: command.commandId },
+            });
+            expect(p.c.trusted()).toBe(true);
+            await p.send(select);
+            expect(p.sent).toMatchObject([
+              {
+                messageType: 'navigation.form-action.refusal',
+                navigationRequestId: select.requestId,
+                presentationUnchanged: true,
+                refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+              },
+            ]);
+            expect(p.c.contextId).toBe(source.contextId);
+            expect(events()).toEqual(previous);
+            expect(child.messages).toEqual([]);
+          }, 60000);
+          return;
+        }
         beforeEach(async () => {
           const blocked = campaignLobbyPlayerProjectionValue(payload());
           expect(blocked.lobby.selectedCopy.lifecycleState).toBe('PROPOSED');
@@ -4639,6 +5207,10 @@ export function registerAcceptedReadyAndResults() {
   });
 }
 export function registerOtherAdmissionResults() {
+  registerAdmissionScenarios(['TWO_ACTIVE'], (suite) => {
+    suite.preparedTabs();
+    suite.preparedTabs(true);
+  });
   registerAdmissionScenarios(['ACCEPT_WITH_BLOCKERS', 'DECLINE', 'REJECT', 'MIXED'], (suite) => {
     suite.preparedTabs();
     suite.ready();
