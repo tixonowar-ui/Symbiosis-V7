@@ -281,6 +281,13 @@ export function createOrdinarySeatRuntime(dependencies: Dependencies) {
     const base = message.presentation.base;
     if (!supported(connection) || (base.formId !== 'NET-003' && base.formId !== 'PLY-001'))
       return message;
+    // A late cancellation returns to NET-003 even after Start, outside character selection.
+    if (
+      base.formId === 'NET-003' &&
+      (base.roleFilteredPayload['campaignStatus'] !== 'PAUSED' ||
+        base.roleFilteredPayload['pendingCommandIdOrNull'] !== null)
+    )
+      return message;
     const campaignId =
       base.roleFilteredPayload[base.formId === 'NET-003' ? 'campaignIdOrNull' : 'campaignId'];
     if (
@@ -290,7 +297,6 @@ export function createOrdinarySeatRuntime(dependencies: Dependencies) {
       return message;
     let action: ActionKey;
     if (base.formId === 'NET-003') {
-      if (base.roleFilteredPayload['pendingCommandIdOrNull'] !== null) return message;
       action = 'NET-003::CTA::004';
     } else {
       const source = peaceSource(message);

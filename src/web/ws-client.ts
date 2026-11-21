@@ -4889,6 +4889,8 @@ function decodeConfirmedSnapshot(
         [
           ...expectedNetworkActions(base.formId, p, executableWorkflowCommandIds),
           ...(base.formId === 'NET-003' &&
+          p['campaignStatus'] === 'PAUSED' &&
+          p.pendingCommandIdOrNull === null &&
           executableWorkflowCommandIds.includes(ORDINARY_SEAT_ACK) &&
           base.availableActionKeys.includes('NET-003::CTA::004')
             ? ['NET-003::CTA::004' as const]

@@ -778,6 +778,39 @@ describe('NET application client command and recovery boundaries', () => {
       refusal: { value: invalid === 'actions' ? ['NET-005::CTA::001'] : null },
     });
   });
+  it.each([
+    ['PAUSED', null, true],
+    ['HOSTING', null, false],
+    ['PAUSED', 'pending-network-command', false],
+  ] as const)(
+    'validates host-advertised NET-003 seat setup with campaign %s and pending command %s',
+    async (campaignStatus, pendingCommandIdOrNull, allowed) => {
+      const p = { ...selection(ZERO, 0, false), campaignStatus, pendingCommandIdOrNull };
+      const capabilities = [...CAPS, ORDINARY_SEAT_ACK];
+      const action = 'NET-003::CTA::004';
+      const flow = await start('NET-003', p, { keys: [], capabilities });
+      expect(flow.connection.requestFormAction(action).ok).toBe(false);
+      flow.socket.drop();
+      expect(flow.connection.reconnect()).toEqual({ ok: true });
+      const resumed = Socket.instances[1]!;
+      resumed.open();
+      ready(resumed, 'NET-003', p, ZERO, [action], capabilities);
+      if (allowed) {
+        expect(flow.states.at(-1)).toMatchObject({
+          kind: 'ready',
+          snapshot: { availableActionKeys: [action] },
+        });
+        expect(flow.connection.requestFormAction(action)).toEqual({ ok: true });
+        expect(sent(resumed)).toMatchObject({
+          messageType: 'navigation.form-action',
+          actionKey: action,
+        });
+      } else {
+        expect(flow.states.at(-1)?.kind).toBe('protocol-error');
+        expect(flow.connection.requestFormAction(action).ok).toBe(false);
+      }
+    },
+  );
   it.each(['confirmed', 'wrong scope', 'wrong vector'] as const)(
     'restores only the confirmed empty seat return after a menu reload (%s)',
     async (change) => {

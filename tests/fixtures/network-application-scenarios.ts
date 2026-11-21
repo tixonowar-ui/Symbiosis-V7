@@ -3635,9 +3635,10 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
                   const destination = waiting.sent.findLast(
                     (m) => m.messageType === 'projection.snapshot',
                   );
-                  expect(destination).toMatchObject({
+                  const closedSelection = {
                     presentation: { base: { formId: 'NET-003', availableActionKeys: [] } },
-                  });
+                  };
+                  expect(destination).toMatchObject(closedSelection);
                   await waiting.restart([command.commandId]);
                   expect(waiting.sent[0]).toEqual({
                     ...receipt,
@@ -3645,6 +3646,9 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
                     lifecycleState: 'IDEMPOTENT_REPLAY',
                   });
                   expect(waiting.payload()['campaignStatus']).toBe('HOSTING');
+                  expect(
+                    waiting.sent.findLast((m) => m.messageType === 'projection.snapshot'),
+                  ).toMatchObject(closedSelection);
                   expect(
                     h.db.prepare('SELECT count(*) AS n FROM campaign_peace_scene').get(),
                   ).toEqual({ n: 1 });
