@@ -4,8 +4,11 @@ import transitionsSource from '@generated/spec/atlas/renderer/transitions-by-for
 import { FORM_IDS } from '@generated/types/atlas.js';
 import type { FormId, FormType } from '@generated/types/atlas.js';
 
-import { LOCAL_SEAT_COMPONENTS } from '../forms/ply/local-seat-components.js';
-import { IMPLEMENTED_FORM_IDS, isImplementedFormId } from '../forms/index.js';
+import {
+  IMPLEMENTED_FORM_IDS,
+  isImplementedFormId,
+  LOCAL_SEAT_COMPONENTS,
+} from '../forms/index.js';
 import type { ImplementedFormId } from '../forms/index.js';
 
 type JsonRecord = Record<string, unknown>;

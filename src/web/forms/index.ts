@@ -10,7 +10,6 @@ import { ADMISSION_GM_VIEW_FORM_IDS } from '@shared/campaign-admission-review.js
 import { ADMISSION_OWNER_FORM_IDS } from '@shared/campaign-admission-presentation.js';
 
 import { APP_FORM_IDS } from './app/index.js';
-import { LOCAL_SEAT_COMPONENTS } from './ply/local-seat-components.js';
 import type { AppFormId } from './app/index.js';
 import { CHR_FORM_IDS } from './chr/index.js';
 import type { ChrFormId } from './chr/index.js';
@@ -19,6 +18,12 @@ import {
   NETWORK_APPLICATION_FORM_IDS,
   type NetworkApplicationFormId,
 } from '@shared/network-application.js';
+
+export const LOCAL_SEAT_COMPONENTS = [
+  'PLY-027',
+  'PLY-029',
+  'PLY-030',
+] as const satisfies readonly FormId[];
 
 export const IMPLEMENTED_FORM_IDS = [
   ...ENEMY_LIBRARY_FORMS,

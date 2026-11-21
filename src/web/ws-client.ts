@@ -271,6 +271,7 @@ import {
   decodePostSaveTerminal,
   postSaveDestinationMatches,
   postSaveReceiptUnchanged,
+  postSaveTerminalProof,
 } from './forms/chr/post-save.js';
 import {
   POST_SAVE_COMMAND_IDS,
@@ -10020,7 +10021,7 @@ export function connectProjection(
   } | null = null;
   let pendingCheckpoint: PendingCheckpoint | null = null;
   let pendingPostSave: {
-    request: PostSaveRequest | PostSaveDraftRequest;
+    proof: ReturnType<typeof postSaveTerminalProof>;
     receipt: CommandReceipt<PostSaveCommandResult> | null;
     source: ReturnType<typeof postSaveSource>;
     downloadReceiptFingerprint?: string;
@@ -11513,7 +11514,7 @@ export function connectProjection(
           } else if (pendingPostSave !== null) {
             const receipt = decodePostSaveTerminal(
               message,
-              pendingPostSave.request,
+              pendingPostSave.proof,
               pendingPostSave.source.projection,
             );
             if (!receipt.ok) {
@@ -11713,7 +11714,7 @@ export function connectProjection(
             pendingPostSave !== null &&
             pendingPostSave.receipt === null &&
             pendingPostSave.downloadReceiptFingerprint === undefined &&
-            message.commandId === pendingPostSave.request.commandId;
+            message.commandId === pendingPostSave.proof.commandId;
           const matchesCheckpoint =
             pendingCheckpoint !== null &&
             pendingCheckpoint.receipt === null &&
@@ -13126,7 +13127,7 @@ export function connectProjection(
           if (
             snapshot.ok &&
             (message.presentation.assignment.reason !== 'COMMAND_DESTINATION' ||
-              message.presentation.assignment.correlationId !== pendingPostSave.request.commandId ||
+              message.presentation.assignment.correlationId !== pendingPostSave.proof.commandId ||
               !postSaveDestinationMatches(snapshot.value, pendingPostSave.receipt))
           )
             snapshot = unrecognized(
@@ -13454,7 +13455,7 @@ export function connectProjection(
                   : pendingCampaignCreate !== null
                     ? [pendingCampaignCreate.request.commandId]
                     : pendingPostSave !== null
-                      ? [pendingPostSave.request.commandId]
+                      ? [pendingPostSave.proof.commandId]
                       : pendingCheckpoint !== null
                         ? [pendingCheckpoint.request.commandId]
                         : pendingSetDecision !== null
@@ -13699,7 +13700,11 @@ export function connectProjection(
     }
     const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
     if (!encoded.ok) return { ok: false, detail: JSON.stringify(encoded.refusal) };
-    pendingPostSave = { request, receipt: null, source: postSaveSource(lastSnapshot) };
+    pendingPostSave = {
+      proof: postSaveTerminalProof(request),
+      receipt: null,
+      source: postSaveSource(lastSnapshot),
+    };
     try {
       socket.send(encoded.text);
     } catch (error: unknown) {
@@ -16092,7 +16097,11 @@ export function connectProjection(
         };
         const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
         if (!encoded.ok) return { ok: false, detail: JSON.stringify(encoded.refusal) };
-        pendingPostSave = { request, receipt: null, source: postSaveSource(lastSnapshot) };
+        pendingPostSave = {
+          proof: postSaveTerminalProof(request),
+          receipt: null,
+          source: postSaveSource(lastSnapshot),
+        };
         try {
           socket.send(encoded.text);
         } catch (error: unknown) {
