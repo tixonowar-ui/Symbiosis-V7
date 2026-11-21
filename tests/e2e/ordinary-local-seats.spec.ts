@@ -20,6 +20,7 @@ import {
 import {
   admitAndStart,
   connectOrdinaryPlayer,
+  openInterruptibleLibrary,
   peacePayload,
   seatRoster,
   type SeatScenario,
@@ -332,6 +333,14 @@ handoffTest(
         ...controllers.map((c) => c.campaign_character_id),
       ];
       await expect(library).toBeVisible();
+      const offlinePage = await targetContext.newPage();
+      const offlineLibrary = await openInterruptibleLibrary(
+        offlinePage,
+        player.baseURL,
+        originalNames,
+      );
+      await offlineLibrary.disconnect();
+      await expect(networkForm(offlinePage, 'APP-004')).toHaveCount(0);
       const shellBeforeRoster = shell.frames.length;
       await atlasControl(playerPage, 'PLY-001::CTA::015').click();
       await expect(networkForm(playerPage, 'PLY-027')).toBeVisible({
@@ -371,6 +380,7 @@ handoffTest(
           libraryPage.getByRole('button', { name: `Открыть: ${name}`, exact: true }),
         ).toHaveCount(0);
       await verifyNeutralSurface(libraryPage, shell.frames.slice(shellBeforeRoster), privateValues);
+      await verifyNeutralSurface(offlinePage, offlineLibrary.frames, privateValues);
       expect(player.inspect().sources).toEqual(originals);
       await verifyNeutralSurface(playerPage, source.frames, privateValues);
       const preReloadCount = source.frames.length;
@@ -438,11 +448,18 @@ handoffTest(
       expect(beforeAck[1]?.command_id).toBe(sent.id);
       const handoffId = beforeAck[1]!.handoff_id;
 
+      offlineLibrary.restore();
+      await offlinePage.reload();
+      await expect(networkForm(offlinePage, 'PLY-030')).toBeVisible({
+        timeout: player.operationTimeoutMs,
+      });
+      await verifyNeutralSurface(offlinePage, offlineLibrary.frames, privateValues);
+      await offlinePage.close();
       const targetPage = await targetContext.newPage();
       const received: string[] = [],
         acknowledgements: string[] = [],
         transportErrors: string[] = [];
-      const cut: { receipt?: JsonObject; restart?: Promise<void> } = {};
+      const cut: { receipt?: JsonObject; refusal?: JsonObject; restart?: Promise<void> } = {};
       await targetPage.routeWebSocket('**/state', async (route) => {
         if (cut.restart !== undefined) await cut.restart;
         const server = route.connectToServer();
@@ -463,7 +480,15 @@ handoffTest(
           const raw = String(message),
             frame = JSON.parse(raw) as JsonObject;
           if (intercept) {
-            if (frame['messageType'] === 'command.result') {
+            if (
+              frame['messageType'] === 'command.refusal' ||
+              frame['messageType'] === 'protocol.refusal'
+            ) {
+              cut.refusal = frame;
+              route.send(message);
+              return;
+            }
+            if (cut.receipt === undefined && frame['messageType'] === 'command.result') {
               const receipt = frame['receipt'] as JsonObject;
               const expected = JSON.parse(acknowledgements[0]!) as JsonObject;
               if (receipt['commandId'] === expected['commandId']) {
@@ -473,9 +498,11 @@ handoffTest(
                   route.close({ code: 1012, reason: 'committed seat ACK response lost' }),
                   server.close(),
                 ]).catch((error) => transportErrors.push(String(error)));
+                return;
               }
             }
-            return;
+            // Drop only the transport that lost its confirmed reply. Earlier frames must be observable.
+            if (cut.receipt !== undefined) return;
           }
           received.push(raw);
           route.send(message);
@@ -492,7 +519,10 @@ handoffTest(
       expect(player.inspectOrdinarySeats().events).toEqual(beforeAck);
       const preActivationCount = source.frames.length;
       await atlasControl(targetPage, 'PLY-030::CTA::001').click();
-      await expect.poll(() => cut.receipt, { timeout: player.operationTimeoutMs }).toBeDefined();
+      await expect
+        .poll(() => cut.refusal ?? cut.receipt, { timeout: player.operationTimeoutMs })
+        .toBeDefined();
+      expect(cut.refusal, 'The addressed curtain must accept its original command').toBeUndefined();
       if (!cut.restart) throw Error('The ACK never triggered a physical restart');
       await cut.restart;
       await expect(networkForm(targetPage, 'PLY-001')).toBeVisible({
@@ -511,6 +541,12 @@ handoffTest(
       await expect(networkForm(targetPage, 'PLY-029')).toContainText(
         `Активное место: игрок ${targetOrdinal}.`,
       );
+      await expect(
+        networkForm(targetPage, 'PLY-029').getByRole('heading', {
+          name: 'Индикатор активного локального места',
+          exact: true,
+        }),
+      ).toBeVisible();
       const destinations = received
         .filter((raw) => peacePayload(raw) !== null)
         .map((raw) => (JSON.parse(raw) as JsonObject)['presentation'] as JsonObject)
@@ -543,6 +579,15 @@ handoffTest(
             (frame['receipt'] as JsonObject)['commandId'] === request['commandId'],
         );
       expect(replay?.['receipt']).toEqual(cut.receipt);
+      const replayIndex = received.findIndex((raw) => {
+        const frame = JSON.parse(raw) as JsonObject;
+        return (
+          frame['messageType'] === 'command.replay' &&
+          (frame['receipt'] as JsonObject)['commandId'] === request['commandId']
+        );
+      });
+      expect(replayIndex).toBeGreaterThan(-1);
+      expect(received.slice(0, replayIndex).some((raw) => peacePayload(raw) !== null)).toBe(false);
       expect(acknowledgements.length).toBeGreaterThanOrEqual(2);
       for (const raw of acknowledgements) expect(raw).toBe(acknowledgements[0]);
       const afterAck = player.inspectOrdinarySeats().events;

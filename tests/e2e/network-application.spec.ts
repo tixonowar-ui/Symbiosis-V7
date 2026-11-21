@@ -425,6 +425,9 @@ for (const outcome of [
         ).toContainText('Лагерь');
         firstPeace = lastPeace();
         const roster = form(playerPage, 'PLY-027');
+        await expect(
+          roster.getByRole('heading', { name: 'Переключатель локальных игроков', exact: true }),
+        ).toBeVisible();
         await expect(roster).toContainText('Ваше место: игрок 1.');
         await expect(roster.getByRole('button')).toHaveCount(0);
         await expect(playerPage.locator('[data-atlas-action-key="PLY-001::CTA::015"]')).toHaveCount(

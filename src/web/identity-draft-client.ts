@@ -20,6 +20,10 @@ export interface IdentityDraftClientState {
   readonly outstanding: IdentityDraftReplaceV3Message | null;
   readonly widgetValues: IdentityDraftValues;
 }
+interface SuspendedIdentityDraft {
+  readonly request: IdentityDraftReplaceV3Message;
+  readonly coalescedValues: IdentityDraftValues | null;
+}
 const copy = <T>(value: T): T => structuredClone(value);
 const sameScope = (a: IdentityDraftScope, b: IdentityDraftScope, context = true): boolean =>
   a.characterDraftId === b.characterDraftId &&
@@ -123,6 +127,22 @@ export class IdentityDraftClient {
     this.#lastRefusal = null;
     this.#dirty = false;
     return null;
+  }
+  pendingForReconnect(): SuspendedIdentityDraft | null {
+    if (this.#outstanding === null) return null;
+    return {
+      request: this.#outstanding,
+      coalescedValues: sameValues(this.#widgetValues, this.#outstanding.values)
+        ? null
+        : this.#widgetValues,
+    };
+  }
+  restorePending(pending: SuspendedIdentityDraft): IdentityDraftReplaceV3Message | null {
+    if (!sameScope(pending.request.scope, this.#confirmed.scope, false)) return null;
+    this.#outstanding = pending.request;
+    this.#widgetValues = pending.coalescedValues ?? pending.request.values;
+    this.#dirty = true;
+    return copy(pending.request);
   }
   #issue(): IdentityDraftReplaceV3Message {
     const draftUpdateId = this.#allocateUpdateId();

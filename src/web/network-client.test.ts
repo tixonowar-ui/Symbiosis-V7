@@ -1243,59 +1243,68 @@ describe('NET application client command and recovery boundaries', () => {
       });
     },
   );
-  it('binds CHR-027 to its exact source character rather than a scope or campaign locator', async () => {
-    const p: JsonObject = {
-      ...common(),
-      localCharacterUuid: REF.sourceUuid,
-      finalSnapshotVersion: 7,
-      candidateSnapshotChecksum: REF.candidateSnapshotChecksum,
-      eligibleCampaignIds: [],
-      selectedCampaignId: null,
-      requestedControllerSeat: null,
-      sourceUuidAndProvenance: {
-        registryVersion: 'registry',
-        catalogVersion: 'catalog',
-        builtAgainstTuple: 'tuple',
-        sourceUuid: REF.sourceUuid,
-        sourceSnapshotId: SUMMARY.sourceSnapshotId,
-        metadataRevision: 2,
-        sourceChecksum: REF.candidateSnapshotChecksum,
-        finalSaveReceiptId: 'original-final-receipt',
+  it.each([false, true])(
+    'binds CHR-027 to its exact source character rather than a scope or campaign locator (handoff %s)',
+    async (handoff) => {
+      const capabilities = handoff ? [...CAPS, ORDINARY_SEAT_ACK] : CAPS;
+      const p: JsonObject = {
+        ...common(),
+        localCharacterUuid: REF.sourceUuid,
         finalSnapshotVersion: 7,
-      },
-      submissionStatus: 'DRAFT',
-      commandId: null,
-    };
-    const flow = await start('CHR-027', p, { keys: ['CHR-027::CTA::002'] });
-    expect(flow.states.at(-1)).toMatchObject({
-      kind: 'ready',
-      snapshot: { path: `/player/characters/${REF.sourceUuid}/create/chr-027` },
-    });
-    flow.socket.drop();
-    flow.connection.reconnect();
-    const second = Socket.instances[1]!;
-    second.open();
-    const id = sent(second)['reconnectRequestId'] as string;
-    second.message({
-      messageType: 'session.reconnect.capabilities',
-      protocolVersion: 2,
-      reconnectRequestId: id,
-      revisions: ZERO,
-      executableWorkflowCommandIds: CAPS,
-    });
-    const bad = snapshot('CHR-027', p, ZERO, id, 'RECONNECT', ['CHR-027::CTA::002']);
-    second.message({
-      ...bad,
-      presentation: {
-        ...bad.presentation,
-        base: {
-          ...bad.presentation.base,
-          routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CAMPAIGN }],
+        candidateSnapshotChecksum: REF.candidateSnapshotChecksum,
+        eligibleCampaignIds: [],
+        selectedCampaignId: null,
+        requestedControllerSeat: null,
+        sourceUuidAndProvenance: {
+          registryVersion: 'registry',
+          catalogVersion: 'catalog',
+          builtAgainstTuple: 'tuple',
+          sourceUuid: REF.sourceUuid,
+          sourceSnapshotId: SUMMARY.sourceSnapshotId,
+          metadataRevision: 2,
+          sourceChecksum: REF.candidateSnapshotChecksum,
+          finalSaveReceiptId: 'original-final-receipt',
+          finalSnapshotVersion: 7,
         },
-      },
-    });
-    expect(flow.states.at(-1)).toMatchObject({ kind: 'protocol-error', refusal: { value: null } });
-  });
+        submissionStatus: 'DRAFT',
+        commandId: null,
+      };
+      const flow = await start('CHR-027', p, { keys: ['CHR-027::CTA::002'], capabilities });
+      expect(flow.states.at(-1)).toMatchObject({
+        kind: 'ready',
+        snapshot: { path: `/player/characters/${REF.sourceUuid}/create/chr-027` },
+      });
+      flow.socket.drop();
+      if (handoff)
+        expect(flow.states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+      flow.connection.reconnect();
+      const second = Socket.instances[1]!;
+      second.open();
+      const id = sent(second)['reconnectRequestId'] as string;
+      second.message({
+        messageType: 'session.reconnect.capabilities',
+        protocolVersion: 2,
+        reconnectRequestId: id,
+        revisions: ZERO,
+        executableWorkflowCommandIds: capabilities,
+      });
+      const bad = snapshot('CHR-027', p, ZERO, id, 'RECONNECT', ['CHR-027::CTA::002']);
+      second.message({
+        ...bad,
+        presentation: {
+          ...bad.presentation,
+          base: {
+            ...bad.presentation.base,
+            routeBindings: [{ parameterIndex: 0, source: 'inherited', value: CAMPAIGN }],
+          },
+        },
+      });
+      expect(flow.states.at(-1)).toMatchObject({
+        kind: 'protocol-error',
+        refusal: { value: null },
+      });
+    },
+  );
   it('routes the real NET-002 QR action locally in App and suppresses raw projection details', async () => {
     window.sessionStorage.setItem(NETWORK_CONTEXT_STORAGE_KEY, SCOPE);
     vi.stubGlobal('WebSocket', Socket);
@@ -2113,27 +2122,67 @@ describe('NET-017 actual GM client transport family', () => {
     });
     expect(f.states.at(-1)?.kind).toBe('protocol-error');
   });
-  it('retains an unseen player command through the real resume absence sequence and retries its exact envelope', async () => {
-    const f = await start('NET-002', address());
-    expect(f.connection.requestFormAction('NET-002::CTA::003')).toEqual({ ok: true });
-    const command = sent(f.socket);
-    f.socket.drop();
-    f.connection.reconnect();
-    const second = Socket.instances[1]!;
-    second.open();
-    expect(sent(second)['unacknowledgedCommandIds']).toEqual([command['commandId']]);
-    second.message({
-      protocolVersion: 1,
-      messageType: 'command.refusal',
-      commandId: command['commandId'],
-      lastLifecycleState: null,
-      revisions: ZERO,
-      refusal: { code: 'GUARD_REJECTED' },
-    });
-    ready(second, 'NET-002', { ...address(), contextId: NEXT_CONTEXT });
-    expect(sent(second)).toEqual(command);
-    expect(f.states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { availableActionKeys: [] } });
-  });
+  it.each([false, true])(
+    'retains an unseen player command through the real resume absence sequence and retries its exact envelope (handoff %s)',
+    async (handoff) => {
+      const capabilities = handoff ? [...CAPS, ORDINARY_SEAT_ACK] : CAPS;
+      const f = await start('NET-002', address(), { capabilities });
+      expect(f.connection.requestFormAction('NET-002::CTA::003')).toEqual({ ok: true });
+      const command = sent(f.socket);
+      f.socket.drop();
+      if (handoff) expect(f.states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+      f.connection.reconnect();
+      const second = Socket.instances[1]!;
+      second.open();
+      expect(sent(second)['unacknowledgedCommandIds']).toEqual([command['commandId']]);
+      second.message({
+        protocolVersion: 1,
+        messageType: 'command.refusal',
+        commandId: command['commandId'],
+        lastLifecycleState: null,
+        revisions: ZERO,
+        refusal: { code: 'GUARD_REJECTED' },
+      });
+      ready(
+        second,
+        'NET-002',
+        { ...address(), contextId: NEXT_CONTEXT },
+        ZERO,
+        undefined,
+        capabilities,
+      );
+      expect(sent(second)).toEqual(command);
+      expect(f.states.at(-1)).toMatchObject({
+        kind: 'ready',
+        snapshot: { availableActionKeys: [] },
+      });
+    },
+  );
+  it.each(['NET-003', 'NET-005'] as const)(
+    'withdraws the %s private batch while waiting for its authenticated reconnect',
+    async (form) => {
+      const capabilities = [...CAPS, ORDINARY_SEAT_ACK];
+      const p = form === 'NET-003' ? selection() : waiting(ZERO);
+      const f = await start(form, p, { capabilities });
+      expect(JSON.stringify(f.states.at(-1))).toContain(SUMMARY.name);
+      f.socket.drop();
+      expect(f.states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+      expect(f.drafts.at(-1)).toBeNull();
+      f.connection.reconnect();
+      const second = Socket.instances[1]!;
+      second.open();
+      expect(sent(second)).toMatchObject({
+        messageType: 'network.local-context.resume',
+        networkScopeId: SCOPE,
+        unacknowledgedCommandIds: [],
+      });
+      expect(JSON.stringify(second.sent)).not.toContain(SUMMARY.name);
+      expect(JSON.stringify(f.states.at(-1))).not.toContain(REF.sourceUuid);
+      ready(second, form, { ...p, contextId: NEXT_CONTEXT }, ZERO, undefined, capabilities);
+      expect(f.states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId: form } });
+      expect(JSON.stringify(f.states.at(-1))).toContain(SUMMARY.name);
+    },
+  );
   it.each(['same-vector replacement', 'different applied values'] as const)(
     'rejects a player draft result with %s',
     async (invalid) => {

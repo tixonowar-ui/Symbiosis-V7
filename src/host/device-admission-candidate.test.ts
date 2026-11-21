@@ -12,6 +12,9 @@ import { commitGmRequestReviewNavigation } from '../persistence/network-device-r
 import { mkdtempSync, rmSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { initializeNetworkInstallation } from './network-installation.js';
+import { createHost } from './server.js';
+import { openLocalHostWebSocket } from '../../tests/fixtures/local-host-websocket.js';
+import { ORDINARY_SEAT_ACK } from '../shared/ordinary-seat.js';
 import {
   commitOrdinarySeatHandoff,
   ordinaryHandoffPresentAtStartup,
@@ -2300,6 +2303,168 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
         randomUUID,
         f.allow,
       ).current;
+    });
+    it('returns one redacted refusal per malformed frame on a purged socket and resumes its curtain', async () => {
+      const db = owner.db,
+        device = owner.scope.ownerDeviceId,
+        receipt = accepted.playerDecisionOrNull!.receipt;
+      acknowledgeLocalAdmissionDecision(
+        db,
+        owner.scope,
+        f.batch.requestId,
+        randomUUID(),
+        owner.hostIdentity,
+        { kind: 'ACK', receipt },
+        f.allow,
+      );
+      initializeNetworkInstallation(db);
+      const [source, target] = receipt.copies.map(
+        (copy) => copy.controllerBindingOrNull!.localControllerSeatId,
+      );
+      const saved = commitOrdinarySeatHandoff(
+        db,
+        device,
+        {
+          kind: 'BEGIN',
+          commandId: randomUUID(),
+          expectedRevision: 0,
+          targetSeatId: target!,
+          sourceSeatIdOrNull: source!,
+          sourceContextId: randomUUID(),
+          targetContextId: randomUUID(),
+          sceneId: randomUUID(),
+          pendingCommandOwner: null,
+          activeProofOrNull: null,
+        },
+        f.allow,
+      );
+      const before = readOrdinarySeatHandoff(db, device);
+      const staticRoot = mkdtempSync(join(tmpdir(), 'ordinary-refusal-static-'));
+      directories.push(staticRoot);
+      const zero = { stateRevision: 0, projectionRevision: 0, actorVisibilityRevision: 0 };
+      const frameErrors = vi.fn();
+      const app = await createHost({
+        database: db,
+        projectRoot: process.cwd(),
+        staticRoot,
+        readRevisions: () => zero,
+        advanceRevisions: () => {
+          throw new Error('Unexpected revision change');
+        },
+        allocateCreationBranchUuid: randomUUID,
+        allocateCreationRollRequestId: randomUUID,
+        allocateContextId: randomUUID,
+        allocateLocalCharacterId: randomUUID,
+        allocateReceiptId: randomUUID,
+        allocateWizardCheckpointId: randomUUID,
+        sampleCreationD20: () => 1,
+        onFrameError: frameErrors,
+      });
+      const socket = await openLocalHostWebSocket(app);
+      const frames: unknown[] = [];
+      socket.on('message', (data) => {
+        if (!Buffer.isBuffer(data)) throw new Error('Expected a text frame from the host');
+        frames.push(JSON.parse(data.toString('utf8')) as unknown);
+      });
+      try {
+        const entry = randomUUID();
+        socket.send(
+          JSON.stringify({
+            messageType: 'session.reconnect',
+            protocolVersion: 2,
+            reconnectRequestId: entry,
+            deviceId: device,
+            knownRevisions: zero,
+            unacknowledgedCommandIds: [],
+            supportedWorkflowCommandIds: [ORDINARY_SEAT_ACK],
+          }),
+        );
+        await vi.waitFor(() => expect(frames).toHaveLength(2), { timeout: 5000 });
+        const requestId = randomUUID();
+        const resume = {
+          messageType: 'ordinary.seat.control',
+          protocolVersion: 3,
+          operation: 'RESUME',
+          requestId,
+          deliveryKeyOrNull: null,
+        };
+        socket.send(JSON.stringify({ ...resume, operation: 'unrecognized-private-operation' }));
+        socket.send(JSON.stringify({ ...resume, privateField: 'unpublished value' }));
+        socket.send(JSON.stringify(resume));
+        // The host processes frames on one queue. The final live response bounds the exact refusal count.
+        await vi.waitFor(
+          () =>
+            expect(frames.at(-1)).toMatchObject({
+              presentation: { assignment: { correlationId: requestId } },
+            }),
+          { timeout: 5000 },
+        );
+        const refusal = {
+          messageType: 'protocol.refusal',
+          protocolVersion: 1,
+          relatedCommandId: null,
+          refusal: { code: 'UNRECOGNIZED', path: '$', value: null },
+        };
+        const revisions = {
+          stateRevision: before.revision,
+          projectionRevision: before.revision,
+          actorVisibilityRevision: before.revision,
+        };
+        const curtain = (correlationId: string) => ({
+          messageType: 'projection.snapshot',
+          protocolVersion: 2,
+          projectionRole: 'player',
+          revisions,
+          presentation: {
+            assignment: { reason: 'RECONNECT', correlationId },
+            base: {
+              formId: 'APP-003',
+              formType: 'screen',
+              routeTemplate: '/local/app-003',
+              routeBindings: [],
+              roleFilteredPayload: { ordinarySeatView: 'WAITING', revision: before.revision },
+              availableActionKeys: [],
+            },
+            layers: [
+              {
+                formId: 'PLY-030',
+                formType: 'component',
+                routeTemplate: '@component/ply-030',
+                routeBindings: [],
+                availableActionKeys: ['PLY-030::CTA::001'],
+                roleFilteredPayload: {
+                  ordinarySeatView: 'CURTAIN',
+                  revision: before.revision,
+                  handoffId: saved.receipt.handoffId,
+                  targetSeatId: target,
+                  targetOrdinal: 2,
+                  sourceSeatIdOrNull: source,
+                  signedReturnContext: before.pendingOrNull!.signedReturnContext,
+                  pendingCommandOwner: null,
+                },
+              },
+            ],
+          },
+        });
+        expect(frames).toEqual([
+          {
+            messageType: 'session.reconnect.capabilities',
+            protocolVersion: 2,
+            reconnectRequestId: entry,
+            executableWorkflowCommandIds: [ORDINARY_SEAT_ACK],
+            revisions,
+          },
+          curtain(entry),
+          refusal,
+          refusal,
+          curtain(requestId),
+        ]);
+        expect(readOrdinarySeatHandoff(db, device)).toEqual(before);
+        expect(frameErrors).not.toHaveBeenCalled();
+      } finally {
+        socket.terminate();
+        await app.close();
+      }
     });
     it('reopens an addressed two-seat handoff, replays its lost ACK and rolls back a failed delivery', () => {
       const db = owner.db,

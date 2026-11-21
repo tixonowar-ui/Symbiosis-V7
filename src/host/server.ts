@@ -1090,9 +1090,9 @@ function sendChecked(
   socket: WebSocket,
   message: HostToClientMessage,
   vocabulary: ProtocolVocabulary,
-  fromOrdinaryRuntime = false,
+  allowAfterOrdinaryPurge = false,
 ): void {
-  if (!fromOrdinaryRuntime && ordinaryOnlySockets.has(socket)) return;
+  if (!allowAfterOrdinaryPurge && ordinaryOnlySockets.has(socket)) return;
   const encoded = encodeHostMessage(message, vocabulary);
   if (!encoded.ok) {
     throw new Error(`host produced an invalid wire v1 message: ${JSON.stringify(encoded.refusal)}`);
@@ -3734,15 +3734,18 @@ function sendProtocolRefusal(
   vocabulary: ProtocolVocabulary,
   refusal: Extract<HostToClientMessage, { readonly messageType: 'protocol.refusal' }>['refusal'],
 ): void {
+  const redacted = redactProtocolInputRefusal(refusal);
   sendChecked(
     socket,
     {
       messageType: 'protocol.refusal',
       protocolVersion: WIRE_PROTOCOL_VERSION,
-      refusal: redactProtocolInputRefusal(refusal),
+      // Older codecs can include a client-supplied field name in the path.
+      refusal: ordinaryOnlySockets.has(socket) ? { ...redacted, path: '$' } : redacted,
       relatedCommandId: null,
     },
     vocabulary,
+    true,
   );
 }
 
@@ -7155,8 +7158,11 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
             socket.close(1008, 'local app connection required');
             return;
           }
+          const previousContext = connection.current;
           await handleFrame(socket, data, isBinary, dependencies, commandJournal, connection);
           if (
+            // A refusal keeps its existing subscription. Rechecking identity would report the same reset twice.
+            connection.current !== previousContext &&
             connection.network.networkScopeId === null &&
             connection.campaign.gmLocalContextId === null &&
             connection.current !== null &&

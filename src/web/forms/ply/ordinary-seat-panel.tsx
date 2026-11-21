@@ -19,23 +19,11 @@ export function OrdinarySeatPanel({ formId, view, actions, enabled, getConnectio
     view.ordinarySeatView === 'LIBRARY' ? view.selectedSourceUuids : [],
   );
   const [notice, setNotice] = useState<string | null>(null);
-  if (view.ordinarySeatView === 'ACTIVE')
-    return (
-      <section data-atlas-form-id="PLY-029" aria-label="Активное место">
-        <p role="status">Активное место: игрок {view.ordinal}.</p>
-      </section>
-    );
-  if (
+  const singleton =
     view.ordinarySeatView === 'ROSTER' &&
     view.roster.length === 1 &&
     view.activeSeatIdOrNull === view.roster[0]?.seatId &&
-    actions.length === 0
-  )
-    return (
-      <section data-atlas-form-id="PLY-027" aria-label="Допущенные места">
-        <p>Ваше место: игрок {view.roster[0].ordinal}.</p>
-      </section>
-    );
+    actions.length === 0;
   const selectable = view.ordinarySeatView === 'ROSTER' ? eligibleSeatTargets(view) : [];
   const allowed = actions.filter(
     (key) => key !== 'PLY-027::CTA::003' || selectable.some((s) => s.seatId === choice),
@@ -48,6 +36,9 @@ export function OrdinarySeatPanel({ formId, view, actions, enabled, getConnectio
         availableActionKeys={allowed}
         projectionContent={
           <>
+            {view.ordinarySeatView === 'ACTIVE' ? (
+              <p role="status">Активное место: игрок {view.ordinal}.</p>
+            ) : null}
             {view.ordinarySeatView === 'WAITING' ? <p>Ожидание передачи устройства.</p> : null}
             {view.ordinarySeatView === 'SETUP' ? (
               <p>Выбрано персонажей: {view.selectedCount}.</p>
@@ -88,7 +79,9 @@ export function OrdinarySeatPanel({ formId, view, actions, enabled, getConnectio
             ) : null}
             {view.ordinarySeatView === 'ROSTER' ? (
               <>
-                {view.roster.length === 0 ? (
+                {singleton ? (
+                  <p>Ваше место: игрок {view.roster[0]!.ordinal}.</p>
+                ) : view.roster.length === 0 ? (
                   <p>На этом устройстве пока нет допущенных игроков.</p>
                 ) : (
                   <ul aria-label="Допущенные места">

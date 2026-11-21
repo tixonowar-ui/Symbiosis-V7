@@ -29,6 +29,8 @@ import type {
 } from '@shared/index.js';
 
 import { App } from './app.js';
+import { getAtlasFormModel } from './renderer/atlas-data.js';
+import { OrdinarySeatPanel } from './forms/ply/ordinary-seat-panel.js';
 import {
   MetadataFields,
   PostSaveFields,
@@ -2038,6 +2040,255 @@ describe('ordinary device handoff at the browser boundary', () => {
     sessionStorage.removeItem(NETWORK_CONTEXT_STORAGE_KEY);
   });
 
+  it.each(['close', 'error', 'offline', 'pagehide'] as const)(
+    'removes a standalone private library on %s and revalidates before showing another view',
+    async (loss) => {
+      const { container, socket } = await connectClient();
+      open(socket);
+      const name = 'Имя исходного владельца';
+      const library = navigationSnapshot(
+        {
+          formId: 'APP-004',
+          formType: 'screen',
+          routeTemplate: '/player/characters',
+          routeBindings: [],
+          availableActionKeys: ['APP-004::CTA::001', 'APP-004::CTA::007'],
+          roleFilteredPayload: {
+            ...APP_004_PROJECTION,
+            draftCharacterIds: [CHARACTER_DRAFT_ID],
+            libraryEntries: [
+              {
+                localCharacterId: CHARACTER_DRAFT_ID,
+                lifecycleState: 'DRAFT',
+                name,
+                selectionFormId: 'CHR-026',
+              },
+            ],
+          },
+        },
+        11,
+        REQUEST_ID,
+        'RECONNECT',
+      );
+      deliverPair(
+        socket,
+        capabilities({
+          revisions: library.revisions,
+          executableWorkflowCommandIds: [ORDINARY_SEAT_ACK],
+        }),
+        library,
+      );
+      expect(container.textContent).toContain(name);
+      vi.useFakeTimers();
+      try {
+        act(() => {
+          if (loss === 'close') socket.serverClose(1006, 'lost');
+          else if (loss === 'error')
+            socket.onerror?.call(socket as unknown as WebSocket, new Event('error'));
+          else window.dispatchEvent(new Event(loss));
+        });
+        const hidden = () => {
+          expect(container.querySelector('[data-atlas-form-id="APP-004"]')).toBeNull();
+          expect(container.innerHTML).not.toContain(name);
+          expect(container.innerHTML).not.toContain(CHARACTER_DRAFT_ID);
+        };
+        hidden();
+        expect(container.querySelector('[data-client-state="disconnected"]')).not.toBeNull();
+        expect(window.location.pathname).toBe('/local/app-003');
+        deliver(socket, checkedHostTextV2(library));
+        hidden();
+        if (loss === 'pagehide') {
+          act(() => {
+            window.dispatchEvent(new Event('online'));
+            vi.advanceTimersByTime(1500);
+          });
+          expect(FakeWebSocket.instances.at(-1)).toBe(socket);
+          act(() => {
+            window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+          });
+        } else {
+          act(() => {
+            window.dispatchEvent(new Event('online'));
+            vi.advanceTimersByTime(1000);
+          });
+        }
+        const resumed = FakeWebSocket.instances.at(-1)!;
+        expect(resumed).not.toBe(socket);
+        open(resumed);
+        const hello = decodedClientMessageV2(resumed, 0);
+        if (hello.messageType !== 'session.reconnect')
+          throw new Error('Expected session reconnect');
+        expect(hello.knownRevisions).toEqual(library.revisions);
+        hidden();
+        const neutral = curtain(hello.reconnectRequestId);
+        deliverPair(
+          resumed,
+          capabilities({
+            reconnectRequestId: hello.reconnectRequestId,
+            revisions: seatRevisions,
+            executableWorkflowCommandIds: [ORDINARY_SEAT_ACK],
+          }),
+          { ...neutral, presentation: { ...neutral.presentation, layers: [] } },
+        );
+        expect(container.querySelector('[data-atlas-form-id="APP-003"]')).not.toBeNull();
+        hidden();
+        expect(resumed.sent).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
+  it.each(['same draft', 'curtain'] as const)(
+    'restores the exact pending CHR-001 draft only after the host confirms its scope again (%s)',
+    async (destination) => {
+      const caps = [...capabilities().executableWorkflowCommandIds, ORDINARY_SEAT_ACK];
+      const { container, socket } = await connectToValidChr001(
+        capabilities({ executableWorkflowCommandIds: caps }),
+      );
+      select(
+        requiredElement(
+          container.querySelector<HTMLSelectElement>('[data-character-art-placeholder]'),
+          'portrait',
+        ),
+        LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS[0],
+      );
+      const original = socket.sent.at(-1)!;
+      expect(decodedClientMessageV3(socket, socket.sent.length - 1).messageType).toBe(
+        'character.identity-draft.replace',
+      );
+      act(() => {
+        window.dispatchEvent(new Event('pagehide'));
+      });
+      expect(container.innerHTML).not.toContain('Алиса');
+      expect(container.querySelector('[data-atlas-form-id="CHR-001"]')).toBeNull();
+      act(() => {
+        window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }));
+      });
+      const resumed = FakeWebSocket.instances.at(-1)!;
+      open(resumed);
+      const hello = decodedClientMessageV2(resumed, 0);
+      if (hello.messageType !== 'session.reconnect') throw new Error('Expected session reconnect');
+      expect(resumed.sent).toHaveLength(1);
+      if (destination === 'curtain') {
+        deliverPair(
+          resumed,
+          capabilities({
+            revisions: seatRevisions,
+            reconnectRequestId: hello.reconnectRequestId,
+            executableWorkflowCommandIds: caps,
+          }),
+          curtain(hello.reconnectRequestId),
+        );
+        expect(container.querySelector('[data-atlas-form-id="PLY-030"]')).not.toBeNull();
+        expect(container.innerHTML).not.toContain('Алиса');
+        expect(container.querySelector('[data-atlas-form-id="CHR-001"]')).toBeNull();
+        expect(resumed.sent).toHaveLength(1);
+        return;
+      }
+      const restored = navigationSnapshot(
+        {
+          ...chr001Base(VALID_CHR_001_PROJECTION),
+          availableActionKeys: ['CHR-001::CTA::001', 'CHR-001::CTA::002'],
+        },
+        10,
+        hello.reconnectRequestId,
+        'RECONNECT',
+      );
+      deliverPair(
+        resumed,
+        capabilities({
+          revisions: restored.revisions,
+          reconnectRequestId: hello.reconnectRequestId,
+          executableWorkflowCommandIds: caps,
+        }),
+        restored,
+      );
+      expect(container.querySelector('[data-atlas-form-id="CHR-001"]')).not.toBeNull();
+      expect(resumed.sent).toEqual([resumed.sent[0], original]);
+    },
+  );
+
+  it('uses the Atlas component heading for the acknowledged active seat without controls', () => {
+    const container = document.createElement('div');
+    document.body.append(container);
+    const root = createRoot(container);
+    mountedClients.push({ container, root });
+    act(() =>
+      root.render(
+        <OrdinarySeatPanel
+          formId="PLY-029"
+          view={{
+            ordinarySeatView: 'ACTIVE',
+            seatId: CHARACTER_DRAFT_ID,
+            ordinal: 2,
+            receiptId: CONTEXT_ID,
+            revision: 7,
+          }}
+          actions={[]}
+          enabled
+          getConnection={() => null}
+        />,
+      ),
+    );
+    expect(container.querySelector('#PLY-029-title')?.textContent).toBe(
+      getAtlasFormModel('PLY-029').title,
+    );
+    expect(container.querySelector('[role="status"]')?.textContent).toBe(
+      'Активное место: игрок 2.',
+    );
+    expect(container.querySelector('button')).toBeNull();
+  });
+
+  it.each(['NET-006', 'PLY-001'] as const)(
+    'removes the confirmed %s owner view when its socket drops',
+    async (formId) => {
+      const p = formId === 'NET-006' ? ownerFixture.lobbySource : ownerFixture.peace;
+      const { socket, container } = await connectClient(
+        Promise.resolve(identityResponse({ deviceId: p.deviceId })),
+      );
+      open(socket);
+      const revisions = {
+        stateRevision: p.stateRevision,
+        projectionRevision: p.projectionRevision,
+        actorVisibilityRevision: p.actorVisibilityRevision,
+      };
+      const base: ProjectionSnapshotV2Message['presentation']['base'] =
+        formId === 'PLY-001'
+          ? initialSheetBase([])
+          : {
+              formId,
+              formType: 'screen',
+              routeTemplate: '/player/campaigns/:campaignId/network/net-006',
+              routeBindings: [{ parameterIndex: 0, source: 'inherited', value: p.campaignId }],
+              availableActionKeys: ['NET-006::CTA::001'],
+              roleFilteredPayload: p,
+            };
+      deliverPair(
+        socket,
+        capabilities({ revisions, executableWorkflowCommandIds: [ORDINARY_SEAT_ACK] }),
+        snapshot({
+          projectionRole: 'player',
+          revisions,
+          presentation: {
+            base,
+            layers: [],
+            assignment: { reason: 'RECONNECT', correlationId: REQUEST_ID },
+          },
+        }),
+      );
+      expect(container.querySelector(`[data-atlas-form-id="${formId}"]`)).not.toBeNull();
+      const name = ownerFixture.peace.mechanicalSheet.identity.name;
+      if (formId === 'PLY-001') expect(container.textContent).toContain(name);
+      act(() => socket.serverClose(1006, 'owner connection interrupted'));
+      expect(container.querySelector('[data-client-state="disconnected"]')).not.toBeNull();
+      expect(container.querySelector(`[data-atlas-form-id="${formId}"]`)).toBeNull();
+      expect(container.innerHTML).not.toContain(name);
+      expect(container.innerHTML).not.toContain(p.campaignId);
+      expect(window.location.pathname).toBe('/local/app-003');
+    },
+  );
+
   it('purges an open local wizard without submitting or cancelling its draft', async () => {
     const { container, socket } = await connectToValidChr001(
       capabilities({
@@ -2221,6 +2472,9 @@ describe('ordinary device handoff at the browser boundary', () => {
       );
       if (own) {
         expect(container.querySelector('[data-atlas-form-id="PLY-001"]')).not.toBeNull();
+        expect(container.querySelector('#PLY-027-title')?.textContent).toBe(
+          getAtlasFormModel('PLY-027').title,
+        );
         expect(container.querySelector('[data-atlas-form-id="PLY-027"]')?.textContent).toContain(
           'Ваше место: игрок 1.',
         );

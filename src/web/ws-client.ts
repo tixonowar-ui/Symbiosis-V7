@@ -20,6 +20,21 @@ import { enemyLibrarySelectionConfirmed } from './forms/enm/enemy-library-confir
 import { ORDINARY_SEAT_ACK, ordinarySeatViewValue } from '@shared/ordinary-seat.js';
 import type { OrdinarySeatControlV3Message } from '@shared/ordinary-seat.js';
 import {
+  ownerReconnectCheck,
+  ownerCommandWitness,
+  type OwnerCommandWitness,
+  type OwnerReceiptWitness,
+} from './forms/net/owner-reconnect-witness.js';
+import {
+  absentNetworkCommandSourceMatches,
+  networkRefusalSourceMatches,
+  pendingNetworkCancelSnapshotMatches,
+  rememberNetworkCommandSource,
+  unconfirmedNetworkCommandSourceMatches,
+  type NetworkCommandReconnectSource,
+} from './forms/net/network-command-reconnect-source.js';
+import { reconnectFingerprint } from '@shared/reconnect-fingerprint.js';
+import {
   checkedSeatReceipt,
   checkedSeatView,
   eligibleSeatTargets,
@@ -170,9 +185,7 @@ import {
   type AdmissionBrowserRequest,
   type AdmissionBrowserEdit,
   admissionOwnerBrowserCommand,
-  admissionOwnerBrowserReceipt,
   admissionOwnerMonotonic,
-  admissionOwnerDecisionDestination,
 } from './forms/net/admission-client.js';
 import type { AdmissionGmClientV3Message } from '@shared/campaign-admission-review.js';
 import {
@@ -1716,7 +1729,8 @@ interface PendingCheckpoint {
   readonly request: CheckpointRequest;
   readonly receipt: CommandReceipt<CheckpointResult> | null;
   readonly skillSelectionDraft: CharacterSkillSelectionDraft | null;
-  readonly sourceSnapshot: ConfirmedProjectionSnapshot;
+  readonly sourceSnapshot: ConfirmedProjectionSnapshot | null;
+  readonly finalizationProof?: ReturnType<typeof finalizationReceiptSource>;
 }
 
 interface SetDecisionCommonPayload extends JsonObject {
@@ -6019,52 +6033,6 @@ function decodeReconnectSnapshot(
   return decodeConfirmedSnapshot(message, capabilities.executableWorkflowCommandIds);
 }
 
-function pendingNetworkCancelSnapshotMatches(
-  next: ConfirmedProjectionSnapshot,
-  source: ConfirmedProjectionSnapshot,
-  request: NetworkWorkflowRequest,
-  reconnect: boolean,
-): boolean {
-  if (
-    request.workflowCommandId !== 'UI-CMD-DEVICE-REQUEST-CANCEL' ||
-    source.formId !== 'NET-005' ||
-    next.formId !== 'NET-005'
-  )
-    return false;
-  const p = source.projection,
-    n = next.projection,
-    payload = request.payload;
-  return (
-    n['networkScopeId'] === p['networkScopeId'] &&
-    n['networkScopeId'] === payload.networkScopeId &&
-    n['deviceId'] === p['deviceId'] &&
-    n['controllerSeat'] === p['controllerSeat'] &&
-    p['contextId'] === payload.contextId &&
-    (reconnect || n['contextId'] === payload.contextId) &&
-    n['draftRevision'] === p['draftRevision'] &&
-    n['draftRevision'] === payload.expectedDraftRevision &&
-    n['campaignIdOrNull'] === p['campaignIdOrNull'] &&
-    n['connectionState'] === 'CONNECTING' &&
-    n['pendingCommandIdOrNull'] === request.commandId &&
-    n['commandId'] === request.commandId &&
-    n['sessionId'] === p['sessionId'] &&
-    n['sessionId'] === payload.technicalSessionId &&
-    n['requestId'] === p['requestId'] &&
-    n['requestId'] === payload.requestId &&
-    n['requestRevision'] === p['requestRevision'] &&
-    n['requestRevision'] === payload.requestRevision &&
-    n['requestOwnerDeviceId'] === p['requestOwnerDeviceId'] &&
-    n['requestStatus'] === 'PENDING' &&
-    n['cancelReason'] === p['cancelReason'] &&
-    n['cancelReason'] === payload.reason &&
-    n['gmMessage'] === p['gmMessage'] &&
-    sameJson(n['batchCharacterSummaries']!, p['batchCharacterSummaries']!) &&
-    next.revisions.stateRevision === source.revisions.stateRevision + 1 &&
-    next.revisions.projectionRevision >= source.revisions.projectionRevision + 1 &&
-    next.revisions.actorVisibilityRevision === source.revisions.actorVisibilityRevision
-  );
-}
-
 function decodeAddressableRouteSnapshot(
   message: ProjectionSnapshotV2Message,
   pending: AddressableRouteIntentV2Message,
@@ -6199,6 +6167,99 @@ const ORDINARY_NAV = new Map<ActionKey, string>([
   ['PLY-027::CTA::006', 'APP-002'],
   ['PLY-001::CTA::015', 'ROSTER'],
 ]);
+
+function privateLocalPlayerView(snapshot: ConfirmedProjectionSnapshot): boolean {
+  return (
+    snapshot.formId === 'APP-002' ||
+    snapshot.formId === 'APP-004' ||
+    snapshot.formId === 'APP-009' ||
+    (snapshot.formId === 'APP-010' &&
+      snapshot.projection['ownerContext'] !== 'GM_ARCHIVE_EXPORT') ||
+    (snapshot.formId.startsWith('CHR-') && !isNetworkApplicationForm(snapshot.formId))
+  );
+}
+
+function privateOrdinaryPlayerView(snapshot: ConfirmedProjectionSnapshot): boolean {
+  return (
+    privateLocalPlayerView(snapshot) ||
+    isNetworkApplicationForm(snapshot.formId) ||
+    isCampaignOwnerForm(snapshot.formId)
+  );
+}
+
+function networkReconnectWitness(previous: ConfirmedProjectionSnapshot) {
+  return {
+    formId: previous.formId,
+    finalFingerprint:
+      previous.formId === 'CHR-027'
+        ? reconnectFingerprint([
+            previous.projection['localCharacterUuid'],
+            previous.projection['finalSnapshotVersion'],
+            previous.projection['candidateSnapshotChecksum'],
+          ])
+        : null,
+    acceptsOwner: ownerReconnectCheck(previous),
+  };
+}
+
+function matchesRetiredFinal(
+  current: JsonObject,
+  previous: ConfirmedProjectionSnapshot | null,
+  witness: ReturnType<typeof networkReconnectWitness> | null,
+): boolean {
+  const checksum = (current['provenance'] as JsonObject)['sourceChecksum'];
+  if (previous !== null)
+    return (
+      previous.formId === 'CHR-027' &&
+      current['localCharacterUuid'] === previous.projection['localCharacterUuid'] &&
+      current['finalSnapshotVersion'] === previous.projection['finalSnapshotVersion'] &&
+      checksum === previous.projection['candidateSnapshotChecksum']
+    );
+  return (
+    witness === null ||
+    (witness.formId === 'CHR-027' &&
+      witness.finalFingerprint ===
+        reconnectFingerprint([
+          current['localCharacterUuid'],
+          current['finalSnapshotVersion'],
+          checksum,
+        ]))
+  );
+}
+
+function selectedSourceFields(p: JsonObject, keys: readonly string[]): Record<string, JsonValue> {
+  return Object.fromEntries(
+    keys.filter((key) => Object.hasOwn(p, key)).map((key) => [key, p[key]!]),
+  );
+}
+function postSaveSource(snapshot: ConfirmedProjectionSnapshot) {
+  return {
+    projection: selectedSourceFields(snapshot.projection, [
+      'resumeFormId',
+      'lastCompleteCheckpointId',
+      'checkpointRevision',
+    ]),
+    executableWorkflowCommandIds: snapshot.executableWorkflowCommandIds,
+  };
+}
+function finalizationReceiptSource(snapshot: ConfirmedProjectionSnapshot) {
+  const projection = selectedSourceFields(snapshot.projection, [
+    'characterDraftId',
+    'wizardCheckpointId',
+    'draftRevision',
+    'correctionHeadHash',
+    'summaryReceiptIdOrNull',
+    'nextFormId',
+    'nextRandomKindOrNull',
+    'pendingRollRequestIds',
+  ]);
+  const rolls = snapshot.projection['physicalRolls'];
+  if (Array.isArray(rolls))
+    projection['physicalRolls'] = rolls
+      .filter(isJsonObject)
+      .map((roll: JsonObject) => selectedSourceFields(roll, ['rollRequestId', 'rollReceiptId']));
+  return { projection, revisions: snapshot.revisions };
+}
 
 function decodeFormActionSnapshot(
   message: ProjectionSnapshotV2Message,
@@ -7057,12 +7118,44 @@ function decodeCheckpointTerminal(
   >,
   pending: PendingCheckpoint,
 ): DecodeResult<CommandReceipt<CheckpointResult>> {
-  if ((pending.request.payload as JsonObject)['stage'] === 'FINALIZATION')
+  if ((pending.request.payload as JsonObject)['stage'] === 'FINALIZATION') {
+    if (!pending.finalizationProof) return unrecognized('$.receipt.result.stage', 'FINALIZATION');
     return decodeCreationFinalizationTerminal(
       message,
       pending.request,
-      pending.sourceSnapshot,
+      pending.finalizationProof,
     ) as DecodeResult<CommandReceipt<CheckpointResult>>;
+  }
+  if (pending.request.payload.stage === 'IDENTITY') {
+    const receipt = message.receipt;
+    if (receipt.commandId !== pending.request.commandId) {
+      return unrecognized('$.receipt.commandId', receipt.commandId);
+    }
+    if (receipt.receiptId.trim().length === 0) {
+      return unrecognized('$.receipt.receiptId', receipt.receiptId);
+    }
+    const payload = pending.request.payload;
+    const result = decodeProjection(receipt.result, '$.receipt.result', {
+      branchCacheHash: (field) => field === EMPTY_BRANCH_CACHE_HASH,
+      characterDraftId: (field) => field === payload.characterDraftId,
+      checkpointId: (field) => field === payload.wizardCheckpointId,
+      checkpointOwnerId: (field) => field === payload.characterDraftId,
+      checkpointRevision: (field) => field === 0,
+      draftRevision: (field) => field === payload.draftRevision,
+      nextFormId: (field) => field === 'CHR-010',
+      stage: (field) => field === 'IDENTITY',
+    });
+    if (!result.ok) return result;
+    if (
+      receipt.revisions.stateRevision !== 0 ||
+      receipt.revisions.projectionRevision !== 0 ||
+      receipt.revisions.actorVisibilityRevision !== 0
+    ) {
+      return unrecognized('$.receipt.revisions', { ...receipt.revisions });
+    }
+    return { ok: true, value: receipt as CommandReceipt<IdentityCheckpointResult> };
+  }
+  if (pending.sourceSnapshot === null) return unrecognized('$.receipt.result.sourceFormId', null);
   if (
     (pending.request.payload as { readonly variant?: string }).variant ===
     'FIVE_STARTING_POSITIONS_CHECKPOINT'
@@ -7177,27 +7270,6 @@ function decodeCheckpointTerminal(
     return unrecognized('$.receipt.receiptId', receipt.receiptId);
   }
   const payload = pending.request.payload;
-  if (payload.stage === 'IDENTITY') {
-    const result = decodeProjection(receipt.result, '$.receipt.result', {
-      branchCacheHash: (field) => field === EMPTY_BRANCH_CACHE_HASH,
-      characterDraftId: (field) => field === payload.characterDraftId,
-      checkpointId: (field) => field === payload.wizardCheckpointId,
-      checkpointOwnerId: (field) => field === payload.characterDraftId,
-      checkpointRevision: (field) => field === 0,
-      draftRevision: (field) => field === payload.draftRevision,
-      nextFormId: (field) => field === 'CHR-010',
-      stage: (field) => field === 'IDENTITY',
-    });
-    if (!result.ok) return result;
-    if (
-      receipt.revisions.stateRevision !== 0 ||
-      receipt.revisions.projectionRevision !== 0 ||
-      receipt.revisions.actorVisibilityRevision !== 0
-    ) {
-      return unrecognized('$.receipt.revisions', { ...receipt.revisions });
-    }
-    return { ok: true, value: receipt as CommandReceipt<IdentityCheckpointResult> };
-  }
   if (payload.stage === 'SKILLS') {
     const sourceFormId = pending.sourceSnapshot.formId;
     if (
@@ -8264,13 +8336,29 @@ function armorBundleSnapshotMatchesReceipt(
 function checkpointSnapshotMatchesReceipt(
   snapshot: ConfirmedProjectionSnapshot,
   receipt: CommandReceipt<CheckpointResult>,
-  sourceSnapshot: ConfirmedProjectionSnapshot,
+  sourceSnapshot: ConfirmedProjectionSnapshot | null,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   const result = receipt.result;
   if ((result as JsonObject)['stage'] === 'FINALIZATION')
     return creationFinalizationSnapshotMatchesReceipt(snapshot, receipt)
       ? { ok: true, value: snapshot }
       : unrecognized('$.presentation.base.roleFilteredPayload', snapshot.projection);
+  if (result.stage === 'IDENTITY') {
+    const p = snapshot.projection;
+    if (snapshot.formId !== 'CHR-010')
+      return unrecognized('$.presentation.base.formId', snapshot.formId);
+    for (const [key, expected] of [
+      ['characterDraftId', result.characterDraftId],
+      ['wizardCheckpointId', result.checkpointId],
+      ['draftRevision', result.draftRevision],
+    ] as const)
+      if (p[key] !== expected)
+        return unrecognized(`$.presentation.base.roleFilteredPayload.${key}`, p[key]);
+    return sameNetworkRevisions(snapshot.revisions, receipt.revisions)
+      ? { ok: true, value: snapshot }
+      : unrecognized('$.revisions', { ...snapshot.revisions });
+  }
+  if (sourceSnapshot === null) return unrecognized('$.receipt.result.sourceFormId', null);
   if ((result as { readonly variant?: string }).variant === 'FIVE_STARTING_POSITIONS_CHECKPOINT')
     return fiveStartingPositionsSnapshotMatchesReceipt(snapshot, receipt);
   if ((result as { readonly variant?: string }).variant === 'STARTING_MONEY_CHECKPOINT')
@@ -8394,11 +8482,7 @@ function checkpointSnapshotMatchesReceipt(
     return { ok: true, value: snapshot };
   }
   let advance = 0;
-  if (result.stage === 'IDENTITY') {
-    if (snapshot.formId !== 'CHR-010') {
-      return unrecognized('$.presentation.base.formId', snapshot.formId);
-    }
-  } else if (result.nextFormId === 'CHR-011') {
+  if (result.nextFormId === 'CHR-011') {
     if (snapshot.formId === 'CHR-012') {
       advance = 1;
     } else if (snapshot.formId !== 'CHR-011') {
@@ -9804,14 +9888,15 @@ export function connectProjection(
   let deviceId: string | null = null;
   let disposed = false;
   let identity: IdentityDraftClient | null = null;
+  let suspendedIdentity: ReturnType<IdentityDraftClient['pendingForReconnect']> = null;
   let terminal = false;
   let lastSnapshot: ConfirmedProjectionSnapshot | null = null;
   let gmLocalContextId: string | null = null;
   let networkScopeId: string | null = null;
   let pendingOwnerCommand: {
     request: OwnerBrowserCommand;
-    source: ConfirmedProjectionSnapshot;
-    receipt: CommandReceipt | null;
+    witness: OwnerCommandWitness;
+    receipt: OwnerReceiptWitness | null;
   } | null = null;
   const npc = new NpcBrowserSession();
   let gmEdit: NetworkGmRequestDraftValues | null = null;
@@ -9912,12 +9997,12 @@ export function connectProjection(
     request: NetworkWorkflowRequest;
     receipt: CommandReceipt<NetworkCommandResult> | null;
     replay: boolean;
-    source: ConfirmedProjectionSnapshot;
+    source: NetworkCommandReconnectSource;
   } | null = null;
   let absentNetworkCommandId: string | null = null;
   let pendingNetworkRefusal: {
     request: NetworkWorkflowRequest;
-    source: ConfirmedProjectionSnapshot;
+    source: NetworkCommandReconnectSource;
     refusal: CommandRefusalMessage;
   } | null = null;
   let campaignEdit: CampaignEdit | null = null;
@@ -9937,7 +10022,8 @@ export function connectProjection(
   let pendingPostSave: {
     request: PostSaveRequest | PostSaveDraftRequest;
     receipt: CommandReceipt<PostSaveCommandResult> | null;
-    source: ConfirmedProjectionSnapshot;
+    source: ReturnType<typeof postSaveSource>;
+    downloadReceiptFingerprint?: string;
   } | null = null;
   const downloadedReceipts = new Set<string>();
   let pendingSetDecision: PendingSetDecision | null = null;
@@ -9958,6 +10044,9 @@ export function connectProjection(
   let seatAckSent = false;
   let seatReconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let seatAuthorityKnown = seatDelivery !== null;
+  let suspendedPlayerRevisions: RevisionVector | null = null;
+  let suspendedNetwork: ReturnType<typeof networkReconnectWitness> | null = null;
+  let suspendedPage = false;
   let seatRevision = -1;
   let durableHandoff = seatDelivery !== null;
   const retiredSeatPeerIds = new Set<string>();
@@ -10603,7 +10692,7 @@ export function connectProjection(
           skillSelectionDraft,
         );
 
-  const purgeSeatScreen = () => {
+  const hidePrivatePresentation = () => {
     // An already queued frame can be discarded by subscription ID without retaining its former owner.
     if (peerSubscription !== null) retiredSeatPeerIds.add(peerSubscription.requestId);
     for (const id of retiredPeerSubscriptions.keys()) retiredSeatPeerIds.add(id);
@@ -10617,13 +10706,39 @@ export function connectProjection(
     peerDisconnectBindings.clear();
     peerReceiptBindings.clear();
     onCampaignPeerState?.(null);
+    onIdentityDraft(null);
+    creationChoiceDraft = null;
+    onCreationChoiceDraft(null);
+    creationRollDraft = null;
+    onCreationRollDraft(null);
+    statAssignmentDraft = null;
+    onStatAssignmentDraft(null);
+    skillSelectionDraft = null;
+    onSkillSelectionDraft(null);
+    randomSymbiontDraft = null;
+    onRandomSymbiontDraft(null);
+    advisorSkillSelectionDraft = null;
+    onAdvisorSkillSelectionDraft(null);
+    skillCardDraft = null;
+    onSkillCardDraft(null);
+    manualCompositionDraft = null;
+    onManualCompositionDraft(null);
+    armorBundleDraft = null;
+    onArmorBundleDraft(null);
+    startingWeaponDraft = null;
+    onStartingWeaponDraft(null);
+    onState({ kind: 'awaiting-snapshot', localHandoff: true });
+    window.history.replaceState(null, '', '/local/app-003');
+  };
+  const purgeSeatScreen = () => {
+    hidePrivatePresentation();
     pendingOwnerCommand = null;
     pendingNetworkCommand = null;
     pendingNetworkRefusal = null;
     absentNetworkCommandId = null;
     playerContextId = null;
     identity = null;
-    onIdentityDraft(null);
+    suspendedIdentity = null;
     pendingPostSave = null;
     pendingCheckpoint = null;
     pendingRollCommit = null;
@@ -10632,8 +10747,6 @@ export function connectProjection(
     downloadedReceipts.clear();
     clearNetworkDraft();
     publishNetworkDraft();
-    onState({ kind: 'awaiting-snapshot', localHandoff: true });
-    window.history.replaceState(null, '', '/local/app-003');
   };
   const sendSeatControl = (control: OrdinarySeatControlV3Message): void => {
     const encoded = encodeClientMessageV3(control, WEB_PROTOCOL_VOCABULARY);
@@ -10684,11 +10797,45 @@ export function connectProjection(
   };
   const resetSeatTransport = () => {
     if (
+      lastSnapshot?.executableWorkflowCommandIds.includes(ORDINARY_SEAT_ACK) &&
+      privateOrdinaryPlayerView(lastSnapshot)
+    ) {
+      // A disconnected window can miss another seat's revocation. Only the host can restore its view.
+      suspendedPlayerRevisions = lastSnapshot.revisions;
+      if (
+        isNetworkApplicationForm(lastSnapshot.formId) ||
+        isCampaignOwnerForm(lastSnapshot.formId)
+      ) {
+        try {
+          suspendedNetwork = networkReconnectWitness(lastSnapshot);
+        } catch {
+          // A missing comparison proof still revokes this view and cannot authorize a private resume.
+          suspendedNetwork = {
+            formId: lastSnapshot.formId,
+            finalFingerprint: null,
+            acceptsOwner: () => false,
+          };
+        }
+      }
+      suspendedIdentity = identity?.pendingForReconnect() ?? null;
+      identity = null;
+      hidePrivatePresentation();
+      discardDisconnectedNetworkInput();
+    } else if (
       lastSnapshot?.formId === 'PLY-001' &&
       (lastSnapshot.executableWorkflowCommandIds.includes(ORDINARY_SEAT_ACK) ||
         seatDelivery !== null)
-    )
+    ) {
+      seatAuthorityKnown = true;
       purgeSeatScreen();
+    }
+    if (suspendedPlayerRevisions !== null && pendingPostSave?.receipt?.result.downloadOrNull) {
+      pendingPostSave = {
+        ...pendingPostSave,
+        downloadReceiptFingerprint: reconnectFingerprint(pendingPostSave.receipt),
+        receipt: null,
+      };
+    }
     seatControl = null;
     selectedSeat = null;
     seatNavigation = null;
@@ -10701,7 +10848,8 @@ export function connectProjection(
   };
   const scheduleSeatReconnect = () => {
     if (
-      !seatAuthorityKnown ||
+      (!seatAuthorityKnown && suspendedPlayerRevisions === null) ||
+      suspendedPage ||
       disposed ||
       terminal ||
       seatReconnectTimer !== null ||
@@ -10750,7 +10898,8 @@ export function connectProjection(
     pendingFormAction = null;
     pendingAddressableRoute = null;
     stagedCapabilities = null;
-    if (seatAuthorityKnown) refusal = { code: 'UNRECOGNIZED', path: '$.ordinarySeat', value: null };
+    if (seatAuthorityKnown || suspendedPlayerRevisions !== null)
+      refusal = { code: 'UNRECOGNIZED', path: '$.ordinarySeat', value: null };
     const response = {
       messageType: 'protocol.refusal',
       protocolVersion: WIRE_PROTOCOL_VERSION,
@@ -10910,6 +11059,8 @@ export function connectProjection(
 
   const adoptSnapshot = (next: ConfirmedProjectionSnapshot, reconnect: boolean): void => {
     const previous = lastSnapshot;
+    suspendedPlayerRevisions = null;
+    suspendedNetwork = null;
     if (
       !durableHandoff &&
       next.formId !== 'APP-003' &&
@@ -11080,9 +11231,12 @@ export function connectProjection(
     const draft = correction ? null : identitySnapshot(next, playerContextId);
     let replay = null;
     if (draft === null) identity = null;
-    else if (identity === null || !reconnect)
+    else if (identity === null || !reconnect) {
       identity = new IdentityDraftClient(draft, () => createRequestId('identity'));
-    else replay = identity.resumeAfterSnapshot(draft);
+      if (reconnect && suspendedIdentity !== null)
+        replay = identity.restorePending(suspendedIdentity);
+    } else replay = identity.resumeAfterSnapshot(draft);
+    suspendedIdentity = null;
     onIdentityDraft(identity?.state ?? null);
     publishCampaignDraft();
     publishNetworkDraft();
@@ -11212,6 +11366,7 @@ export function connectProjection(
         activeSocket.send(reconnectText);
       } catch (error: unknown) {
         socket = null;
+        scheduleSeatReconnect();
         onState({
           code: null,
           detail: `session.reconnect could not be sent: ${diagnostic(error)}`,
@@ -11221,7 +11376,7 @@ export function connectProjection(
         return;
       }
       onState(
-        seatAuthorityKnown
+        seatAuthorityKnown || suspendedPlayerRevisions !== null
           ? { kind: 'awaiting-snapshot', localHandoff: true }
           : { kind: 'awaiting-snapshot' },
       );
@@ -11274,17 +11429,10 @@ export function connectProjection(
           }
           if (pendingOwnerCommand !== null) {
             try {
-              const receipt = admissionOwnerBrowserReceipt(
-                message.receipt,
-                pendingOwnerCommand.request,
-                pendingOwnerCommand.source,
-              );
+              const receipt = pendingOwnerCommand.witness.checkReceipt(message.receipt);
               if (
                 pendingOwnerCommand.receipt !== null &&
-                !sameJson(
-                  pendingOwnerCommand.receipt as unknown as JsonObject,
-                  receipt as unknown as JsonObject,
-                )
+                pendingOwnerCommand.receipt.fingerprint !== receipt.fingerprint
               )
                 throw new Error('changed original admission receipt');
               pendingOwnerCommand = { ...pendingOwnerCommand, receipt };
@@ -11393,6 +11541,14 @@ export function connectProjection(
                 message.receipt.receiptId,
                 'Host changed a confirmed post-save receipt.',
               );
+              return;
+            }
+            if (
+              pendingPostSave.downloadReceiptFingerprint !== undefined &&
+              (message.messageType !== 'command.replay' ||
+                reconnectFingerprint(receipt.value) !== pendingPostSave.downloadReceiptFingerprint)
+            ) {
+              failUnexpected('$.receipt', null, 'Host changed a confirmed export receipt.');
               return;
             }
             pendingPostSave = { ...pendingPostSave, receipt: receipt.value };
@@ -11556,6 +11712,7 @@ export function connectProjection(
           const matchesPostSave =
             pendingPostSave !== null &&
             pendingPostSave.receipt === null &&
+            pendingPostSave.downloadReceiptFingerprint === undefined &&
             message.commandId === pendingPostSave.request.commandId;
           const matchesCheckpoint =
             pendingCheckpoint !== null &&
@@ -11577,7 +11734,7 @@ export function connectProjection(
               !matchesCheckpoint &&
               !matchesSetDecision &&
               !matchesRollCommit) ||
-            lastSnapshot === null
+            (lastSnapshot === null && !(expectingCapabilities && suspendedPlayerRevisions !== null))
           ) {
             failUnexpected(
               '$.commandId',
@@ -11643,7 +11800,7 @@ export function connectProjection(
           if (matchesPostSave) pendingPostSave = null;
           if (matchesSetDecision) pendingSetDecision = null;
           if (matchesRollCommit) pendingRollCommit = null;
-          if (!expectingCapabilities) {
+          if (!expectingCapabilities && lastSnapshot !== null) {
             onState({
               kind: 'command-refusal',
               refusal: message.refusal,
@@ -11699,9 +11856,10 @@ export function connectProjection(
           publishCampaignDraft();
           onState({
             kind: 'host-refusal',
-            refusal: seatAuthorityKnown
-              ? { code: 'UNRECOGNIZED', path: '$.ordinarySeat', value: null }
-              : message.refusal,
+            refusal:
+              seatAuthorityKnown || suspendedPlayerRevisions !== null
+                ? { code: 'UNRECOGNIZED', path: '$.ordinarySeat', value: null }
+                : message.refusal,
             snapshot: visibleLast(),
           });
           closeAfterTerminalState();
@@ -12356,15 +12514,7 @@ export function connectProjection(
             assignment.reason === 'HOST_SYSTEM_EVENT' &&
             lastSnapshot !== null &&
             (kind === 'WAITING' || kind === 'CURTAIN') &&
-            (lastSnapshot.formId === 'APP-003' ||
-              lastSnapshot.formId === 'APP-002' ||
-              lastSnapshot.formId === 'APP-004' ||
-              ((lastSnapshot.formId.startsWith('CHR-') ||
-                lastSnapshot.formId === 'APP-009' ||
-                lastSnapshot.formId === 'APP-010') &&
-                lastSnapshot.projection['ownerContext'] !== 'GM_ARCHIVE_EXPORT') ||
-              isCampaignOwnerForm(lastSnapshot.formId) ||
-              isNetworkApplicationForm(lastSnapshot.formId));
+            (lastSnapshot.formId === 'APP-003' || privateOrdinaryPlayerView(lastSnapshot));
           if (
             committed &&
             kind === 'ACTIVE' &&
@@ -12562,10 +12712,8 @@ export function connectProjection(
           }
           if (pendingOwnerCommand !== null) {
             if (
-              !admissionOwnerDecisionDestination(
+              !pendingOwnerCommand.witness.matchesDestination(
                 candidate.value,
-                pendingOwnerCommand.request,
-                pendingOwnerCommand.source,
                 pendingOwnerCommand.receipt,
                 false,
                 lastSnapshot.projection['contextId'] as string,
@@ -12602,7 +12750,8 @@ export function connectProjection(
           ) {
             const next = snapshot.value,
               p = next.projection,
-              previous = lastSnapshot;
+              previous = lastSnapshot,
+              previousFormId = previous?.formId ?? suspendedNetwork?.formId;
             // A retired scope resumes its audited exit, whose shell owns a separate vector.
             const ownClosedExit =
               pendingNetworkDraft === null &&
@@ -12610,14 +12759,8 @@ export function connectProjection(
               pendingNetworkRefusal === null &&
               next.layers.length === 0 &&
               (next.formId === 'APP-002'
-                ? p['deviceId'] === deviceId && previous?.formId !== 'CHR-027'
-                : next.formId === 'CHR-040' &&
-                  (previous === null ||
-                    (previous.formId === 'CHR-027' &&
-                      p['localCharacterUuid'] === previous.projection['localCharacterUuid'] &&
-                      p['finalSnapshotVersion'] === previous.projection['finalSnapshotVersion'] &&
-                      (p['provenance'] as JsonObject)['sourceChecksum'] ===
-                        previous.projection['candidateSnapshotChecksum'])));
+                ? p['deviceId'] === deviceId && previousFormId !== 'CHR-027'
+                : next.formId === 'CHR-040' && matchesRetiredFinal(p, previous, suspendedNetwork));
             if (!ownClosedExit)
               snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
           }
@@ -12632,10 +12775,11 @@ export function connectProjection(
             snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
           if (
             snapshot.ok &&
-            lastSnapshot !== null &&
-            (isCampaignOwnerProjection(snapshot.value.projection) ||
-              isCampaignOwnerProjection(lastSnapshot.projection)) &&
-            !admissionOwnerMonotonic(snapshot.value, lastSnapshot, true)
+            ((suspendedNetwork !== null && !suspendedNetwork.acceptsOwner(snapshot.value)) ||
+              (lastSnapshot !== null &&
+                (isCampaignOwnerProjection(snapshot.value.projection) ||
+                  isCampaignOwnerProjection(lastSnapshot.projection)) &&
+                !admissionOwnerMonotonic(snapshot.value, lastSnapshot, true)))
           )
             snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
           if (
@@ -12702,44 +12846,14 @@ export function connectProjection(
             )
               snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
           } else if (snapshot.ok && pendingNetworkRefusal !== null) {
-            if (
-              !isNetworkApplicationForm(snapshot.value.formId) ||
-              snapshot.value.projection['networkScopeId'] !==
-                pendingNetworkRefusal.source.projection['networkScopeId'] ||
-              snapshot.value.revisions.stateRevision <
-                pendingNetworkRefusal.source.revisions.stateRevision ||
-              snapshot.value.revisions.projectionRevision <
-                pendingNetworkRefusal.source.revisions.projectionRevision ||
-              snapshot.value.revisions.actorVisibilityRevision !==
-                pendingNetworkRefusal.source.revisions.actorVisibilityRevision
-            )
+            if (!networkRefusalSourceMatches(snapshot.value, pendingNetworkRefusal.source))
               snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
           } else if (
             snapshot.ok &&
             pendingNetworkCommand !== null &&
             absentNetworkCommandId === pendingNetworkCommand.request.commandId
           ) {
-            const original = pendingNetworkCommand.source,
-              next = snapshot.value;
-            const oldPayload = { ...original.projection, contextId: next.projection['contextId']! };
-            if (
-              next.formId !== original.formId ||
-              next.projection['pendingCommandIdOrNull'] !== null ||
-              [
-                'networkScopeId',
-                'deviceId',
-                'controllerSeat',
-                'campaignIdOrNull',
-                'sessionId',
-                'requestId',
-              ].some((key) => next.projection[key] !== original.projection[key]) ||
-              next.revisions.stateRevision < original.revisions.stateRevision ||
-              next.revisions.projectionRevision < original.revisions.projectionRevision ||
-              next.revisions.actorVisibilityRevision !==
-                original.revisions.actorVisibilityRevision ||
-              (sameNetworkRevisions(next.revisions, original.revisions) &&
-                !sameJson(oldPayload, next.projection))
-            )
+            if (!absentNetworkCommandSourceMatches(snapshot.value, pendingNetworkCommand.source))
               snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
           } else if (snapshot.ok && pendingNetworkCommand !== null) {
             if (
@@ -12877,17 +12991,15 @@ export function connectProjection(
         } else if (pendingOwnerCommand !== null) {
           snapshot = decodeConfirmedSnapshot(
             message,
-            pendingOwnerCommand.source.executableWorkflowCommandIds,
+            pendingOwnerCommand.witness.executableWorkflowCommandIds,
           );
           if (
             snapshot.ok &&
             (message.presentation.assignment.reason !== 'COMMAND_DESTINATION' ||
               message.presentation.assignment.correlationId !==
                 pendingOwnerCommand.request.commandId ||
-              !admissionOwnerDecisionDestination(
+              !pendingOwnerCommand.witness.matchesDestination(
                 snapshot.value,
-                pendingOwnerCommand.request,
-                pendingOwnerCommand.source,
                 pendingOwnerCommand.receipt,
                 false,
                 lastSnapshot?.projection['contextId'] as string | undefined,
@@ -12941,15 +13053,7 @@ export function connectProjection(
             (message.presentation.assignment.reason !== 'COMMAND_DESTINATION' ||
               message.presentation.assignment.correlationId !==
                 pendingNetworkRefusal.request.commandId ||
-              !isNetworkApplicationForm(snapshot.value.formId) ||
-              snapshot.value.projection['networkScopeId'] !==
-                pendingNetworkRefusal.source.projection['networkScopeId'] ||
-              snapshot.value.revisions.stateRevision <
-                pendingNetworkRefusal.source.revisions.stateRevision ||
-              snapshot.value.revisions.projectionRevision <
-                pendingNetworkRefusal.source.revisions.projectionRevision ||
-              snapshot.value.revisions.actorVisibilityRevision !==
-                pendingNetworkRefusal.source.revisions.actorVisibilityRevision)
+              !networkRefusalSourceMatches(snapshot.value, pendingNetworkRefusal.source))
           )
             snapshot = unrecognized('$.presentation.base.roleFilteredPayload', null);
         } else if (pendingNetworkCommand !== null && pendingNetworkCommand.receipt === null) {
@@ -12967,21 +13071,11 @@ export function connectProjection(
                   pendingNetworkCommand.request,
                   false,
                 )
-              : snapshot.value.formId === 'NET-011' &&
-                snapshot.value.projection['errorCode'] === 'UNCONFIRMED_OUTCOME' &&
-                snapshot.value.projection['pendingCommandIdOrNull'] ===
-                  pendingNetworkCommand.request.commandId &&
-                snapshot.value.projection['networkScopeId'] ===
-                  original.projection['networkScopeId'] &&
-                snapshot.value.projection['controllerSeat'] ===
-                  original.projection['controllerSeat'] &&
-                snapshot.value.projection['draftRevision'] ===
-                  original.projection['draftRevision'] &&
-                snapshot.value.revisions.stateRevision === original.revisions.stateRevision + 1 &&
-                snapshot.value.revisions.projectionRevision >=
-                  original.revisions.projectionRevision + 1 &&
-                snapshot.value.revisions.actorVisibilityRevision ===
-                  original.revisions.actorVisibilityRevision);
+              : unconfirmedNetworkCommandSourceMatches(
+                  snapshot.value,
+                  original,
+                  pendingNetworkCommand.request.commandId,
+                ));
           if (
             snapshot.ok &&
             (message.presentation.assignment.reason !== 'COMMAND_DESTINATION' ||
@@ -13142,13 +13236,12 @@ export function connectProjection(
         }
         if (pendingOwnerCommand !== null) {
           if (
-            !admissionOwnerDecisionDestination(
+            !pendingOwnerCommand.witness.matchesDestination(
               snapshot.value,
-              pendingOwnerCommand.request,
-              pendingOwnerCommand.source,
               pendingOwnerCommand.receipt,
               reconnecting,
-              lastSnapshot?.projection['contextId'] as string | undefined,
+              (lastSnapshot?.projection['contextId'] ?? pendingOwnerCommand.witness.contextId) as
+                string | undefined,
             )
           ) {
             failUnexpected('$.presentation', null, 'Invalid recovered owner decision');
@@ -13168,7 +13261,13 @@ export function connectProjection(
         if (pendingNetworkCommand?.receipt !== null && pendingNetworkCommand?.receipt !== undefined)
           pendingNetworkCommand = null;
         if (expectingCapabilities) {
-          lastSnapshot = snapshot.value;
+          if (
+            suspendedPlayerRevisions !== null &&
+            isNetworkApplicationForm(snapshot.value.formId)
+          ) {
+            suspendedNetwork = networkReconnectWitness(snapshot.value);
+            suspendedPlayerRevisions = snapshot.value.revisions;
+          } else lastSnapshot = snapshot.value;
           return;
         }
         adoptSnapshot(snapshot.value, reconnecting);
@@ -13324,7 +13423,7 @@ export function connectProjection(
     const requestId = createRequestId('reconnect');
     const reconnect = {
       deviceId: currentDeviceId,
-      knownRevisions: lastSnapshot?.revisions ?? NO_KNOWN_REVISIONS,
+      knownRevisions: lastSnapshot?.revisions ?? suspendedPlayerRevisions ?? NO_KNOWN_REVISIONS,
       messageType: 'session.reconnect',
       protocolVersion: WIRE_PROTOCOL_V2_VERSION,
       reconnectRequestId: requestId,
@@ -13454,18 +13553,20 @@ export function connectProjection(
     openTransport(deviceId);
   };
 
-  const suspendOrdinarySeat = () => {
+  const suspendOrdinarySeat = (event: Event) => {
     if (
       disposed ||
       terminal ||
-      lastSnapshot === null ||
       !(
         seatAuthorityKnown ||
-        (lastSnapshot.formId === 'PLY-001' &&
-          lastSnapshot.executableWorkflowCommandIds.includes(ORDINARY_SEAT_ACK))
+        suspendedPlayerRevisions !== null ||
+        (lastSnapshot?.executableWorkflowCommandIds.includes(ORDINARY_SEAT_ACK) &&
+          privateOrdinaryPlayerView(lastSnapshot))
       )
     )
       return;
+    if (event.type === 'pagehide') suspendedPage = true;
+    cancelSeatReconnect();
     const old = socket;
     socket = null;
     resetSeatTransport();
@@ -13479,7 +13580,9 @@ export function connectProjection(
     });
   };
   const resumeOrdinaryPage = (event: PageTransitionEvent) => {
-    if (event.persisted && !disposed && !terminal && socket === null && deviceId !== null)
+    if (!event.persisted || !suspendedPage) return;
+    suspendedPage = false;
+    if (!disposed && !terminal && socket === null && deviceId !== null && navigator.onLine)
       openTransport(deviceId);
   };
   const reconnectOrdinaryOnline = () => {
@@ -13596,7 +13699,7 @@ export function connectProjection(
     }
     const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
     if (!encoded.ok) return { ok: false, detail: JSON.stringify(encoded.refusal) };
-    pendingPostSave = { request, receipt: null, source: lastSnapshot };
+    pendingPostSave = { request, receipt: null, source: postSaveSource(lastSnapshot) };
     try {
       socket.send(encoded.text);
     } catch (error: unknown) {
@@ -14873,7 +14976,8 @@ export function connectProjection(
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
       }
-      if (identity === null) return { ok: false, detail: 'no active CHR-001 draft scope' };
+      if (identity === null || lastSnapshot?.formId !== 'CHR-001')
+        return { ok: false, detail: 'no active CHR-001 draft scope' };
       if (commandPending())
         return { ok: false, detail: 'identity is frozen while checkpoint delivery is pending' };
       if ([values.age, values.massKg].some((value) => value !== null && !Number.isFinite(value)))
@@ -15310,7 +15414,8 @@ export function connectProjection(
         receipt: null,
         request: request as unknown as PendingCheckpoint['request'],
         skillSelectionDraft: null,
-        sourceSnapshot: lastSnapshot,
+        sourceSnapshot: null,
+        finalizationProof: finalizationReceiptSource(lastSnapshot),
       };
       try {
         socket.send(encoded.text);
@@ -15727,7 +15832,11 @@ export function connectProjection(
         }
         const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
         if (!encoded.ok) return { ok: false, detail: 'Ready intention failed encoding' };
-        pendingOwnerCommand = { request, source: lastSnapshot, receipt: null };
+        pendingOwnerCommand = {
+          request,
+          witness: ownerCommandWitness(lastSnapshot, request),
+          receipt: null,
+        };
         try {
           socket.send(encoded.text);
         } catch {
@@ -15749,7 +15858,11 @@ export function connectProjection(
         }
         const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
         if (!encoded.ok) return { ok: false, detail: 'Whole-batch intention failed encoding' };
-        pendingOwnerCommand = { request, source: lastSnapshot, receipt: null };
+        pendingOwnerCommand = {
+          request,
+          witness: ownerCommandWitness(lastSnapshot, request),
+          receipt: null,
+        };
         try {
           socket.send(encoded.text);
         } catch {
@@ -15894,7 +16007,7 @@ export function connectProjection(
             request: networkRequest,
             receipt: null,
             replay: false,
-            source: lastSnapshot,
+            source: rememberNetworkCommandSource(lastSnapshot),
           };
           try {
             socket.send(encoded.text);
@@ -15979,7 +16092,7 @@ export function connectProjection(
         };
         const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
         if (!encoded.ok) return { ok: false, detail: JSON.stringify(encoded.refusal) };
-        pendingPostSave = { request, receipt: null, source: lastSnapshot };
+        pendingPostSave = { request, receipt: null, source: postSaveSource(lastSnapshot) };
         try {
           socket.send(encoded.text);
         } catch (error: unknown) {
@@ -16066,7 +16179,8 @@ export function connectProjection(
           receipt: null,
           request: request as unknown as PendingCheckpoint['request'],
           skillSelectionDraft: null,
-          sourceSnapshot: lastSnapshot,
+          sourceSnapshot: null,
+          finalizationProof: finalizationReceiptSource(lastSnapshot),
         };
         try {
           socket.send(encoded.text);
@@ -16478,7 +16592,7 @@ export function connectProjection(
           receipt: null,
           request,
           skillSelectionDraft: null,
-          sourceSnapshot: lastSnapshot,
+          sourceSnapshot: null,
         };
         try {
           socket.send(encoded.text);

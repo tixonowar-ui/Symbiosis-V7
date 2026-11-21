@@ -15,6 +15,51 @@ import type { createNetworkBrowserScenario } from './network-application-e2e.js'
 
 export type SeatScenario = Awaited<ReturnType<typeof createNetworkBrowserScenario>>;
 
+export async function openInterruptibleLibrary(page: Page, baseURL: string, names: string[]) {
+  let interrupted = false;
+  const connections = new Set<() => Promise<void>>();
+  const frames: string[] = [];
+  await page.routeWebSocket('**/state', async (route) => {
+    if (interrupted) {
+      await route.close({ code: 1013, reason: 'library transport unavailable' });
+      return;
+    }
+    const server = route.connectToServer();
+    const close = async () => {
+      await Promise.all([
+        route.close({ code: 1012, reason: 'library disconnected' }),
+        server.close(),
+      ]);
+    };
+    connections.add(close);
+    route.onClose(async () => {
+      connections.delete(close);
+      await server.close();
+    });
+    server.onMessage((message) => {
+      frames.push(String(message));
+      route.send(message);
+    });
+  });
+  await page.goto(baseURL);
+  await atlasControl(page, 'APP-001::CTA::001').click();
+  await atlasControl(page, 'APP-002::CTA::002').click();
+  for (const name of names)
+    await expect(page.getByRole('button', { name: `Открыть: ${name}`, exact: true })).toBeVisible();
+  return {
+    frames,
+    async disconnect() {
+      interrupted = true;
+      expect(connections.size).toBeGreaterThan(0);
+      await Promise.all([...connections].map((close) => close()));
+      frames.length = 0;
+    },
+    restore() {
+      interrupted = false;
+    },
+  };
+}
+
 async function confirmedGmCommand(
   scenario: SeatScenario,
   wire: GmReviewMonitor,
