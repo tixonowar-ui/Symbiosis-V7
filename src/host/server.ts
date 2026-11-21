@@ -7124,6 +7124,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
         contextId: null,
         executableWorkflowCommandIds: [],
         trusted: () => connection.campaign.trusted(),
+        transportClosed: () => socket.readyState !== socket.OPEN || request.raw.socket.destroyed,
       },
       campaign: {
         gmLocalContextId: null,

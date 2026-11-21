@@ -225,6 +225,7 @@ export interface LocalNetworkConnection {
   zeroSeatReturn?: NonNullable<ReturnType<typeof readLocalNetworkZeroSeatReturn>>;
   executableWorkflowCommandIds: readonly WorkflowCommandCapabilityId[];
   readonly trusted: () => boolean;
+  readonly transportClosed?: () => boolean;
 }
 export interface LocalNetworkShell {
   readonly formId: string | null;
@@ -273,6 +274,11 @@ class LocalNetworkPublicationError extends Error {
     super('Network publication failed after durable acknowledgement', { cause });
   }
 }
+class LocalNetworkTransportClosedError extends NetworkApplicationStoreError {
+  constructor() {
+    super('UNAVAILABLE');
+  }
+}
 /** One own host serializes local intents; only the authenticated Node peer crosses the LAN. */
 export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
   const db = d.database;
@@ -287,7 +293,8 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
   const discovery = new Map<string, CampaignDiscoveryScan | null>(),
     discoveryFailures = new Set<string>();
   const trust = (c: LocalNetworkConnection) => {
-    if (closed || !c.trusted()) unavailable();
+    if (closed || c.transportClosed?.()) throw new LocalNetworkTransportClosedError();
+    if (!c.trusted()) unavailable();
   };
   const owner = (c: LocalNetworkConnection) => {
     trust(c);
@@ -2330,7 +2337,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     const reset = readLocalNetworkZeroSeatReturn(db, bound, request);
     if (reset?.exitNavigationId !== request.exitNavigationId) return unavailable();
     const holder = zeroReturnConnections.get(bound.networkScopeId);
-    if (holder?.trusted()) {
+    if (holder?.trusted() && !holder.transportClosed?.()) {
       if (holder !== c || shell.lastNetworkExitNavigationIdOrNull !== reset.exitNavigationId)
         return unavailable();
       exact(c.zeroSeatReturn, reset);
@@ -2914,6 +2921,9 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       } else unavailable();
     } catch (error) {
       if (error instanceof LocalNetworkPublicationError) throw error;
+      // A queued frame can outlive its socket while awaiting the peer. Its replacement resumes independently.
+      if (error instanceof LocalNetworkTransportClosedError) return true;
+      if (closed || c.transportClosed?.()) throw error;
       let revisions = shell.revisions;
       try {
         if (c.trusted() && c.networkScopeId !== null) revisions = currentVector(c);
@@ -3935,7 +3945,16 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
               }
             });
           } catch (error) {
-            if (published || shell.formId !== previousForm || !c.trusted()) throw error;
+            // A committed return can be replayed by its exact request after discovery loses the socket.
+            if (!published && error instanceof LocalNetworkTransportClosedError) return true;
+            if (
+              published ||
+              closed ||
+              c.transportClosed?.() ||
+              shell.formId !== previousForm ||
+              !c.trusted()
+            )
+              throw error;
             send({
               messageType: 'navigation.form-action.refusal',
               protocolVersion: 2,
@@ -4019,6 +4038,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           watchedContextId === c.contextId &&
           watchedScopeId === c.networkScopeId &&
           !closed &&
+          !c.transportClosed?.() &&
           c.trusted() &&
           c.networkScopeId !== null &&
           c.contextId !== null

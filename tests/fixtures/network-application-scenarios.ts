@@ -108,6 +108,8 @@ import {
 } from '../../src/persistence/network-device-request.js';
 import {
   readLocalNetworkApplication,
+  readLocalNetworkApplicationEvent,
+  readLocalNetworkZeroSeatReturn,
   readLocalNetworkOutbox,
   readLocalNetworkDeliverySnapshot,
   readLocalNetworkRequestDeliverySnapshot,
@@ -250,7 +252,7 @@ export function setupNetworkFixture(owner: NetworkFixtureOwner) {
   });
 }
 
-function client(twoSources = false) {
+function client(twoSources = false, transportClosed?: () => boolean) {
   const dir = mkdtempSync(join(tmpdir(), 'network-app-'));
   dirs.push(dir);
   const path = join(dir, 'player.sqlite');
@@ -318,6 +320,7 @@ function client(twoSources = false) {
       networkScopeId: null,
       contextId: null,
       executableWorkflowCommandIds: NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS,
+      ...(transportClosed === undefined ? {} : { transportClosed }),
       trusted: () => live && db.open && loadDeviceId(db) === playerMaterial.ownerDeviceId,
     };
     const own = (id: string, formId: 'APP-002' | 'CHR-040'): ProjectionSnapshotV2Message => ({
@@ -639,6 +642,9 @@ function client(twoSources = false) {
       get peerForTest() {
         return inspectionPeer;
       },
+      get runtimeForTest() {
+        return runtime;
+      },
       reconnectCount: () => reconnectCount,
       dropPeer: () => dropPeer(),
       goOffline() {
@@ -714,7 +720,7 @@ function client(twoSources = false) {
       loseNextExit() {
         loseExit = true;
       },
-      reopenShell(formId: 'APP-002' | 'CHR-040', sourceId = player.setup.characterDraftId) {
+      reopenShell(formId: 'APP-002' | 'CHR-040' | null, sourceId = player.setup.characterDraftId) {
         const measuredPhase = phaseDiagnostics.begin('client.reopen-shell');
         try {
           runtime.close();
@@ -826,8 +832,12 @@ async function submittedPlayer(
   );
 }
 
-async function connectedPlayer(h: Awaited<ReturnType<typeof host>>, twoSources = false) {
-  const p = await client(twoSources);
+async function connectedPlayer(
+  h: Awaited<ReturnType<typeof host>>,
+  twoSources = false,
+  transportClosed?: () => boolean,
+) {
+  const p = await client(twoSources, transportClosed);
   await p.nav('APP-002::CTA::003', 'APP-002');
   await p.nav('NET-001::CTA::001');
   await p.replace('ADDRESS', {
@@ -1029,7 +1039,232 @@ function gmDecision(h: Awaited<ReturnType<typeof host>>, requestId: string, reje
   );
 }
 
+function holdNextPeerReconnect(peer: ReturnType<typeof createLocalNetworkPeer>) {
+  let entered!: () => void;
+  let release!: () => void;
+  const reached = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const reconnect = peer.reconnect.bind(peer);
+  const spy = vi.spyOn(peer, 'reconnect').mockImplementationOnce(async (...args) => {
+    const connected = await reconnect(...args);
+    entered();
+    await held;
+    return connected;
+  });
+  return {
+    reached,
+    release,
+    restore() {
+      release();
+      spy.mockRestore();
+    },
+  };
+}
+
+async function leaveEmptySeatSelection(p: Awaited<ReturnType<typeof client>>) {
+  const scope = p.scope();
+  const session = p.state().sessionOrNull!;
+  const navigate = async (actionKey: FormActionIntentV2Message['actionKey']) => {
+    const last = p.sent.findLast(
+      (message) => message.messageType === 'projection.snapshot' && message.protocolVersion === 2,
+    );
+    if (last?.messageType !== 'projection.snapshot' || last.protocolVersion !== 2)
+      throw Error('Missing confirmed ordinary-seat view');
+    const source = last.presentation.layers.at(-1) ?? last.presentation.base;
+    expect(source.availableActionKeys).toContain(actionKey);
+    const navigationRequestId = randomUUID();
+    await p.send({
+      messageType: 'navigation.form-action',
+      protocolVersion: 2,
+      navigationRequestId,
+      sourceFormId: source.formId,
+      actionKey,
+      expectedProjectionRevision: last.revisions.projectionRevision,
+    });
+    return navigationRequestId;
+  };
+  await navigate('NET-003::CTA::004');
+  await navigate('APP-003::CTA::004');
+  const exitNavigationId = await navigate('PLY-027::CTA::006');
+  const proof = {
+    networkScopeId: scope.networkScopeId,
+    exitNavigationId,
+    technicalSessionId: session.technicalSessionId,
+  };
+  expect(readLocalNetworkZeroSeatReturn(p.db, scope)).toEqual(proof);
+  return { scope, session, proof };
+}
+
+function emptySeatReturnRequest(p: Awaited<ReturnType<typeof client>>, exitNavigationId: string) {
+  return {
+    messageType: 'ordinary.seat.control',
+    protocolVersion: 3,
+    operation: 'RESUME_EMPTY',
+    requestId: randomUUID(),
+    exitNavigationId,
+    expectedProjectionRevision: p.shell.revisions.projectionRevision,
+  } as const;
+}
+
+function emptySeatRecords(p: Awaited<ReturnType<typeof client>>) {
+  return {
+    events: p.db.prepare('SELECT * FROM local_network_application_event ORDER BY event_id').all(),
+    tabs: p.db.prepare('SELECT * FROM local_network_tab').all(),
+    outbox: p.db.prepare('SELECT * FROM local_network_outbox').all(),
+  };
+}
+
 const transportCases = () => {
+  it('replays the exact empty-seat return on a new socket after the old reconnect closes', async () => {
+    const h = await host();
+    const p = await connectedPlayer(h);
+    const { scope, session, proof } = await leaveEmptySeatSelection(p);
+    p.reopenShell('APP-002');
+    const resume = emptySeatReturnRequest(p, proof.exitNavigationId);
+    const runtime = p.runtimeForTest;
+    let closed = false;
+    const old: LocalNetworkConnection = { ...p.c, transportClosed: () => closed };
+    let oldForm = p.shell.formId;
+    const oldShell: LocalNetworkShell = {
+      ...p.shell,
+      get formId() {
+        return oldForm;
+      },
+      get revisions() {
+        return old.networkScopeId === null ? p.shell.revisions : runtime.currentVector(old);
+      },
+      enterNetwork() {
+        oldForm = null;
+      },
+    };
+    const barrier = holdNextPeerReconnect(p.peerForTest);
+    const oldFrames: LocalNetworkHostMessage[] = [];
+    try {
+      const pending = runtime.handle(resume, old, oldShell, (message) => oldFrames.push(message));
+      await Promise.race([
+        barrier.reached,
+        pending.then(() => {
+          throw Error('Empty-seat return did not reach the authenticated peer');
+        }),
+      ]);
+      const saved = readLocalNetworkApplicationEvent(p.db, scope, `navigation:${resume.requestId}`);
+      expect(saved?.input.clientRequestJsonOrNull).toBe(canonicalPostSaveJson(resume));
+      expect(readLocalNetworkZeroSeatReturn(p.db, scope, resume)).toEqual(proof);
+      const before = emptySeatRecords(p);
+      closed = true;
+      runtime.disconnect(old);
+      const replacement = p.send(resume);
+      barrier.release();
+      const [abandoned, resumed] = await Promise.allSettled([pending, replacement]);
+      expect(abandoned).toEqual({ status: 'fulfilled', value: true });
+      expect(resumed.status).toBe('fulfilled');
+      expect(oldFrames).toEqual([]);
+      expect(p.sent).toMatchObject([
+        {
+          messageType: 'projection.snapshot',
+          presentation: {
+            assignment: { correlationId: resume.requestId },
+            base: {
+              formId: 'NET-001',
+              roleFilteredPayload: { networkScopeId: scope.networkScopeId },
+            },
+          },
+        },
+      ]);
+      expect(p.state().sessionOrNull).toEqual(session);
+      expect(emptySeatRecords(p)).toEqual(before);
+    } finally {
+      barrier.restore();
+    }
+  }, 30000);
+
+  it('keeps an open empty-seat holder exclusive and restores the same return as soon as its socket is closing', async () => {
+    const h = await host();
+    let closing = false;
+    const p = await connectedPlayer(h, false, () => closing);
+    const { scope, session, proof } = await leaveEmptySeatSelection(p);
+    const resume = emptySeatReturnRequest(p, proof.exitNavigationId);
+    const replacement: LocalNetworkConnection = {
+      contextId: null,
+      networkScopeId: null,
+      executableWorkflowCommandIds: p.c.executableWorkflowCommandIds,
+      trusted: p.c.trusted,
+    };
+    const runtime = p.runtimeForTest;
+    let formId: string | null = 'APP-002';
+    const shell: LocalNetworkShell = {
+      ...p.shell,
+      contextId: randomUUID(),
+      lastNetworkExitNavigationIdOrNull: null,
+      get formId() {
+        return formId;
+      },
+      get revisions() {
+        return replacement.networkScopeId === null ? zero : runtime.currentVector(replacement);
+      },
+      enterNetwork() {
+        formId = null;
+      },
+    };
+    const frames: LocalNetworkHostMessage[] = [];
+    const send = () => {
+      frames.length = 0;
+      return runtime.handle(resume, replacement, shell, (message) => frames.push(message));
+    };
+    const writes = p.db.prepare('SELECT total_changes() AS count');
+    const before = emptySeatRecords(p);
+    const beforeWrites = writes.get();
+    expect(p.c.trusted()).toBe(true);
+    expect(p.c.transportClosed?.()).toBe(false);
+    expect(await send()).toBe(true);
+    expect(frames).toEqual([
+      {
+        messageType: 'navigation.form-action.refusal',
+        protocolVersion: 2,
+        navigationRequestId: resume.requestId,
+        presentationUnchanged: true,
+        revisions: zero,
+        refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+      },
+    ]);
+    expect(writes.get()).toEqual(beforeWrites);
+    expect(formId).toBe('APP-002');
+    expect(replacement.networkScopeId).toBeNull();
+    closing = true;
+    expect(p.c.trusted()).toBe(true);
+    expect(p.c.transportClosed?.()).toBe(true);
+    expect(await send()).toBe(true);
+    expect(frames).toMatchObject([
+      {
+        messageType: 'projection.snapshot',
+        presentation: {
+          assignment: { correlationId: resume.requestId },
+          base: {
+            formId: 'NET-001',
+            roleFilteredPayload: { networkScopeId: scope.networkScopeId },
+          },
+        },
+      },
+    ]);
+    const after = emptySeatRecords(p);
+    expect(after.events).toHaveLength(before.events.length + 1);
+    expect(after.tabs).toEqual(before.tabs);
+    expect(after.outbox).toEqual(before.outbox);
+    const saved = readLocalNetworkApplicationEvent(p.db, scope, `navigation:${resume.requestId}`);
+    expect(saved?.input.clientRequestJsonOrNull).toBe(canonicalPostSaveJson(resume));
+    expect(readLocalNetworkZeroSeatReturn(p.db, scope, resume)).toEqual(proof);
+    expect(readLocalNetworkApplication(p.db, scope).sessionOrNull).toEqual(session);
+    const snapshot = frames[0];
+    runtime.disconnect(p.c);
+    expect(await send()).toBe(true);
+    expect(frames).toEqual([snapshot]);
+    expect(emptySeatRecords(p)).toEqual(after);
+  }, 30000);
+
   it.each([10, 11] as const)(
     'proves empty admission history only for an intact schema %s CREATE checkpoint',
     async (legacySchema) => {
@@ -3056,7 +3291,111 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
           await p.send(request);
           return request;
         };
-        if (scenario === 'ACCEPT_WITH_BLOCKERS')
+        if (scenario === 'ACCEPT_WITH_BLOCKERS') {
+          it('resumes the admitted lobby after the old socket closes during peer reconnect', async () => {
+            const scope = p.scope();
+            const receipt = readLocalAdmission(p.db, scope, requestId)!.receiptOrNull!;
+            expect(receipt.decision).toBe('ACCEPT');
+            const copies = h.db.prepare('SELECT * FROM campaign_character_copy').all();
+            const previous = campaignLobbyPlayerProjectionValue(p.payload());
+            expect(previous.lobby.selectedCopy.lifecycleState).toBe('PROPOSED');
+            const resume = {
+              messageType: 'network.local-context.resume',
+              protocolVersion: 3,
+              networkScopeId: scope.networkScopeId,
+              reconnectRequestId: randomUUID(),
+              knownRevisions: vector(p.state()),
+              supportedWorkflowCommandIds: NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS,
+              unacknowledgedCommandIds: [],
+            } as const;
+            p.reopenShell(null);
+            const runtime = p.runtimeForTest;
+            function openSocket() {
+              let closed = false;
+              const c: LocalNetworkConnection = {
+                ...p.c,
+                trusted: () => !closed && p.c.trusted(),
+                transportClosed: () => closed,
+              };
+              const shell = {
+                ...p.shell,
+                // The production /state shell reads revisions through the bound network connection.
+                get revisions() {
+                  return c.networkScopeId === null ? zero : runtime.currentVector(c);
+                },
+              };
+              const sent: LocalNetworkHostMessage[] = [];
+              return {
+                c,
+                sent,
+                send: (message: LocalNetworkClientMessage) =>
+                  runtime.handle(message, c, shell, (value) => sent.push(value)),
+                close() {
+                  closed = true;
+                  runtime.disconnect(c);
+                },
+              };
+            }
+            const old = openSocket();
+            const barrier = holdNextPeerReconnect(p.peerForTest);
+            try {
+              const pending = old.send(resume);
+              await Promise.race([
+                barrier.reached,
+                pending.then(() => {
+                  throw Error('Old resume completed before reconnect');
+                }),
+              ]);
+              expect(old.c.networkScopeId).toBe(scope.networkScopeId);
+              old.close();
+              const current = openSocket();
+              const nextId = randomUUID();
+              const next = current.send({ ...resume, reconnectRequestId: nextId });
+              barrier.release();
+              const settled = await Promise.allSettled([pending, next]);
+              // A rejected handler goes to the host's onFrameError. A closed transport has no recipient.
+              expect(settled).toEqual([
+                { status: 'fulfilled', value: true },
+                { status: 'fulfilled', value: true },
+              ]);
+              expect(old.sent).toEqual([]);
+              expect(current.sent.map((message) => message.messageType)).toEqual([
+                'session.reconnect.capabilities',
+                'projection.snapshot',
+              ]);
+              expect(current.sent[1]).toMatchObject({
+                projectionRole: 'player',
+                presentation: {
+                  assignment: { reason: 'RECONNECT', correlationId: nextId },
+                  base: {
+                    formId: 'NET-006',
+                    roleFilteredPayload: { projectionVariant: 'LOBBY_SNAPSHOT' },
+                  },
+                },
+              });
+              const snapshot = current.sent[1];
+              if (snapshot?.messageType !== 'projection.snapshot' || snapshot.protocolVersion !== 2)
+                throw Error('Missing resumed owner projection');
+              const restored = campaignLobbyPlayerProjectionValue(
+                snapshot.presentation.base.roleFilteredPayload,
+              );
+              expect(restored.lobby.ownCopies).toEqual(previous.lobby.ownCopies);
+              expect(readLocalAdmission(p.db, scope, requestId)!.receiptOrNull).toEqual(receipt);
+              expect(h.db.prepare('SELECT * FROM campaign_character_copy').all()).toEqual(copies);
+              expect(p.db.prepare('SELECT * FROM local_character').all()).toEqual(sourceRows);
+              await current.send({
+                ...resume,
+                reconnectRequestId: randomUUID(),
+                networkScopeId: randomUUID(),
+              });
+              expect(current.sent.at(-1)).toMatchObject({
+                messageType: 'protocol.refusal',
+                refusal: { code: 'UNRECOGNIZED', path: '$.networkContext' },
+              });
+            } finally {
+              barrier.restore();
+            }
+          }, 30000);
           it('keeps blocked PROPOSED copies visible and refuses Ready without host writes', async () => {
             const owner = campaignLobbyPlayerProjectionValue(p.payload());
             expect(owner.lobby.includedCampaignCharacterIds).toEqual([]);
@@ -3066,6 +3405,7 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
             expect(p.sent[0]?.messageType).toBe('command.refusal');
             expect(h.db.serialize().equals(before)).toBe(true);
           });
+        }
         if (scenario === 'ACCEPT') {
           async function isolatedLobbyPeer() {
             // Direct protocol assertions must not race the runtime's serialized owner poll.
