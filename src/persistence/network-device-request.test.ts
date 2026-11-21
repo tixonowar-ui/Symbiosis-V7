@@ -1,3 +1,4 @@
+import { migration0025 } from './migrations/0025-enemy-art-upload.js';
 import { migration0023 } from './migrations/0023-enemy-template-versions.js';
 import { migration0024 } from './migrations/0024-monster-stat-roll-once.js';
 import { migration0011 } from './migrations/0011-device-request-review.js';
@@ -117,7 +118,7 @@ function withBatchHash(value: Omit<NetworkPreparedBatch, 'batchSha256'>): Networ
   };
   return { ...body, batchSha256: sha(canonical(body)) };
 }
-const open = (filename = ':memory:', legacy: boolean | 22 | 23 | 24 = false) => {
+const open = (filename = ':memory:', legacy: boolean | 22 | 23 | 24 | 25 = false) => {
   const db = legacy ? new Database(filename) : openPersistenceDatabase(filename);
   if (legacy) {
     configurePersistenceDatabase(db);
@@ -147,7 +148,8 @@ const open = (filename = ':memory:', legacy: boolean | 22 | 23 | 24 = false) => 
             migration0021,
             migration0022,
             ...(legacy >= 23 ? [migration0023] : []),
-            ...(legacy === 24 ? [migration0024] : []),
+            ...(legacy >= 24 ? [migration0024] : []),
+            ...(legacy === 25 ? [migration0025] : []),
           ]
         : []),
     ]);
@@ -157,7 +159,7 @@ const open = (filename = ':memory:', legacy: boolean | 22 | 23 | 24 = false) => 
 };
 function setup(
   filename = ':memory:',
-  legacy: boolean | 22 | 23 | 24 = false,
+  legacy: boolean | 22 | 23 | 24 | 25 = false,
   existing?: { db: Database.Database; draftId: string },
 ) {
   const db = existing?.db ?? open(filename, legacy),
@@ -378,7 +380,8 @@ function submission(
     schemaVersion === 22 ||
     schemaVersion === 23 ||
     schemaVersion === 24 ||
-    schemaVersion === 25
+    schemaVersion === 25 ||
+    schemaVersion === 26
       ? { schemaVersion: 2 as const, localControllerSeatId: randomUUID() }
       : {}),
     requestId,
@@ -2279,10 +2282,10 @@ describe('hosted network session and addressed request journal', () => {
       ),
     ).toThrow('STALE_REVISION');
   });
-  it.each([22, 23, 24, 25] as const)(
+  it.each([22, 23, 24, 25, 26] as const)(
     'rejects a v1 batch on schema %s without writes',
     (version) => {
-      const p = setup(':memory:', version === 25 ? false : version),
+      const p = setup(':memory:', version === 26 ? false : version),
         opening = connect(p),
         request = submission(p, opening);
       expect(p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({

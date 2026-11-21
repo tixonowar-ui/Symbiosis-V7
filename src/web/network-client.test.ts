@@ -25,6 +25,8 @@ import {
   type NetworkGmRequestDraftClientState,
   type WebClientState,
 } from './ws-client.js';
+import { ORDINARY_SEAT_ACK } from '@shared/ordinary-seat.js';
+import { readEmptySeatReturn } from './forms/ply/ordinary-seat-client.js';
 import { NETWORK_CONTEXT_STORAGE_KEY } from './forms/net/network-application.js';
 import {
   admissionBrowserReceipt,
@@ -776,6 +778,116 @@ describe('NET application client command and recovery boundaries', () => {
       refusal: { value: invalid === 'actions' ? ['NET-005::CTA::001'] : null },
     });
   });
+  it.each(['confirmed', 'wrong scope', 'wrong vector'] as const)(
+    'restores only the confirmed empty seat return after a menu reload (%s)',
+    async (change) => {
+      const v = { stateRevision: 5, projectionRevision: 7, actorVisibilityRevision: 0 };
+      const caps = [...CAPS, ORDINARY_SEAT_ACK];
+      const flow = await start('NET-003', selection(v, 4, false), {
+        capabilities: caps,
+        revisions: v,
+        keys: ['NET-003::CTA::004'],
+      });
+      const neutral = (kind: 'SETUP' | 'ROSTER') => {
+        const actions: ActionKey[] =
+          kind === 'SETUP' ? ['APP-003::CTA::004'] : ['PLY-027::CTA::005', 'PLY-027::CTA::006'];
+        const message: ProjectionSnapshotV2Message = {
+          protocolVersion: 2,
+          messageType: 'projection.snapshot',
+          projectionRole: 'player',
+          revisions: ZERO,
+          presentation: {
+            assignment: {
+              reason: 'FORM_ACTION',
+              correlationId: sent(flow.socket)['navigationRequestId'] as string,
+            },
+            base: {
+              formId: 'APP-003',
+              formType: 'screen',
+              routeTemplate: '/local/app-003',
+              routeBindings: [],
+              availableActionKeys: kind === 'SETUP' ? actions : [],
+              roleFilteredPayload:
+                kind === 'SETUP'
+                  ? { ordinarySeatView: 'SETUP', revision: 0, selectedCount: 0 }
+                  : { ordinarySeatView: 'WAITING', revision: 0 },
+            },
+            layers:
+              kind === 'SETUP'
+                ? []
+                : [
+                    {
+                      formId: 'PLY-027',
+                      formType: 'component',
+                      routeTemplate: '@component/ply-027',
+                      routeBindings: [],
+                      availableActionKeys: actions,
+                      roleFilteredPayload: {
+                        ordinarySeatView: 'ROSTER',
+                        revision: 0,
+                        roster: [],
+                        activeSeatIdOrNull: null,
+                      },
+                    },
+                  ],
+          },
+        };
+        flow.socket.message(message);
+      };
+      expect(flow.connection.requestFormAction('NET-003::CTA::004')).toEqual({ ok: true });
+      neutral('SETUP');
+      expect(flow.connection.requestFormAction('APP-003::CTA::004')).toEqual({ ok: true });
+      neutral('ROSTER');
+      expect(flow.connection.requestFormAction('PLY-027::CTA::006')).toEqual({ ok: true });
+      const exit = sent(flow.socket)['navigationRequestId'] as string;
+      const shell = {
+        contextId: CONTEXT,
+        deviceId: DEVICE,
+        stateRevision: 0,
+        projectionRevision: 0,
+      };
+      flow.socket.message(snapshot('APP-002', shell, ZERO, exit, 'FORM_ACTION'));
+      expect(readEmptySeatReturn()).toMatchObject({
+        exitNavigationId: exit,
+        networkScopeId: SCOPE,
+        request: null,
+      });
+      expect(JSON.stringify(window.sessionStorage)).not.toContain(SUMMARY.name);
+      flow.connection.disconnect();
+      Socket.instances = [];
+      const menu = await start('APP-002', shell, { ticket: false, capabilities: caps });
+      expect(menu.connection.requestFormAction('APP-002::CTA::003')).toEqual({ ok: true });
+      const resume = sent(menu.socket);
+      expect(resume).toMatchObject({
+        operation: 'RESUME_EMPTY',
+        exitNavigationId: exit,
+        expectedProjectionRevision: 0,
+      });
+      menu.connection.disconnect();
+      Socket.instances = [];
+      const retry = await start('APP-002', shell, { ticket: false, capabilities: caps });
+      expect(retry.connection.requestFormAction('APP-002::CTA::003')).toEqual({ ok: true });
+      expect(sent(retry.socket)).toEqual(resume);
+      const received = { ...v, projectionRevision: change === 'wrong vector' ? 9 : 8 };
+      retry.socket.message(
+        snapshot(
+          'NET-001',
+          {
+            ...discovery(),
+            ...bound(received, 4),
+            contextId: NEXT_CONTEXT,
+            networkScopeId: change === 'wrong scope' ? NEXT_CONTEXT : SCOPE,
+          },
+          received,
+          resume['requestId'] as string,
+          'FORM_ACTION',
+          ['NET-001::CTA::001', 'NET-001::CTA::002'],
+        ),
+      );
+      expect(retry.states.at(-1)?.kind).toBe(change === 'confirmed' ? 'ready' : 'protocol-error');
+      if (change === 'confirmed') expect(readEmptySeatReturn()).toBeNull();
+    },
+  );
   it('requires the exact zero initial vector for player-menu entry into NET-001', async () => {
     const flow = await start(
       'APP-002',

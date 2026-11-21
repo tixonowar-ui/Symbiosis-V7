@@ -3,6 +3,10 @@ import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import ownerFixture from '../../tests/fixtures/campaign-lobby-owner.json';
+import { NETWORK_CONTEXT_STORAGE_KEY } from './forms/net/network-application.js';
+import { ORDINARY_SEAT_ACK } from '@shared/ordinary-seat.js';
+import { SEAT_DELIVERY_STORAGE } from './forms/ply/ordinary-seat-client.js';
 import { LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS } from '@generated/types/local-character-portraits.js';
 import {
   decodeClientMessage,
@@ -1974,6 +1978,687 @@ async function connectToWizardBase(
   return connection;
 }
 
+describe('ordinary device handoff at the browser boundary', () => {
+  const seatRevisions = { actorVisibilityRevision: 7, stateRevision: 7, projectionRevision: 7 };
+  const initialSheetBase = (
+    actions: ProjectionSnapshotV2Message['presentation']['base']['availableActionKeys'],
+  ): ProjectionSnapshotV2Message['presentation']['base'] => {
+    const p = ownerFixture.peace;
+    return {
+      formId: 'PLY-001',
+      formType: 'screen',
+      routeTemplate: '/campaigns/:campaignId/player/:campaignCharacterId',
+      routeBindings: [
+        { parameterIndex: 0, source: 'inherited', value: p.campaignId },
+        { parameterIndex: 1, source: 'inherited', value: p.campaignCharacterId },
+      ],
+      availableActionKeys: actions,
+      roleFilteredPayload: p,
+    };
+  };
+  const curtain = (correlationId: string, extra: JsonObject = {}) =>
+    snapshot({
+      projectionRole: 'player',
+      revisions: seatRevisions,
+      presentation: {
+        assignment: { reason: 'RECONNECT', correlationId },
+        base: {
+          formId: 'APP-003',
+          formType: 'screen',
+          routeTemplate: '/local/app-003',
+          routeBindings: [],
+          availableActionKeys: [],
+          roleFilteredPayload: { ordinarySeatView: 'WAITING', revision: 7 },
+        },
+        layers: [
+          {
+            formId: 'PLY-030',
+            formType: 'component',
+            routeTemplate: '@component/ply-030',
+            routeBindings: [],
+            availableActionKeys: ['PLY-030::CTA::001'],
+            roleFilteredPayload: {
+              ordinarySeatView: 'CURTAIN',
+              revision: 7,
+              targetOrdinal: 2,
+              handoffId: CONTEXT_ID,
+              targetSeatId: CHARACTER_DRAFT_ID,
+              sourceSeatIdOrNull: null,
+              signedReturnContext: 'signed-return',
+              pendingCommandOwner: null,
+              ...extra,
+            },
+          },
+        ],
+      },
+    });
+
+  afterEach(() => {
+    sessionStorage.removeItem(SEAT_DELIVERY_STORAGE);
+    sessionStorage.removeItem(NETWORK_CONTEXT_STORAGE_KEY);
+  });
+
+  it('purges an open local wizard without submitting or cancelling its draft', async () => {
+    const { container, socket } = await connectToValidChr001(
+      capabilities({
+        executableWorkflowCommandIds: [
+          ...capabilities().executableWorkflowCommandIds,
+          ORDINARY_SEAT_ACK,
+        ],
+      }),
+    );
+    expect(container.querySelector('[data-atlas-form-id="CHR-001"]')).not.toBeNull();
+    expect(container.innerHTML).toContain('Алиса');
+    const before = socket.sent.length;
+    const waiting = curtain(CONTEXT_ID);
+    deliver(
+      socket,
+      checkedHostTextV2({
+        ...waiting,
+        presentation: {
+          ...waiting.presentation,
+          assignment: { reason: 'HOST_SYSTEM_EVENT', correlationId: CONTEXT_ID },
+          layers: [],
+        },
+      }),
+    );
+    expect(container.querySelector('[data-atlas-form-id="APP-003"]')).not.toBeNull();
+    expect(container.innerHTML).not.toContain('Алиса');
+    expect(socket.sent).toHaveLength(before);
+  });
+
+  it('returns exactly the checked FINALs and the original signed library context', async () => {
+    sessionStorage.setItem(NETWORK_CONTEXT_STORAGE_KEY, CONTEXT_ID);
+    const { container, socket } = await connectClient();
+    open(socket);
+    const hello = decodedClientMessageV3(socket, 0);
+    if (hello.messageType !== 'network.local-context.resume')
+      throw new Error('Expected the existing network session');
+    const revision = { actorVisibilityRevision: 9, stateRevision: 9, projectionRevision: 9 };
+    const assigned = (
+      base: ProjectionSnapshotV2Message['presentation']['base'],
+      correlationId: string,
+      reason: 'RECONNECT' | 'FORM_ACTION',
+    ) =>
+      snapshot({
+        projectionRole: 'player',
+        revisions: revision,
+        presentation: { base, layers: [], assignment: { reason, correlationId } },
+      });
+    const setup = {
+      formId: 'APP-003',
+      formType: 'screen',
+      routeTemplate: '/local/app-003',
+      routeBindings: [],
+      availableActionKeys: ['APP-003::CTA::001'],
+      roleFilteredPayload: { ordinarySeatView: 'SETUP', revision: 9, selectedCount: 0 },
+    } as const;
+    deliverPair(
+      socket,
+      capabilities({
+        executableWorkflowCommandIds: [ORDINARY_SEAT_ACK],
+        revisions: revision,
+        reconnectRequestId: hello.reconnectRequestId,
+      }),
+      assigned(setup, hello.reconnectRequestId, 'RECONNECT'),
+    );
+    act(() =>
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="APP-003::CTA::001"]'),
+        'library',
+      ).click(),
+    );
+    const nav = decodedClientMessageV2(socket, 1);
+    if (nav.messageType !== 'navigation.form-action')
+      throw new Error('Expected library navigation');
+    const libraryContext = 'a'.repeat(64);
+    deliver(
+      socket,
+      checkedHostTextV2(
+        assigned(
+          {
+            formId: 'APP-004',
+            formType: 'screen',
+            routeTemplate: '/player/characters',
+            routeBindings: [],
+            availableActionKeys: ['APP-004::CTA::002'],
+            roleFilteredPayload: {
+              ordinarySeatView: 'LIBRARY',
+              revision: 9,
+              libraryContext,
+              candidates: [
+                { sourceUuid: CHARACTER_DRAFT_ID, name: 'Маяк' },
+                { sourceUuid: CONTEXT_ID, name: 'Проводник' },
+              ],
+              selectedSourceUuids: [],
+            },
+          },
+          nav.navigationRequestId,
+          'FORM_ACTION',
+        ),
+      ),
+    );
+    const checkbox = requiredElement(
+      container.querySelector<HTMLInputElement>(`input[value="${CHARACTER_DRAFT_ID}"]`),
+      'eligible candidate',
+    );
+    act(() => checkbox.click());
+    act(() =>
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="APP-004::CTA::002"]'),
+        'return to setup',
+      ).click(),
+    );
+    const submitted = decodedClientMessageV3(socket, 2);
+    expect(submitted).toMatchObject({
+      messageType: 'ordinary.seat.control',
+      operation: 'RETURN_LIBRARY',
+      expectedProjectionRevision: 9,
+      libraryContext,
+      selectedSourceUuids: [CHARACTER_DRAFT_ID],
+    });
+    if (submitted.messageType !== 'ordinary.seat.control')
+      throw new Error('Expected scoped selection');
+    deliver(
+      socket,
+      checkedHostTextV2(
+        assigned(
+          {
+            ...setup,
+            availableActionKeys: ['APP-003::CTA::002'],
+            roleFilteredPayload: { ordinarySeatView: 'SETUP', revision: 9, selectedCount: 1 },
+          },
+          submitted.requestId,
+          'FORM_ACTION',
+        ),
+      ),
+    );
+    expect(container.querySelector('[data-atlas-form-id="APP-003"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('Маяк');
+  });
+
+  it.each([true, false])(
+    'shows the single initial admitted seat only when the indicator belongs to the visible sheet (%s)',
+    async (own) => {
+      const p = ownerFixture.peace;
+      const { socket, container } = await connectClient(
+        Promise.resolve(identityResponse({ deviceId: p.deviceId })),
+      );
+      open(socket);
+      const revisions = {
+        actorVisibilityRevision: p.actorVisibilityRevision,
+        stateRevision: p.stateRevision,
+        projectionRevision: p.projectionRevision,
+      };
+      const indicated = own ? p.controllerSeat : CHARACTER_DRAFT_ID;
+      const message = snapshot({
+        projectionRole: 'player',
+        revisions,
+        presentation: {
+          assignment: { correlationId: REQUEST_ID, reason: 'RECONNECT' },
+          base: initialSheetBase([]),
+          layers: [
+            {
+              formId: 'PLY-027',
+              formType: 'component',
+              routeTemplate: '@component/ply-027',
+              routeBindings: [],
+              availableActionKeys: [],
+              roleFilteredPayload: {
+                ordinarySeatView: 'ROSTER',
+                revision: 0,
+                roster: [{ seatId: indicated, ordinal: 1 }],
+                activeSeatIdOrNull: indicated,
+              },
+            },
+          ],
+        },
+      });
+      deliverPair(
+        socket,
+        capabilities({ executableWorkflowCommandIds: [ORDINARY_SEAT_ACK], revisions }),
+        message,
+      );
+      if (own) {
+        expect(container.querySelector('[data-atlas-form-id="PLY-001"]')).not.toBeNull();
+        expect(container.querySelector('[data-atlas-form-id="PLY-027"]')?.textContent).toContain(
+          'Ваше место: игрок 1.',
+        );
+        expect(
+          container.querySelector(
+            '[data-atlas-action-key="PLY-001::CTA::015"], [data-atlas-action-key="PLY-027::CTA::003"]',
+          ),
+        ).toBeNull();
+      } else {
+        expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+        expect(container.querySelector('[data-atlas-form-id="PLY-001"]')).toBeNull();
+      }
+      sessionStorage.removeItem(NETWORK_CONTEXT_STORAGE_KEY);
+    },
+  );
+
+  it('shows the neutral curtain until a human ACK and replays that exact command after transport loss', async () => {
+    const { container, socket } = await connectClient();
+    open(socket);
+    deliverPair(
+      socket,
+      capabilities({ executableWorkflowCommandIds: [ORDINARY_SEAT_ACK], revisions: seatRevisions }),
+      curtain(REQUEST_ID),
+    );
+    expect(container.querySelector('[data-atlas-form-id="PLY-030"]')).not.toBeNull();
+    expect(socket.sent).toHaveLength(1);
+    expect(sessionStorage.getItem(SEAT_DELIVERY_STORAGE)).toBeNull();
+    const ack = requiredElement(
+      container.querySelector<HTMLButtonElement>('[data-atlas-action-key="PLY-030::CTA::001"]'),
+      'ack',
+    );
+    act(() => ack.click());
+    const sent = socket.sent.at(-1)!;
+    const request = decodedClientMessageV1(socket, 1);
+    expect(request).toMatchObject({
+      commandKind: 'workflow-command',
+      workflowCommandId: ORDINARY_SEAT_ACK,
+      role: 'player',
+      expectedRevisions: seatRevisions,
+      payload: {
+        handoffId: CONTEXT_ID,
+        targetSeatId: CHARACTER_DRAFT_ID,
+        signedReturnContext: 'signed-return',
+        decision: 'ACTIVATE_TARGET',
+      },
+    });
+    expect((request as { payload: JsonObject }).payload['deliveryKey']).toMatch(/^[0-9a-f]{64}$/u);
+    expect(container.querySelector('[data-atlas-action-key="PLY-030::CTA::001"]')).toBeNull();
+    act(() => socket.serverClose(1006, 'response lost'));
+    act(() =>
+      requiredElement(
+        [...container.querySelectorAll('button')].find(
+          (b) => b.textContent === 'Переподключиться',
+        ) ?? null,
+        'reconnect',
+      ).click(),
+    );
+    const resumed = FakeWebSocket.instances.at(-1)!;
+    open(resumed);
+    const hello = decodedClientMessageV2(resumed, 0);
+    if (hello.messageType !== 'session.reconnect') throw new Error('Expected neutral reconnect');
+    deliverPair(
+      resumed,
+      capabilities({
+        executableWorkflowCommandIds: [ORDINARY_SEAT_ACK],
+        revisions: seatRevisions,
+        reconnectRequestId: hello.reconnectRequestId,
+      }),
+      curtain(hello.reconnectRequestId),
+    );
+    expect(resumed.sent).toEqual([resumed.sent[0], sent]);
+    expect(container.querySelector('[data-atlas-form-id="PLY-001"]')).toBeNull();
+  });
+
+  it.each(['confirmed', 'no eligible target', 'wrong source', 'wrong revision'] as const)(
+    'binds the first chooser to the sheet which opened it (%s)',
+    async (change) => {
+      const p = ownerFixture.peace;
+      const { container, socket } = await connectClient(
+        Promise.resolve(identityResponse({ deviceId: p.deviceId })),
+      );
+      open(socket);
+      const revisions = {
+        stateRevision: p.stateRevision,
+        projectionRevision: p.projectionRevision,
+        actorVisibilityRevision: p.actorVisibilityRevision,
+      };
+      deliverPair(
+        socket,
+        capabilities({ revisions, executableWorkflowCommandIds: [ORDINARY_SEAT_ACK] }),
+        snapshot({
+          projectionRole: 'player',
+          revisions,
+          presentation: {
+            assignment: { reason: 'RECONNECT', correlationId: REQUEST_ID },
+            base: initialSheetBase(['PLY-001::CTA::015']),
+            layers: [],
+          },
+        }),
+      );
+      const watch = decodedClientMessageV3(socket, socket.sent.length - 1);
+      if (watch.messageType !== 'network.peer-control' || watch.operation !== 'WATCH')
+        throw new Error('Expected own PEACE subscription');
+      deliver(
+        socket,
+        checkedHostTextV3({
+          messageType: 'network.peer-state',
+          protocolVersion: 3,
+          subscriptionId: watch.requestId,
+          requestId: watch.requestId,
+          contextId: p.contextId,
+          networkScopeId: p.networkScopeId,
+          campaignId: p.campaignId,
+          deviceId: p.deviceId,
+          controllerSeat: p.controllerSeat,
+          sequence: 1,
+          revisions,
+          connectionRevision: 1,
+          connectionState: 'CONNECTED',
+          statusOrNull: {
+            campaignId: p.campaignId,
+            deviceId: p.deviceId,
+            campaignRevision: 1,
+            campaignStatus: 'HOSTING',
+            firstStartCompleted: true,
+            pauseReasonOrNull: null,
+            disconnectOrNull: null,
+          },
+          formOrNull: null,
+          retryOutcome: 'NONE',
+          diagnosticOrNull: null,
+        }),
+      );
+      act(() =>
+        requiredElement(
+          container.querySelector<HTMLButtonElement>('[data-atlas-action-key="PLY-001::CTA::015"]'),
+          'open chooser',
+        ).click(),
+      );
+      const nav = decodedClientMessageV2(socket, socket.sent.length - 1);
+      if (nav.messageType !== 'navigation.form-action')
+        throw new Error('Expected confirmed sheet action');
+      if (change === 'no eligible target') {
+        deliver(
+          socket,
+          checkedHostTextV2({
+            messageType: 'navigation.form-action.refusal',
+            protocolVersion: 2,
+            navigationRequestId: nav.navigationRequestId,
+            revisions,
+            presentationUnchanged: true,
+            refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+          }),
+        );
+        const resumed = FakeWebSocket.instances.at(-1)!;
+        expect(resumed).not.toBe(socket);
+        open(resumed);
+        const hello = decodedClientMessageV3(resumed, 0);
+        if (hello.messageType !== 'network.local-context.resume')
+          throw new Error('Expected original PEACE scope');
+        expect(hello.networkScopeId).toBe(p.networkScopeId);
+        expect(container.querySelector('[data-atlas-form-id="PLY-001"]')).toBeNull();
+        deliverPair(
+          resumed,
+          capabilities({
+            revisions,
+            reconnectRequestId: hello.reconnectRequestId,
+            executableWorkflowCommandIds: [ORDINARY_SEAT_ACK],
+          }),
+          snapshot({
+            projectionRole: 'player',
+            revisions,
+            presentation: {
+              assignment: { reason: 'RECONNECT', correlationId: hello.reconnectRequestId },
+              base: initialSheetBase([]),
+              layers: [],
+            },
+          }),
+        );
+        expect(container.querySelector('[data-atlas-form-id="PLY-001"]')).not.toBeNull();
+        expect(
+          container.querySelector(
+            '[data-atlas-action-key="PLY-001::CTA::015"],[data-atlas-form-id="PLY-027"]',
+          ),
+        ).toBeNull();
+        return;
+      }
+      const revision = change === 'wrong revision' ? 2 : 1;
+      deliver(
+        socket,
+        checkedHostTextV2(
+          snapshot({
+            projectionRole: 'player',
+            revisions: {
+              stateRevision: revision,
+              projectionRevision: revision,
+              actorVisibilityRevision: revision,
+            },
+            presentation: {
+              assignment: { reason: 'FORM_ACTION', correlationId: nav.navigationRequestId },
+              base: {
+                formId: 'APP-003',
+                formType: 'screen',
+                routeTemplate: '/local/app-003',
+                routeBindings: [],
+                availableActionKeys: [],
+                roleFilteredPayload: { ordinarySeatView: 'WAITING', revision },
+              },
+              layers: [
+                {
+                  formId: 'PLY-027',
+                  formType: 'component',
+                  routeTemplate: '@component/ply-027',
+                  routeBindings: [],
+                  availableActionKeys: ['PLY-027::CTA::003'],
+                  roleFilteredPayload: {
+                    ordinarySeatView: 'ROSTER',
+                    revision,
+                    activeSeatIdOrNull:
+                      change === 'wrong source' ? CHARACTER_DRAFT_ID : p.controllerSeat,
+                    eligibleTargetSeatIds: [
+                      change === 'wrong source' ? p.controllerSeat : CHARACTER_DRAFT_ID,
+                    ],
+                    roster: [
+                      { seatId: p.controllerSeat, ordinal: 1 },
+                      { seatId: CHARACTER_DRAFT_ID, ordinal: 2 },
+                    ],
+                  },
+                },
+              ],
+            },
+          }),
+        ),
+      );
+      expect(container.querySelector('[data-atlas-form-id="PLY-001"]')).toBeNull();
+      if (change === 'confirmed')
+        expect(container.querySelector('[data-atlas-form-id="PLY-027"]')).not.toBeNull();
+      else {
+        expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+        expect(container.querySelector('[data-atlas-form-id="PLY-027"]')).toBeNull();
+      }
+    },
+  );
+
+  it.each([
+    'confirmed',
+    'stale selection',
+    'wrong source',
+    'wrong target',
+    'wrong ordinal',
+    'wrong revision',
+  ] as const)(
+    'displays a selected curtain only for the exact roster assignment (%s)',
+    async (change) => {
+      const { container, socket } = await connectClient();
+      open(socket);
+      const revisions = { actorVisibilityRevision: 6, stateRevision: 6, projectionRevision: 6 };
+      const source = CONTEXT_ID,
+        target = CHARACTER_DRAFT_ID;
+      const roster = snapshot({
+        projectionRole: 'player',
+        revisions,
+        presentation: {
+          assignment: { reason: 'RECONNECT', correlationId: REQUEST_ID },
+          base: {
+            formId: 'APP-003',
+            formType: 'screen',
+            routeTemplate: '/local/app-003',
+            routeBindings: [],
+            availableActionKeys: [],
+            roleFilteredPayload: { ordinarySeatView: 'WAITING', revision: 6 },
+          },
+          layers: [
+            {
+              formId: 'PLY-027',
+              formType: 'component',
+              routeTemplate: '@component/ply-027',
+              routeBindings: [],
+              availableActionKeys: ['PLY-027::CTA::003'],
+              roleFilteredPayload: {
+                ordinarySeatView: 'ROSTER',
+                revision: 6,
+                activeSeatIdOrNull: source,
+                eligibleTargetSeatIds: [target],
+                roster: [
+                  { seatId: source, ordinal: 1 },
+                  { seatId: target, ordinal: 2 },
+                  { seatId: DEVICE_ID, ordinal: 3 },
+                ],
+              },
+            },
+          ],
+        },
+      });
+      deliverPair(
+        socket,
+        capabilities({ revisions, executableWorkflowCommandIds: [ORDINARY_SEAT_ACK] }),
+        roster,
+      );
+      const selector = requiredElement(
+        container.querySelector<HTMLSelectElement>('select'),
+        'local seats',
+      );
+      expect(container.querySelector('ul[aria-label="Допущенные места"]')?.textContent).toContain(
+        'Игрок 3',
+      );
+      expect([...selector.options].map((option) => option.value)).toEqual(['', target]);
+      const beforeSelection = socket.sent.length;
+      act(() => {
+        selector.value = DEVICE_ID;
+        selector.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      expect(
+        container.querySelector('[data-atlas-action-key="PLY-027::CTA::003"]:enabled'),
+      ).toBeNull();
+      expect(socket.sent).toHaveLength(beforeSelection);
+      act(() => {
+        selector.value = target;
+        selector.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      act(() =>
+        requiredElement(
+          container.querySelector<HTMLButtonElement>('[data-atlas-action-key="PLY-027::CTA::003"]'),
+          'choose seat',
+        ).click(),
+      );
+      const command = decodedClientMessageV3(socket, 1);
+      if (command.messageType !== 'ordinary.seat.control' || command.operation !== 'SELECT')
+        throw new Error('Expected SELECT');
+      if (change === 'stale selection') {
+        deliver(
+          socket,
+          checkedHostTextV2({
+            messageType: 'navigation.form-action.refusal',
+            protocolVersion: 2,
+            navigationRequestId: command.requestId,
+            revisions,
+            presentationUnchanged: true,
+            refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+          }),
+        );
+        const resumed = FakeWebSocket.instances.at(-1)!;
+        expect(resumed).not.toBe(socket);
+        open(resumed);
+        const hello = decodedClientMessageV2(resumed, 0);
+        if (hello.messageType !== 'session.reconnect')
+          throw new Error('Expected neutral reconnect');
+        const oldLayer = roster.presentation.layers[0]!;
+        deliverPair(
+          resumed,
+          capabilities({
+            revisions,
+            reconnectRequestId: hello.reconnectRequestId,
+            executableWorkflowCommandIds: [ORDINARY_SEAT_ACK],
+          }),
+          {
+            ...roster,
+            presentation: {
+              ...roster.presentation,
+              assignment: { reason: 'RECONNECT', correlationId: hello.reconnectRequestId },
+              layers: [
+                {
+                  ...oldLayer,
+                  availableActionKeys: [],
+                  roleFilteredPayload: {
+                    ...oldLayer.roleFilteredPayload,
+                    eligibleTargetSeatIds: [],
+                  },
+                },
+              ],
+            },
+          },
+        );
+        expect(container.querySelector('[data-atlas-form-id="PLY-027"]')).not.toBeNull();
+        expect(
+          container.querySelector('select, [data-atlas-action-key="PLY-027::CTA::003"]'),
+        ).toBeNull();
+        expect(
+          container.querySelector('[data-atlas-form-id="PLY-001"],[data-atlas-form-id="PLY-030"]'),
+        ).toBeNull();
+        expect(resumed.sent).toHaveLength(1);
+        return;
+      }
+      const revision = change === 'wrong revision' ? 8 : 7;
+      const next = curtain(command.requestId, {
+        sourceSeatIdOrNull: change === 'wrong source' ? null : source,
+        targetSeatId: change === 'wrong target' ? DEVICE_ID : target,
+        targetOrdinal: change === 'wrong ordinal' ? 1 : 2,
+        revision,
+      });
+      deliver(
+        socket,
+        checkedHostTextV2({
+          ...next,
+          revisions: {
+            stateRevision: revision,
+            projectionRevision: revision,
+            actorVisibilityRevision: revision,
+          },
+          presentation: {
+            ...next.presentation,
+            assignment: { reason: 'FORM_ACTION', correlationId: command.requestId },
+            base: {
+              ...next.presentation.base,
+              roleFilteredPayload: { ordinarySeatView: 'WAITING', revision },
+            },
+          },
+        }),
+      );
+      if (change === 'confirmed') {
+        expect(container.textContent).toContain('Передайте устройство игроку 2');
+        expect(
+          container.querySelector('[data-atlas-action-key="PLY-030::CTA::001"]'),
+        ).not.toBeNull();
+      } else {
+        expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+        expect(container.textContent).not.toContain('Передайте устройство');
+        expect(container.querySelector('[data-atlas-form-id="PLY-030"]')).toBeNull();
+        expect(sessionStorage.getItem(SEAT_DELIVERY_STORAGE)).toBeNull();
+      }
+    },
+  );
+
+  it('refuses private data attached to a neutral curtain without rendering its value', async () => {
+    const { container, socket } = await connectClient();
+    open(socket);
+    deliverPair(
+      socket,
+      capabilities({ executableWorkflowCommandIds: [ORDINARY_SEAT_ACK], revisions: seatRevisions }),
+      curtain(REQUEST_ID, { privateSheet: 'foreign-private-sheet' }),
+    );
+    expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+    expect(container.textContent).not.toContain('foreign-private-sheet');
+    expect(container.querySelector('[data-atlas-form-id="PLY-030"]')).toBeNull();
+    expect(sessionStorage.getItem(SEAT_DELIVERY_STORAGE)).toBeNull();
+  });
+});
+
 function reconnectToWizardBase(
   container: HTMLDivElement,
   socket: FakeWebSocket,
@@ -2286,6 +2971,7 @@ describe('APP-001 web entry', () => {
       reconnectRequestId: REQUEST_ID,
       supportedWorkflowCommandIds: [
         IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+        ORDINARY_SEAT_ACK,
         SET_DECIDE_WORKFLOW_COMMAND_ID,
         ROLL_COMMIT_WORKFLOW_COMMAND_ID,
         'UI-CMD-PLAYER-WEAPON-REQUEST-SUBMIT',

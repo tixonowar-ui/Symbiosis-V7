@@ -4,6 +4,7 @@ import { loadNpcAuthoringSourceCatalog } from './npc-catalog.js';
 import { loadNpcArtCatalog } from './npc-art.js';
 import { createNpcHostSupport } from './npc-application.js';
 import { createCampaignGmScheduler } from './campaign-network-executor.js';
+import { confirmedHostedContext } from './ordinary-seat-hosted-context.js';
 import {
   readCampaignCreationCursor,
   readHostedCampaignCreationOrigin,
@@ -423,6 +424,7 @@ import {
   createGmNetworkRuntime,
   type LocalNetworkConnection,
   type LocalNetworkHostMessage,
+  type LocalNetworkClientMessage,
 } from './network-application.js';
 import {
   NETWORK_WORKFLOW_COMMAND_IDS,
@@ -1081,11 +1083,16 @@ function postSaveNavigation(
   };
 }
 
+// A delayed legacy reply must not put a replaced local projection back on the wire.
+const ordinaryOnlySockets = new WeakSet<WebSocket>();
+
 function sendChecked(
   socket: WebSocket,
   message: HostToClientMessage,
   vocabulary: ProtocolVocabulary,
+  fromOrdinaryRuntime = false,
 ): void {
+  if (!fromOrdinaryRuntime && ordinaryOnlySockets.has(socket)) return;
   const encoded = encodeHostMessage(message, vocabulary);
   if (!encoded.ok) {
     throw new Error(`host produced an invalid wire v1 message: ${JSON.stringify(encoded.refusal)}`);
@@ -1097,7 +1104,9 @@ function sendCheckedV2(
   socket: WebSocket,
   message: HostToClientV2Message,
   vocabulary: WireV2Vocabulary,
+  fromOrdinaryRuntime = false,
 ): void {
+  if (!fromOrdinaryRuntime && ordinaryOnlySockets.has(socket)) return;
   const encoded = encodeHostMessageV2(message, vocabulary);
   if (!encoded.ok) {
     throw new Error(`host produced an invalid wire v2 message: ${JSON.stringify(encoded.refusal)}`);
@@ -1109,7 +1118,9 @@ function sendCheckedV3(
   socket: WebSocket,
   message: HostToClientV3Message,
   vocabulary: WireV3Vocabulary,
+  fromOrdinaryRuntime = false,
 ): void {
+  if (!fromOrdinaryRuntime && ordinaryOnlySockets.has(socket)) return;
   const encoded = encodeHostMessageV3(message, vocabulary);
   if (!encoded.ok) {
     throw new Error(`host produced an invalid wire v3 message: ${JSON.stringify(encoded.refusal)}`);
@@ -6502,15 +6513,39 @@ async function handleFrame(
     return;
   }
   const source = rawDataText(data);
+  const routed = async (message: LocalNetworkClientMessage) => {
+    if (dependencies.network.ordinaryLocked(connection.network)) {
+      const gmLocalContextId =
+        connection.campaign.gmLocalContextId ??
+        (message.messageType === 'campaign.local-context.resume' ? message.gmLocalContextId : null);
+      if (
+        confirmedHostedContext(dependencies.database, {
+          gmLocalContextId,
+          networkScopeId: connection.network.networkScopeId,
+          ordinaryParticipant: dependencies.network.ordinaryParticipant(connection.network),
+        })
+      ) {
+        if (
+          (await handleGmNetworkMessage(socket, message, dependencies, connection)) ||
+          (await handleCampaignMessage(socket, message, dependencies, connection))
+        )
+          return true;
+      }
+      return handleNetworkMessage(socket, message, dependencies, connection);
+    }
+    return (
+      (await handleGmNetworkMessage(socket, message, dependencies, connection)) ||
+      (await handleCampaignMessage(socket, message, dependencies, connection)) ||
+      (await handleNetworkMessage(socket, message, dependencies, connection))
+    );
+  };
   if (messageProtocolVersion(source) === WIRE_PROTOCOL_V3_VERSION) {
     const decoded = decodeClientMessageV3(source, dependencies.vocabulary);
     if (!decoded.ok) {
       sendProtocolRefusal(socket, dependencies.vocabulary, decoded.refusal);
       return;
     }
-    if (await handleGmNetworkMessage(socket, decoded.value, dependencies, connection)) return;
-    if (await handleCampaignMessage(socket, decoded.value, dependencies, connection)) return;
-    if (await handleNetworkMessage(socket, decoded.value, dependencies, connection)) return;
+    if (await routed(decoded.value)) return;
     if (decoded.value.messageType !== 'character.identity-draft.replace')
       throw new Error('Unhandled campaign protocol');
     handleClientMessageV3(socket, decoded.value, dependencies, connection);
@@ -6522,9 +6557,7 @@ async function handleFrame(
       sendProtocolRefusal(socket, dependencies.vocabulary, decoded.refusal);
       return;
     }
-    if (await handleGmNetworkMessage(socket, decoded.value, dependencies, connection)) return;
-    if (await handleCampaignMessage(socket, decoded.value, dependencies, connection)) return;
-    if (await handleNetworkMessage(socket, decoded.value, dependencies, connection)) return;
+    if (await routed(decoded.value)) return;
     handleClientMessageV2(socket, decoded.value, dependencies, commandJournal, connection);
     return;
   }
@@ -6533,9 +6566,7 @@ async function handleFrame(
     sendProtocolRefusal(socket, dependencies.vocabulary, decoded.refusal);
     return;
   }
-  if (await handleGmNetworkMessage(socket, decoded.value, dependencies, connection)) return;
-  if (await handleCampaignMessage(socket, decoded.value, dependencies, connection)) return;
-  if (await handleNetworkMessage(socket, decoded.value, dependencies, connection)) return;
+  if (await routed(decoded.value)) return;
   handleClientMessage(socket, decoded.value, dependencies, commandJournal, connection);
 }
 
@@ -6558,7 +6589,10 @@ async function handleNetworkMessage(
   dependencies: NavigationDependencies,
   connection: ConnectionNavigation,
 ): Promise<boolean> {
-  if (connection.network.networkScopeId === null)
+  if (
+    connection.network.networkScopeId === null &&
+    !dependencies.network.ordinaryLocked(connection.network)
+  )
     connection.network.executableWorkflowCommandIds = [...connection.executableWorkflowCommandIds];
   const player = (): ConfirmedPlayerContext => ({
     contextId: allocatedId(
@@ -6676,9 +6710,12 @@ async function handleNetworkMessage(
       },
     },
     (result: LocalNetworkHostMessage) => {
-      if (result.protocolVersion === 3) sendCheckedV3(socket, result, dependencies.vocabulary);
-      else if (result.protocolVersion === 2) sendCheckedV2(socket, result, dependencies.vocabulary);
-      else sendChecked(socket, result, dependencies.vocabulary);
+      if (dependencies.network.ordinaryLocked(connection.network)) ordinaryOnlySockets.add(socket);
+      if (result.protocolVersion === 3)
+        sendCheckedV3(socket, result, dependencies.vocabulary, true);
+      else if (result.protocolVersion === 2)
+        sendCheckedV2(socket, result, dependencies.vocabulary, true);
+      else sendChecked(socket, result, dependencies.vocabulary, true);
     },
   );
   if (handled) {
@@ -7105,6 +7142,7 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
       sessionEstablished: false,
     };
     let frames = Promise.resolve();
+    socket.once('close', () => dependencies.network.disconnect(connection.network));
     socket.on('message', (data: RawData, isBinary: boolean) => {
       frames = frames
         .then(async () => {
@@ -7118,6 +7156,31 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
             return;
           }
           await handleFrame(socket, data, isBinary, dependencies, commandJournal, connection);
+          if (
+            connection.network.networkScopeId === null &&
+            connection.campaign.gmLocalContextId === null &&
+            connection.current !== null &&
+            confirmedPlayerContext(connection.current, dependencies)
+          ) {
+            dependencies.network.observeLocalShell(connection.network, (notice) => {
+              if (
+                notice.protocolVersion !== 2 ||
+                notice.messageType !== 'projection.snapshot' ||
+                notice.presentation.base.roleFilteredPayload['ordinarySeatView'] !== 'WAITING'
+              )
+                return;
+              ordinaryOnlySockets.add(socket);
+              connection.current = null;
+              connection.activeLayer = null;
+              connection.networkExitAssignment = null;
+              sendCheckedV2(socket, notice, dependencies.vocabulary, true);
+            });
+          } else if (
+            connection.campaign.gmLocalContextId !== null &&
+            connection.network.networkScopeId === null &&
+            !dependencies.network.ordinaryParticipant(connection.network)
+          )
+            dependencies.network.disconnect(connection.network);
         })
         .catch((error: unknown) => {
           config.onFrameError(error);

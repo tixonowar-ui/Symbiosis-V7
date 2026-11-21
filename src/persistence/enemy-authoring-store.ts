@@ -243,7 +243,14 @@ function schema(db: Database.Database): boolean {
       return s.fail('SOURCE_CHANGED');
     return false;
   }
-  if (version !== 21 && version !== 22 && version !== 23 && version !== 24 && version !== 25)
+  if (
+    version !== 21 &&
+    version !== 22 &&
+    version !== 23 &&
+    version !== 24 &&
+    version !== 25 &&
+    version !== 26
+  )
     return s.fail('SOURCE_CHANGED');
   for (const table of tables) db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
   return true;
@@ -535,7 +542,7 @@ export function commitEnemyAuthoring(
       s.guarded(db, integration.observe, source, 'APPLY');
       const state = readGmRequestReviewViewStateInTransaction(db, scope);
       const upload = checkEnemyArtRequestBytes(request, uploadBytes);
-      if (request.payload.stage === 'ART' && readAppliedMigrationVersion(db) !== 25)
+      if (request.payload.stage === 'ART' && readAppliedMigrationVersion(db) < 25)
         return s.fail('SOURCE_CHANGED');
       const known = state.events.find((event) => event.eventId === request.commandId);
       if (known !== undefined) {

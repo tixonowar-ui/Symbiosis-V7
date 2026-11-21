@@ -567,7 +567,7 @@ describe('durable local network tab entry', () => {
     ).run();
     const registry = db.prepare('SELECT * FROM schema_migration ORDER BY version').all(),
       campaign = db.prepare('SELECT * FROM campaign').all();
-    expect(applyMigrations(db)).toBe(25);
+    expect(applyMigrations(db)).toBe(26);
     expect(
       db.prepare('SELECT * FROM schema_migration WHERE version<=8 ORDER BY version').all(),
     ).toEqual(registry);
@@ -586,7 +586,7 @@ describe('durable local network tab entry', () => {
       .prepare('SELECT * FROM local_network_tab_entry ORDER BY entry_command_id')
       .all();
     const closes = db.prepare('SELECT * FROM local_network_tab_close').all();
-    expect(applyMigrations(db)).toBe(25);
+    expect(applyMigrations(db)).toBe(26);
     expect(
       db.prepare('SELECT * FROM local_network_tab_entry ORDER BY entry_command_id').all(),
     ).toEqual(entries);
@@ -620,14 +620,14 @@ describe('durable local network tab entry', () => {
         .prepare<[], { version: number }>('SELECT * FROM schema_migration ORDER BY version')
         .all();
       expect(registry.map((row) => row.version)).toEqual(
-        Array.from({ length: 25 }, (_, index) => index + 1),
+        Array.from({ length: 26 }, (_, index) => index + 1),
       );
-      db.prepare('INSERT INTO schema_migration VALUES(?,?,?)').run(26, 'future', 'f'.repeat(64));
+      db.prepare('INSERT INTO schema_migration VALUES(?,?,?)').run(27, 'future', 'f'.repeat(64));
       expect(
-        db.prepare('SELECT * FROM schema_migration WHERE version<=25 ORDER BY version').all(),
+        db.prepare('SELECT * FROM schema_migration WHERE version<=26 ORDER BY version').all(),
       ).toEqual(registry);
       expect(db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
-        version: 26,
+        version: 27,
       });
     }
     const before = db.serialize();
@@ -1023,7 +1023,7 @@ describe('forward request-review migration', () => {
       entry: db.prepare('SELECT * FROM local_network_tab_entry').all(),
       registry: db.prepare('SELECT * FROM schema_migration ORDER BY version').all(),
     };
-    expect(applyMigrations(db)).toBe(25);
+    expect(applyMigrations(db)).toBe(26);
     expect(db.prepare('SELECT * FROM campaign_creation_cursor').all()).toEqual(before.cursor);
     expect(db.prepare('SELECT * FROM local_network_tab_entry').all()).toEqual(before.entry);
     expect(
@@ -1034,7 +1034,7 @@ describe('forward request-review migration', () => {
     for (const table of DEVICE_REQUEST_REVIEW_TABLES)
       expect(db.prepare(`SELECT * FROM ${table}`).all()).toEqual([]);
     const stable = db.serialize();
-    expect(applyMigrations(db)).toBe(25);
+    expect(applyMigrations(db)).toBe(26);
     expect(db.serialize().equals(stable)).toBe(true);
   });
 });

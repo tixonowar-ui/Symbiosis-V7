@@ -1,4 +1,5 @@
 import { NPC_TABLES } from './migrations/0015-persistent-npc.js';
+import { LOCAL_SEAT_HANDOFF_IDENTITIES } from './migrations/0026-local-seat-handoff.js';
 import { npcIdentityInUse, campaignEnemyIdentityInUse } from './npc-identities.js';
 import {
   CAMPAIGN_LIFECYCLE_TABLES,
@@ -927,7 +928,8 @@ function schema(db: Database.Database): void {
     row['version'] !== 22 &&
     row['version'] !== 23 &&
     row['version'] !== 24 &&
-    row['version'] !== 25
+    row['version'] !== 25 &&
+    row['version'] !== 26
   )
     return fail();
   if (
@@ -943,7 +945,8 @@ function schema(db: Database.Database): void {
     row['version'] === 22 ||
     row['version'] === 23 ||
     row['version'] === 24 ||
-    row['version'] === 25
+    row['version'] === 25 ||
+    row['version'] === 26
   )
     probeSchemaTables(db, CAMPAIGN_LOBBY_TABLES);
   if (db.prepare('SELECT 1 FROM schema_migration WHERE version=14').get() !== undefined)
@@ -959,7 +962,8 @@ function schema(db: Database.Database): void {
     row['version'] === 22 ||
     row['version'] === 23 ||
     row['version'] === 24 ||
-    row['version'] === 25
+    row['version'] === 25 ||
+    row['version'] === 26
   )
     probeSchemaTables(db, NPC_TABLES);
   probeSchemaTables(db, NETWORK_APPLICATION_TABLES);
@@ -978,7 +982,8 @@ function schema(db: Database.Database): void {
     row['version'] === 22 ||
     row['version'] === 23 ||
     row['version'] === 24 ||
-    row['version'] === 25
+    row['version'] === 25 ||
+    row['version'] === 26
   )
     probeSchemaTables(db, DEVICE_REQUEST_REVIEW_TABLES);
   if (
@@ -995,7 +1000,8 @@ function schema(db: Database.Database): void {
     row['version'] === 22 ||
     row['version'] === 23 ||
     row['version'] === 24 ||
-    row['version'] === 25
+    row['version'] === 25 ||
+    row['version'] === 26
   )
     probeSchemaTables(db, CAMPAIGN_ADMISSION_TABLES);
 }
@@ -1019,7 +1025,8 @@ function hasRequestReviewSchema(db: Database.Database): boolean {
     version !== 22 &&
     version !== 23 &&
     version !== 24 &&
-    version !== 25
+    version !== 25 &&
+    version !== 26
   )
     return fail();
   return (
@@ -1037,7 +1044,8 @@ function hasRequestReviewSchema(db: Database.Database): boolean {
     version === 22 ||
     version === 23 ||
     version === 24 ||
-    version === 25
+    version === 25 ||
+    version === 26
   );
 }
 function owner(db: Database.Database, id: string): void {
@@ -2472,7 +2480,8 @@ function readHistory(
     version === 22 ||
     version === 23 ||
     version === 24 ||
-    version === 25
+    version === 25 ||
+    version === 26
   ) {
     for (const [table, records, key] of [
       ['local_network_lane_binding', review.lanes, 'request_id'],
@@ -2654,6 +2663,78 @@ export function readLocalNetworkApplicationEvent(
     return { input: event.input, receipt: event.receipt, current: h.current };
   });
 }
+/** The last verified #171 navigation can restore an empty setup's existing technical session. */
+export function readLocalNetworkZeroSeatReturn(
+  db: Database.Database,
+  scope: LocalNetworkScope,
+  exactEntry?: { requestId: string; expectedProjectionRevision: number; exitNavigationId: string },
+) {
+  return read(db, scope.ownerDeviceId, () => {
+    const tab = readOwnedLocalNetworkTab(db, scope.ownerDeviceId, scope.networkScopeId);
+    if (tab?.lifecycleState !== 'UNBOUND') return null;
+    const { current, events } = readHistory(db, tab);
+    const tail = events.at(-1)?.input;
+    const replay =
+      exactEntry !== undefined &&
+      tail?.eventId === `navigation:${exactEntry.requestId}` &&
+      tail.clientRequestJsonOrNull ===
+        canonical({
+          protocolVersion: 3,
+          messageType: 'ordinary.seat.control',
+          operation: 'RESUME_EMPTY',
+          requestId: exactEntry.requestId,
+          expectedProjectionRevision: exactEntry.expectedProjectionRevision,
+          exitNavigationId: exactEntry.exitNavigationId,
+        }) &&
+      tail.mutation.kind === 'NAVIGATE' &&
+      tail.mutation.targetFormId === 'NET-001' &&
+      tail.mutation.singleCandidateOrNull === null &&
+      tail.mutation.plannedAttemptIdOrNull === null;
+    const offset = replay ? -2 : -1;
+    if (
+      current.formId !== 'NET-001' ||
+      current.sessionOrNull === null ||
+      current.selectedCandidates.length !== 0 ||
+      current.pendingCommandIdOrNull !== null ||
+      events.at(offset - 1)?.receipt.formId !== 'NET-003'
+    )
+      return null;
+    const last = events.at(offset)?.input;
+    if (
+      !last ||
+      last.mutation.kind !== 'NAVIGATE' ||
+      last.mutation.targetFormId !== 'NET-001' ||
+      last.mutation.singleCandidateOrNull !== null ||
+      last.mutation.plannedAttemptIdOrNull !== null ||
+      last.clientRequestJsonOrNull === null ||
+      !last.eventId.startsWith('navigation:')
+    )
+      return null;
+    const nav = object(JSON.parse(last.clientRequestJsonOrNull) as unknown);
+    const exitNavigationId = last.eventId.slice('navigation:'.length);
+    if (
+      !Number.isSafeInteger(nav['expectedProjectionRevision']) ||
+      Number(nav['expectedProjectionRevision']) < 0 ||
+      !exitNavigationId ||
+      (replay && exactEntry.exitNavigationId !== exitNavigationId) ||
+      last.clientRequestJsonOrNull !==
+        canonical({
+          messageType: 'navigation.form-action',
+          protocolVersion: 2,
+          navigationRequestId: exitNavigationId,
+          sourceFormId: 'PLY-027',
+          actionKey: 'PLY-027::CTA::006',
+          expectedProjectionRevision: nav['expectedProjectionRevision'],
+        })
+    )
+      return null;
+    return {
+      exitNavigationId,
+      networkScopeId: tab.networkScopeId,
+      technicalSessionId: current.sessionOrNull.technicalSessionId,
+    };
+  });
+}
 export function readLocalNetworkOutbox(
   db: Database.Database,
   scope: LocalNetworkScope,
@@ -2793,6 +2874,14 @@ export function readLocalNetworkShellExitByNavigationId(
   ownerDeviceId: string,
   navigationRequestId: string,
 ): StoredLocalNetworkEvent | null {
+  const event = readLocalNetworkNavigationById(db, ownerDeviceId, navigationRequestId);
+  return event?.input.mutation.kind === 'SHELL_EXIT' ? event : null;
+}
+export function readLocalNetworkNavigationById(
+  db: Database.Database,
+  ownerDeviceId: string,
+  navigationRequestId: string,
+): StoredLocalNetworkEvent | null {
   return read(db, ownerDeviceId, () => {
     const id = `navigation:${text(navigationRequestId)}`,
       row = at(db, 'local_network_application_event', 'event_id', id);
@@ -2804,7 +2893,7 @@ export function readLocalNetworkShellExitByNavigationId(
         { ownerDeviceId, networkScopeId: uuid(row['network_scope_id']) },
         id,
       ) ?? fail();
-    return event.input.mutation.kind === 'SHELL_EXIT' ? event : null;
+    return event;
   });
 }
 function assertUnused(db: Database.Database, id: string): void {
@@ -2814,6 +2903,10 @@ function assertUnused(db: Database.Database, id: string): void {
 }
 /** Existing non-NPC namespace checks, shared with immutable NPC child recovery. */
 function assertUnusedOutsideNpc(db: Database.Database, id: string): void {
+  if (hasStoredIdentity(db, 'schema_migration', 'version', '26'))
+    for (const [table, columns] of LOCAL_SEAT_HANDOFF_IDENTITIES)
+      for (const column of columns)
+        if (hasStoredIdentity(db, table, column, id)) return fail('IDEMPOTENCY_CONFLICT');
   if (id === loadDeviceId(db)) return fail('IDEMPOTENCY_CONFLICT');
   for (const [table, columns] of [
     ['local_gm_profile', ['profile_id']],

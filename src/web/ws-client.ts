@@ -17,6 +17,28 @@ import {
   enemyBrowserDestination,
 } from './forms/enm/enemy-authoring-application.js';
 import { enemyLibrarySelectionConfirmed } from './forms/enm/enemy-library-confirmation.js';
+import { ORDINARY_SEAT_ACK, ordinarySeatViewValue } from '@shared/ordinary-seat.js';
+import type { OrdinarySeatControlV3Message } from '@shared/ordinary-seat.js';
+import {
+  checkedSeatReceipt,
+  checkedSeatView,
+  eligibleSeatTargets,
+  emptySeatScope,
+  matchesEmptySeatReturn,
+  readEmptySeatReturn,
+  writeEmptySeatReturn,
+  readSeatDelivery,
+  seatAckRequest,
+  seatBinding,
+  sameActiveSeatRefresh,
+  writeSeatDelivery,
+} from './forms/ply/ordinary-seat-client.js';
+import type {
+  EmptySeatReturn,
+  EmptySeatScope,
+  PendingSeatDelivery,
+  SeatDelivery,
+} from './forms/ply/ordinary-seat-client.js';
 import { monsterStatDraftPatchValue } from '@shared/monster-stat-roll.js';
 import {
   isEnemyLibraryForm,
@@ -685,6 +707,7 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
     );
   },
   isWorkflowCommandId: (value): value is WorkflowCommandId =>
+    value === ORDINARY_SEAT_ACK ||
     ENEMY_AUTHORING_WORKFLOWS.some((id) => id === value) ||
     NPC_WORKFLOW_COMMAND_IDS.some((id) => id === value) ||
     isCampaignLifecycleWorkflow(value) ||
@@ -2006,6 +2029,7 @@ export type ConfirmedProjectionSnapshot = (
 ) & {
   /** An acknowledged ART-only edit leaves the user's other unsubmitted fields intact. */
   readonly enemyEditorRevision?: number;
+  readonly canResumeOrdinarySeat?: boolean;
 };
 
 interface ConfirmedAbandonmentLayer {
@@ -2024,14 +2048,23 @@ export type ConfirmedPresentationLayer =
   | ConfirmedAbandonmentLayer
   | ConfirmedInvalidWeaponProfileLayer
   | {
-      readonly formId: 'NET-020' | 'NET-021' | 'NET-022' | 'CMP-014' | 'CMP-015' | 'NET-023';
+      readonly formId:
+        | 'NET-020'
+        | 'NET-021'
+        | 'NET-022'
+        | 'CMP-014'
+        | 'CMP-015'
+        | 'NET-023'
+        | 'PLY-027'
+        | 'PLY-029'
+        | 'PLY-030';
       readonly path: string;
       readonly projection: JsonObject;
       readonly availableActionKeys: readonly ActionKey[];
     };
 
 export type WebClientState =
-  | { readonly kind: 'awaiting-snapshot' }
+  | { readonly kind: 'awaiting-snapshot'; readonly localHandoff?: true }
   | { readonly kind: 'client-error'; readonly detail: string }
   | { readonly kind: 'connecting' }
   | {
@@ -2068,6 +2101,9 @@ export type FormActionRequestResult =
   { readonly ok: false; readonly detail: string } | { readonly ok: true };
 
 export interface ProjectionConnection {
+  selectOrdinarySeat(targetSeatId: string): FormActionRequestResult;
+  resumeOrdinarySeat(): FormActionRequestResult;
+  returnOrdinaryLibrary(selectedSourceUuids: readonly string[]): FormActionRequestResult;
   replaceNpcStage(edit: NpcStageEdit): FormActionRequestResult;
   stageNpcInput(edit: NpcStageEdit): FormActionRequestResult;
   applyNpcInput(): FormActionRequestResult;
@@ -4307,6 +4343,52 @@ function decodePresentationLayers(
 ): DecodeResult<readonly ConfirmedPresentationLayer[]> {
   const layers = message.presentation.layers;
   if (layers.length === 0) return { ok: true, value: [] };
+  if (baseFormId === 'APP-003' || baseFormId === 'PLY-001') {
+    const layer = layers[0];
+    if (
+      layer === undefined ||
+      layers.length !== 1 ||
+      layer.routeBindings.length !== 0 ||
+      !executableWorkflowCommandIds.includes(ORDINARY_SEAT_ACK) ||
+      (layer.formId !== 'PLY-027' && layer.formId !== 'PLY-029' && layer.formId !== 'PLY-030')
+    )
+      return unrecognized('$.ordinarySeat.layer', null);
+    try {
+      const v = checkedSeatView(layer.roleFilteredPayload, layer.formId, layer.availableActionKeys);
+      if (baseFormId === 'PLY-001') {
+        const ownSeat = baseProjection['controllerSeat'];
+        const singleton =
+          v.ordinarySeatView === 'ROSTER' &&
+          v.revision === 0 &&
+          v.activeSeatIdOrNull === ownSeat &&
+          v.roster.length === 1 &&
+          v.roster[0]?.seatId === ownSeat &&
+          v.roster[0].ordinal === 1 &&
+          layer.availableActionKeys.length === 0 &&
+          message.presentation.base.availableActionKeys.length === 0;
+        if (!(singleton || (v.ordinarySeatView === 'ACTIVE' && v.seatId === ownSeat)))
+          return unrecognized('$.ordinarySeat.layer', null);
+      } else if (
+        (v.ordinarySeatView !== 'ROSTER' && v.ordinarySeatView !== 'CURTAIN') ||
+        baseProjection['ordinarySeatView'] !== 'WAITING' ||
+        baseProjection['revision'] !== v.revision
+      )
+        return unrecognized('$.ordinarySeat.layer', null);
+      return {
+        ok: true,
+        value: [
+          {
+            formId: layer.formId,
+            projection: v,
+            path: layer.routeTemplate,
+            availableActionKeys: layer.availableActionKeys,
+          },
+        ],
+      };
+    } catch {
+      return unrecognized('$.ordinarySeat.layer', null);
+    }
+  }
   if (baseFormId === 'CMP-008') {
     const layer = layers[0];
     if (
@@ -4548,7 +4630,30 @@ function decodeConfirmedSnapshot(
   )
     return unrecognized('$.executableWorkflowCommandIds', CAMPAIGN_CREATE_COMMAND_ID);
   let projection: DecodeResult<JsonObject>;
-  if (isEnemyAuthoringForm(base.formId)) {
+  if (
+    base.formId === 'APP-003' ||
+    (base.formId === 'APP-004' && base.roleFilteredPayload['ordinarySeatView'] === 'LIBRARY')
+  ) {
+    try {
+      if (base.formId === 'APP-004' && message.presentation.layers.length !== 0)
+        return unrecognized('$.ordinarySeat.library', null);
+      if (
+        !executableWorkflowCommandIds.includes(ORDINARY_SEAT_ACK) ||
+        base.routeBindings.length !== 0
+      )
+        return unrecognized('$.ordinarySeat.base', null);
+      const v = checkedSeatView(base.roleFilteredPayload, base.formId, base.availableActionKeys);
+      if (
+        message.revisions.stateRevision !== v.revision ||
+        message.revisions.actorVisibilityRevision !== v.revision ||
+        message.revisions.projectionRevision !== v.revision
+      )
+        return unrecognized('$.ordinarySeat.revisions', null);
+      projection = { ok: true, value: v };
+    } catch {
+      return unrecognized('$.ordinarySeat.base', null);
+    }
+  } else if (isEnemyAuthoringForm(base.formId)) {
     try {
       const p = enemyAuthoringProjectionValue(base.roleFilteredPayload);
       if (
@@ -4661,7 +4766,7 @@ function decodeConfirmedSnapshot(
     try {
       const p = campaignOwnerSnapshotValue(base.formId, base.roleFilteredPayload);
       if (
-        message.presentation.layers.length !== 0 ||
+        (message.presentation.layers.length !== 0 && base.formId !== 'PLY-001') ||
         base.routeBindings[0]?.value !== p.campaignId ||
         !sameNetworkRevisions(message.revisions, p) ||
         (base.formId === 'PLY-001' &&
@@ -4671,7 +4776,10 @@ function decodeConfirmedSnapshot(
         return unrecognized('$.presentation', null);
       const expected =
         base.formId === 'PLY-001'
-          ? []
+          ? base.availableActionKeys.includes('PLY-001::CTA::015') &&
+            executableWorkflowCommandIds.includes(ORDINARY_SEAT_ACK)
+            ? ['PLY-001::CTA::015' as const]
+            : []
           : campaignLobbyPlayerActions(
               campaignLobbyPlayerProjectionValue(base.roleFilteredPayload),
               executableWorkflowCommandIds,
@@ -4763,7 +4871,14 @@ function decodeConfirmedSnapshot(
         return unrecognized('$.presentation.base.routeBindings', null);
       const actions = exactSymbiontActionKeys(
         base.availableActionKeys,
-        expectedNetworkActions(base.formId, p, executableWorkflowCommandIds),
+        [
+          ...expectedNetworkActions(base.formId, p, executableWorkflowCommandIds),
+          ...(base.formId === 'NET-003' &&
+          executableWorkflowCommandIds.includes(ORDINARY_SEAT_ACK) &&
+          base.availableActionKeys.includes('NET-003::CTA::004')
+            ? ['NET-003::CTA::004' as const]
+            : []),
+        ],
         '$.presentation.base.availableActionKeys',
       );
       if (!actions.ok) return actions;
@@ -5668,6 +5783,10 @@ function visibleSnapshotCore(
   skillCardDraft: CharacterSkillCardDraft | null = null,
   manualCompositionDraft: ManualCompositionDraft | null = null,
 ): ConfirmedProjectionSnapshot {
+  if (snapshot.projection['ordinarySeatView'] === 'LIBRARY' && commandPending)
+    return { ...snapshot, availableActionKeys: [] };
+  if (snapshot.canResumeOrdinarySeat && commandPending)
+    return { ...snapshot, canResumeOrdinarySeat: false };
   if (Object.hasOwn(snapshot.projection, 'correctionContext') || isPostSaveForm(snapshot.formId))
     return commandPending ? { ...snapshot, availableActionKeys: [] } : snapshot;
   if (snapshot.formId === 'CHR-001' && (identity?.state.dirty === true || commandPending)) {
@@ -5856,7 +5975,8 @@ function activePresentedForm(snapshot: ConfirmedProjectionSnapshot): {
   readonly formId: SupportedPresentationFormId;
   readonly projection: JsonObject;
 } {
-  return snapshot.layers.at(-1) ?? snapshot;
+  const layer = snapshot.layers.at(-1);
+  return snapshot.formId === 'PLY-001' ? snapshot : (layer ?? snapshot);
 }
 
 function sameBasePresentation(
@@ -6070,10 +6190,21 @@ function decodeAddressableRouteSnapshot(
   return decoded;
 }
 
+const ORDINARY_NAV = new Map<ActionKey, string>([
+  ['NET-003::CTA::004', 'SETUP'],
+  ['APP-003::CTA::001', 'LIBRARY'],
+  ['APP-003::CTA::004', 'ROSTER'],
+  ['APP-003::CTA::002', 'NET-003'],
+  ['PLY-027::CTA::005', 'SETUP'],
+  ['PLY-027::CTA::006', 'APP-002'],
+  ['PLY-001::CTA::015', 'ROSTER'],
+]);
+
 function decodeFormActionSnapshot(
   message: ProjectionSnapshotV2Message,
   pending: FormActionIntentV2Message,
   previous: ConfirmedProjectionSnapshot,
+  emptyReturn: EmptySeatReturn | null,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   if (message.presentation.assignment.correlationId !== pending.navigationRequestId) {
     return unrecognized(
@@ -6279,10 +6410,16 @@ function decodeFormActionSnapshot(
         (n['connectionState'] === 'CONNECTED_TECHNICAL' || n['connectionState'] === 'LOST') &&
         decoded.value.revisions.stateRevision > 0 &&
         decoded.value.revisions.projectionRevision > decoded.value.revisions.stateRevision;
+      const menuEntry =
+        emptyReturn?.request?.requestId === pending.navigationRequestId
+          ? matchesEmptySeatReturn(emptyReturn, decoded.value)
+          : sameNetworkRevisions(decoded.value.revisions, NO_KNOWN_REVISIONS) &&
+            n['draftRevision'] === 0 &&
+            n['campaignIdOrNull'] === null &&
+            n['connectionState'] === 'NO_TECHNICAL_SESSION' &&
+            n['pendingCommandIdOrNull'] === null;
       if (
-        (previous.formId === 'APP-002' &&
-          (!sameNetworkRevisions(decoded.value.revisions, NO_KNOWN_REVISIONS) ||
-            n['deviceId'] !== p['deviceId'])) ||
+        (previous.formId === 'APP-002' && (!menuEntry || n['deviceId'] !== p['deviceId'])) ||
         (previous.formId === 'CHR-040' &&
           (n['pendingCommandIdOrNull'] !== null ||
             n['commandId'] !== null ||
@@ -9809,6 +9946,36 @@ export function connectProjection(
     request: EnemyLibrarySelectionRequest;
     acknowledged: boolean;
   } | null = null;
+  let emptyScope: EmptySeatScope | null = null;
+  let emptyReturn = readEmptySeatReturn();
+  const setEmptyReturn = (value: EmptySeatReturn | null) => {
+    writeEmptySeatReturn(value);
+    emptyReturn = value;
+  };
+  let seatDelivery = readSeatDelivery();
+  let seatControl: OrdinarySeatControlV3Message | null = null;
+  let selectedSeat: { sourceSeatId: string; targetOrdinal: number } | null = null;
+  let seatAckSent = false;
+  let seatReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let seatAuthorityKnown = seatDelivery !== null;
+  let seatRevision = -1;
+  let durableHandoff = seatDelivery !== null;
+  const retiredSeatPeerIds = new Set<string>();
+  const retiredSeatAcks = new Set<string>();
+  let seatNavigation: {
+    id: string;
+    destination: string;
+    fromOwner?: { seatId: string; chooserRevision: number };
+  } | null = null;
+  let seatCapabilities: readonly WorkflowCommandId[] = [];
+  const setSeatDelivery = (delivery: SeatDelivery | null) => {
+    if (delivery === null && seatAckSent && seatDelivery?.completed === false) {
+      retiredSeatAcks.add(seatDelivery.request.commandId);
+      seatAckSent = false;
+    }
+    writeSeatDelivery(delivery);
+    seatDelivery = delivery;
+  };
   let pendingFormAction: FormActionIntentV2Message | null = null;
   let pendingAddressableRoute: AddressableRouteIntentV2Message | null = null;
   let playerContextId: string | null = null;
@@ -9895,6 +10062,7 @@ export function connectProjection(
     socket.send(encoded.text);
   };
   function acceptPeerState(message: CampaignPeerStateV3Message): void {
+    if (retiredSeatPeerIds.has(message.subscriptionId)) return;
     const retired = retiredPeerSubscriptions.get(message.subscriptionId);
     // Only a known retired subscription can have an already queued final frame.
     if (
@@ -10053,6 +10221,9 @@ export function connectProjection(
   }
 
   const commandPending = (ignoreLocalNpcInput = false) =>
+    seatControl !== null ||
+    seatNavigation !== null ||
+    seatAckSent ||
     pendingEnemySelection !== null ||
     (!ignoreLocalNpcInput && npc.dirty) ||
     npc.pending ||
@@ -10432,6 +10603,118 @@ export function connectProjection(
           skillSelectionDraft,
         );
 
+  const purgeSeatScreen = () => {
+    // An already queued frame can be discarded by subscription ID without retaining its former owner.
+    if (peerSubscription !== null) retiredSeatPeerIds.add(peerSubscription.requestId);
+    for (const id of retiredPeerSubscriptions.keys()) retiredSeatPeerIds.add(id);
+    retiredPeerSubscriptions.clear();
+    lastSnapshot = null;
+    peerSubscription = null;
+    peerState = null;
+    pendingPeerControl = null;
+    peerReconciliationCommandId = null;
+    peerHeads.clear();
+    peerDisconnectBindings.clear();
+    peerReceiptBindings.clear();
+    onCampaignPeerState?.(null);
+    pendingOwnerCommand = null;
+    pendingNetworkCommand = null;
+    pendingNetworkRefusal = null;
+    absentNetworkCommandId = null;
+    playerContextId = null;
+    identity = null;
+    onIdentityDraft(null);
+    pendingPostSave = null;
+    pendingCheckpoint = null;
+    pendingRollCommit = null;
+    pendingSetDecision = null;
+    pendingAddressableRoute = null;
+    downloadedReceipts.clear();
+    clearNetworkDraft();
+    publishNetworkDraft();
+    onState({ kind: 'awaiting-snapshot', localHandoff: true });
+    window.history.replaceState(null, '', '/local/app-003');
+  };
+  const sendSeatControl = (control: OrdinarySeatControlV3Message): void => {
+    const encoded = encodeClientMessageV3(control, WEB_PROTOCOL_VOCABULARY);
+    if (!encoded.ok || socket?.readyState !== WebSocket.OPEN)
+      throw new Error('Seat control unavailable');
+    seatControl = control;
+    try {
+      socket.send(encoded.text);
+    } catch {
+      socket.close(1000, 'seat control delivery interrupted');
+      throw new Error('Seat selection interrupted');
+    }
+  };
+  const resumeOrdinarySeat = (): FormActionRequestResult => {
+    if (
+      disposed ||
+      terminal ||
+      socket?.readyState !== WebSocket.OPEN ||
+      seatDelivery?.completed !== true ||
+      lastSnapshot?.canResumeOrdinarySeat !== true ||
+      commandPending()
+    )
+      return { ok: false, detail: 'Восстановление места недоступно.' };
+    try {
+      sendSeatControl({
+        protocolVersion: 3,
+        messageType: 'ordinary.seat.control',
+        operation: 'RESUME',
+        requestId: createRequestId('reconnect'),
+        deliveryKeyOrNull: seatDelivery.deliveryKey,
+      });
+      notifyReady();
+      return { ok: true };
+    } catch {
+      return { ok: false, detail: 'Соединение с хостом недоступно.' };
+    }
+  };
+  const sendSeatAck = (delivery: PendingSeatDelivery): void => {
+    const encoded = encodeClientMessage(delivery.request, WEB_PROTOCOL_VOCABULARY);
+    if (!encoded.ok || socket?.readyState !== WebSocket.OPEN)
+      throw new Error('Seat acknowledgement unavailable');
+    seatAckSent = true;
+    try {
+      socket.send(encoded.text);
+    } catch {
+      socket.close(1000, 'seat acknowledgement delivery interrupted');
+    }
+  };
+  const resetSeatTransport = () => {
+    if (
+      lastSnapshot?.formId === 'PLY-001' &&
+      (lastSnapshot.executableWorkflowCommandIds.includes(ORDINARY_SEAT_ACK) ||
+        seatDelivery !== null)
+    )
+      purgeSeatScreen();
+    seatControl = null;
+    selectedSeat = null;
+    seatNavigation = null;
+    seatAckSent = false;
+  };
+
+  const cancelSeatReconnect = () => {
+    if (seatReconnectTimer !== null) clearTimeout(seatReconnectTimer);
+    seatReconnectTimer = null;
+  };
+  const scheduleSeatReconnect = () => {
+    if (
+      !seatAuthorityKnown ||
+      disposed ||
+      terminal ||
+      seatReconnectTimer !== null ||
+      !navigator.onLine
+    )
+      return;
+    // Retry the transport only. Activation still requires the original human ACK and a confirmed receipt.
+    seatReconnectTimer = setTimeout(() => {
+      seatReconnectTimer = null;
+      if (!disposed && !terminal && socket === null && deviceId !== null) openTransport(deviceId);
+    }, 1000);
+  };
+
   const closeAfterTerminalState = () => {
     if (
       socket !== null &&
@@ -10444,6 +10727,7 @@ export function connectProjection(
   const failProtocol = (refusal: DecodeRefusal, detail: string) => {
     if (disposed || terminal) return;
     terminal = true;
+    resetSeatTransport();
     npc.dispose();
     onNpcControls(null, null);
     pendingOwnerCommand = null;
@@ -10466,6 +10750,7 @@ export function connectProjection(
     pendingFormAction = null;
     pendingAddressableRoute = null;
     stagedCapabilities = null;
+    if (seatAuthorityKnown) refusal = { code: 'UNRECOGNIZED', path: '$.ordinarySeat', value: null };
     const response = {
       messageType: 'protocol.refusal',
       protocolVersion: WIRE_PROTOCOL_VERSION,
@@ -10625,6 +10910,13 @@ export function connectProjection(
 
   const adoptSnapshot = (next: ConfirmedProjectionSnapshot, reconnect: boolean): void => {
     const previous = lastSnapshot;
+    if (
+      !durableHandoff &&
+      next.formId !== 'APP-003' &&
+      next.projection['ordinarySeatView'] === undefined &&
+      !next.layers.some((layer) => layer.formId === 'PLY-029')
+    )
+      seatAuthorityKnown = false;
     if (next.formId !== 'NET-017' && pendingGmDraft === null) clearGmDraft();
     if (next.formId === 'NET-017' && gmEdit !== null) {
       const p = gmRequestProjection(next.projection);
@@ -10650,7 +10942,10 @@ export function connectProjection(
               networkEditFromProjection(next.formId, next.projection)?.variant)))
     )
       clearNetworkDraft();
-    if (isNetworkApplicationForm(next.formId) || isCampaignOwnerForm(next.formId)) {
+    if (next.layers[0]?.formId === 'PLY-029') {
+      networkScopeId = null;
+      networkContextTicket(null);
+    } else if (isNetworkApplicationForm(next.formId) || isCampaignOwnerForm(next.formId)) {
       networkScopeId = next.projection['networkScopeId'] as string;
       networkContextTicket(networkScopeId);
       gmLocalContextId = null;
@@ -10925,7 +11220,11 @@ export function connectProjection(
         });
         return;
       }
-      onState({ kind: 'awaiting-snapshot' });
+      onState(
+        seatAuthorityKnown
+          ? { kind: 'awaiting-snapshot', localHandoff: true }
+          : { kind: 'awaiting-snapshot' },
+      );
     };
 
     activeSocket.onmessage = (event) => {
@@ -10960,6 +11259,19 @@ export function connectProjection(
         }
         const message = decoded.value;
         if (message.messageType === 'command.result' || message.messageType === 'command.replay') {
+          if (retiredSeatAcks.has(message.receipt.commandId)) return;
+          if (
+            seatAckSent &&
+            seatDelivery?.completed === false &&
+            message.receipt.commandId === seatDelivery.request.commandId
+          ) {
+            try {
+              setSeatDelivery(checkedSeatReceipt(seatDelivery, message.receipt));
+            } catch {
+              failUnexpected('$.receipt', null, 'Invalid local handoff receipt.');
+            }
+            return;
+          }
           if (pendingOwnerCommand !== null) {
             try {
               const receipt = admissionOwnerBrowserReceipt(
@@ -11187,6 +11499,23 @@ export function connectProjection(
           return;
         }
         if (message.messageType === 'command.refusal') {
+          if (retiredSeatAcks.has(message.commandId)) return;
+          if (
+            seatAckSent &&
+            seatDelivery?.completed === false &&
+            message.commandId === seatDelivery.request.commandId
+          ) {
+            seatAckSent = false;
+            setSeatDelivery(null);
+            sendSeatControl({
+              protocolVersion: 3,
+              messageType: 'ordinary.seat.control',
+              operation: 'RESUME',
+              requestId: createRequestId('reconnect'),
+              deliveryKeyOrNull: null,
+            });
+            return;
+          }
           if (
             pendingOwnerCommand !== null &&
             message.commandId === pendingOwnerCommand.request.commandId
@@ -11344,7 +11673,24 @@ export function connectProjection(
           return;
         }
         if (message.messageType === 'protocol.refusal') {
+          if (
+            seatControl !== null &&
+            deviceId !== null &&
+            message.refusal.path === '$.ordinarySeat'
+          ) {
+            const old = socket;
+            const denied = seatControl.operation;
+            seatControl = null;
+            if (denied === 'RESUME') {
+              old?.close(1000, 'wait for authorised seat recovery');
+            } else {
+              openTransport(deviceId);
+              old?.close(1000, 'refresh rejected seat selection');
+            }
+            return;
+          }
           terminal = true;
+          resetSeatTransport();
           clearGmDraft();
           publishGmDraft();
           clearNetworkDraft();
@@ -11353,7 +11699,9 @@ export function connectProjection(
           publishCampaignDraft();
           onState({
             kind: 'host-refusal',
-            refusal: message.refusal,
+            refusal: seatAuthorityKnown
+              ? { code: 'UNRECOGNIZED', path: '$.ordinarySeat', value: null }
+              : message.refusal,
             snapshot: visibleLast(),
           });
           closeAfterTerminalState();
@@ -11913,6 +12261,259 @@ export function connectProjection(
         return;
       }
       if (message.messageType === 'projection.snapshot') {
+        const { base, layers, assignment } = message.presentation;
+        if (
+          base.formId === 'APP-003' ||
+          (base.formId === 'APP-004' &&
+            base.roleFilteredPayload['ordinarySeatView'] === 'LIBRARY') ||
+          layers.some((l) => l.formId === 'PLY-029') ||
+          durableHandoff ||
+          seatNavigation !== null ||
+          seatControl !== null ||
+          seatAckSent
+        ) {
+          const pair = stagedCapabilities;
+          const caps =
+            pair?.executableWorkflowCommandIds ??
+            lastSnapshot?.executableWorkflowCommandIds ??
+            seatCapabilities;
+          const candidate =
+            pair === null
+              ? decodeConfirmedSnapshot(message, caps)
+              : decodeReconnectSnapshot(message, pair, requestId);
+          if (
+            !candidate.ok ||
+            expectingCapabilities ||
+            !caps.includes(ORDINARY_SEAT_ACK) ||
+            (candidate.value.projection['deviceId'] !== undefined &&
+              candidate.value.projection['deviceId'] !== deviceId)
+          ) {
+            failUnexpected('$.ordinarySeat', null, 'Invalid local handoff projection.');
+            return;
+          }
+          const next = candidate.value,
+            payload = next.layers[0]?.projection ?? next.projection;
+          const kind = payload['ordinarySeatView'];
+          if (
+            retiredSeatAcks.has(assignment.correlationId) &&
+            assignment.reason === 'COMMAND_DESTINATION' &&
+            (kind === 'WAITING' || kind === 'CURTAIN' || kind === 'ROSTER') &&
+            next.formId === 'APP-003'
+          )
+            return;
+          const reconnect = pair !== null;
+          const journalView =
+            kind === 'WAITING' ||
+            kind === 'ACTIVE' ||
+            kind === 'CURTAIN' ||
+            (kind === 'ROSTER' && payload['activeSeatIdOrNull'] !== null);
+          const resume =
+            seatControl?.operation === 'RESUME' &&
+            assignment.reason === 'RECONNECT' &&
+            assignment.correlationId === seatControl.requestId;
+          const selected =
+            seatControl?.operation === 'SELECT' &&
+            assignment.reason === 'FORM_ACTION' &&
+            assignment.correlationId === seatControl.requestId &&
+            kind === 'CURTAIN' &&
+            selectedSeat !== null &&
+            payload['targetSeatId'] === seatControl.targetSeatId &&
+            payload['sourceSeatIdOrNull'] === selectedSeat.sourceSeatId &&
+            payload['targetOrdinal'] === selectedSeat.targetOrdinal &&
+            payload['revision'] === seatControl.expectedProjectionRevision + 1;
+          const libraryReturned =
+            seatControl?.operation === 'RETURN_LIBRARY' &&
+            assignment.reason === 'FORM_ACTION' &&
+            assignment.correlationId === seatControl.requestId &&
+            kind === 'SETUP' &&
+            payload['selectedCount'] === seatControl.selectedSourceUuids.length;
+          const navigated =
+            seatNavigation !== null &&
+            assignment.reason === 'FORM_ACTION' &&
+            assignment.correlationId === seatNavigation.id &&
+            (seatNavigation.destination === kind || seatNavigation.destination === next.formId) &&
+            (seatNavigation.fromOwner === undefined ||
+              (kind === 'ROSTER' &&
+                payload['activeSeatIdOrNull'] === seatNavigation.fromOwner.seatId &&
+                payload['revision'] === seatNavigation.fromOwner.chooserRevision &&
+                Array.isArray(payload['roster']) &&
+                payload['roster'].length >= 2));
+          const committed =
+            seatAckSent &&
+            seatDelivery?.completed === false &&
+            seatDelivery.receiptIdOrNull !== null &&
+            assignment.reason === 'COMMAND_DESTINATION' &&
+            assignment.correlationId === seatDelivery.request.commandId;
+          const activeRefresh =
+            assignment.reason === 'HOST_SYSTEM_EVENT' &&
+            kind === 'ACTIVE' &&
+            seatDelivery?.completed === true &&
+            !seatAckSent &&
+            seatControl === null &&
+            seatNavigation === null &&
+            sameActiveSeatRefresh(lastSnapshot, next);
+          const push =
+            assignment.reason === 'HOST_SYSTEM_EVENT' &&
+            lastSnapshot !== null &&
+            (kind === 'WAITING' || kind === 'CURTAIN') &&
+            (lastSnapshot.formId === 'APP-003' ||
+              lastSnapshot.formId === 'APP-002' ||
+              lastSnapshot.formId === 'APP-004' ||
+              ((lastSnapshot.formId.startsWith('CHR-') ||
+                lastSnapshot.formId === 'APP-009' ||
+                lastSnapshot.formId === 'APP-010') &&
+                lastSnapshot.projection['ownerContext'] !== 'GM_ARCHIVE_EXPORT') ||
+              isCampaignOwnerForm(lastSnapshot.formId) ||
+              isNetworkApplicationForm(lastSnapshot.formId));
+          if (
+            committed &&
+            kind === 'ACTIVE' &&
+            seatDelivery?.completed === false &&
+            payload['revision'] !== seatDelivery.request.expectedRevisions.stateRevision + 1
+          ) {
+            failUnexpected(
+              '$.ordinarySeat.revision',
+              null,
+              'Seat acknowledgement and destination revisions differ.',
+            );
+            return;
+          }
+          if (
+            (journalView &&
+              typeof payload['revision'] === 'number' &&
+              payload['revision'] < seatRevision) ||
+            !(
+              resume ||
+              selected ||
+              libraryReturned ||
+              navigated ||
+              committed ||
+              push ||
+              activeRefresh ||
+              reconnect
+            ) ||
+            (kind === 'LIBRARY' &&
+              !(
+                navigated &&
+                seatNavigation?.destination === 'LIBRARY' &&
+                !durableHandoff &&
+                seatDelivery === null &&
+                networkScopeId !== null
+              )) ||
+            (next.formId === 'PLY-001' && kind !== 'ACTIVE') ||
+            (committed &&
+              kind !== 'ACTIVE' &&
+              kind !== 'WAITING' &&
+              kind !== 'CURTAIN' &&
+              kind !== 'ROSTER') ||
+            (kind === 'ACTIVE' &&
+              (!(resume || committed || activeRefresh) ||
+                seatDelivery === null ||
+                payload['seatId'] !== seatBinding(seatDelivery).targetSeatId ||
+                payload['receiptId'] !== seatDelivery.receiptIdOrNull)) ||
+            (kind === undefined && !navigated)
+          ) {
+            failUnexpected(
+              '$.ordinarySeat.assignment',
+              null,
+              'Uncorrelated local handoff projection.',
+            );
+            return;
+          }
+          if (navigated && kind === 'SETUP' && lastSnapshot?.formId === 'NET-003')
+            emptyScope = emptySeatScope(lastSnapshot);
+          if (
+            navigated &&
+            pendingFormAction?.actionKey === 'PLY-027::CTA::006' &&
+            next.formId === 'APP-002' &&
+            emptyScope !== null
+          ) {
+            setEmptyReturn({
+              ...emptyScope,
+              exitNavigationId: pendingFormAction.navigationRequestId,
+              request: null,
+            });
+            emptyScope = null;
+          }
+          if (journalView) {
+            emptyScope = null;
+            if (emptyReturn !== null) setEmptyReturn(null);
+          }
+          seatAuthorityKnown = kind !== undefined;
+          if (journalView && typeof payload['revision'] === 'number') {
+            seatRevision = payload['revision'];
+            if (seatRevision > 0) durableHandoff = true;
+          }
+          if (navigated && kind === undefined) seatRevision = -1;
+          stagedCapabilities = null;
+          if (selected || libraryReturned || resume || push) {
+            seatControl = null;
+            selectedSeat = null;
+          }
+          if (navigated || push) {
+            seatNavigation = null;
+            pendingFormAction = null;
+          }
+          if (committed) seatAckSent = false;
+          seatCapabilities = caps;
+          if (kind !== undefined && kind !== 'ACTIVE') {
+            purgeSeatScreen();
+            if (
+              kind === 'CURTAIN' ||
+              kind === 'WAITING' ||
+              (kind === 'ROSTER' && payload['activeSeatIdOrNull'] !== null)
+            ) {
+              networkScopeId = null;
+              networkContextTicket(null);
+            }
+            if (
+              (kind === 'WAITING' &&
+                seatDelivery?.completed &&
+                typeof payload['revision'] === 'number' &&
+                payload['revision'] > seatDelivery.revision) ||
+              (kind === 'CURTAIN' &&
+                seatDelivery !== null &&
+                payload['handoffId'] !== seatBinding(seatDelivery).handoffId) ||
+              kind === 'ROSTER' ||
+              kind === 'SETUP' ||
+              committed
+            )
+              setSeatDelivery(null);
+          }
+          if (
+            kind === 'ACTIVE' &&
+            seatDelivery?.completed === false &&
+            seatDelivery.receiptIdOrNull !== null
+          ) {
+            const { targetSeatId, handoffId, deliveryKey } = seatDelivery.request.payload;
+            setSeatDelivery({
+              completed: true,
+              revision: seatDelivery.request.expectedRevisions.stateRevision + 1,
+              receiptIdOrNull: seatDelivery.receiptIdOrNull,
+              targetSeatId,
+              handoffId,
+              deliveryKey,
+            });
+          }
+          const mayResume =
+            kind === 'WAITING' &&
+            seatDelivery?.completed === true &&
+            payload['revision'] === seatDelivery.revision;
+          adoptSnapshot(mayResume ? { ...next, canResumeOrdinarySeat: true } : next, reconnect);
+          if (reconnect && kind !== undefined && seatDelivery !== null) {
+            if (seatDelivery.completed)
+              sendSeatControl({
+                protocolVersion: 3,
+                messageType: 'ordinary.seat.control',
+                operation: 'RESUME',
+                requestId: createRequestId('reconnect'),
+                deliveryKeyOrNull: seatDelivery.deliveryKey,
+              });
+            else sendSeatAck(seatDelivery);
+            notifyReady();
+          }
+          return;
+        }
         if (message.presentation.assignment.reason === 'HOST_SYSTEM_EVENT') {
           if (expectingCapabilities || stagedCapabilities !== null || lastSnapshot === null) {
             failUnexpected('$.messageType', null, 'System refresh interrupted reconnect.');
@@ -12486,7 +13087,18 @@ export function connectProjection(
             );
             return;
           }
-          snapshot = decodeFormActionSnapshot(message, pendingFormAction, lastSnapshot!);
+          snapshot = decodeFormActionSnapshot(
+            message,
+            pendingFormAction,
+            lastSnapshot!,
+            emptyReturn,
+          );
+          if (
+            snapshot.ok &&
+            pendingFormAction.actionKey === 'APP-002::CTA::003' &&
+            emptyReturn !== null
+          )
+            setEmptyReturn(null);
           pendingFormAction = null;
         }
         if (!snapshot.ok) {
@@ -12593,6 +13205,27 @@ export function connectProjection(
       }
       if (message.messageType === 'navigation.form-action.refusal') {
         if (
+          (seatControl?.operation === 'RETURN_LIBRARY' || seatControl?.operation === 'SELECT') &&
+          seatControl.requestId === message.navigationRequestId &&
+          deviceId !== null
+        ) {
+          seatControl = null;
+          selectedSeat = null;
+          purgeSeatScreen();
+          const old = socket;
+          openTransport(deviceId);
+          old?.close(1000, 'refresh unavailable selection');
+          return;
+        }
+        if (seatNavigation?.id === message.navigationRequestId && deviceId !== null) {
+          seatNavigation = null;
+          pendingFormAction = null;
+          const old = socket;
+          openTransport(deviceId);
+          old?.close(1000, 'refresh local seats');
+          return;
+        }
+        if (
           lastSnapshot === null ||
           pendingFormAction === null ||
           message.navigationRequestId !== pendingFormAction.navigationRequestId
@@ -12604,6 +13237,10 @@ export function connectProjection(
           );
           return;
         }
+        if (emptyReturn?.request?.requestId === pendingFormAction.navigationRequestId)
+          setEmptyReturn(
+            message.refusal.code === 'STALE_PROJECTION' ? { ...emptyReturn, request: null } : null,
+          );
         pendingFormAction = null;
         onState({
           kind: 'navigation-refusal',
@@ -12629,7 +13266,9 @@ export function connectProjection(
 
     activeSocket.onerror = () => {
       if (disposed || terminal || socket !== activeSocket) return;
+      resetSeatTransport();
       socket = null;
+      scheduleSeatReconnect();
       pendingFormAction = null;
       pendingAddressableRoute = null;
       stagedCapabilities = null;
@@ -12648,7 +13287,9 @@ export function connectProjection(
 
     activeSocket.onclose = (event) => {
       if (disposed || terminal || socket !== activeSocket) return;
+      resetSeatTransport();
       socket = null;
+      scheduleSeatReconnect();
       pendingFormAction = null;
       pendingAddressableRoute = null;
       stagedCapabilities = null;
@@ -12668,11 +13309,14 @@ export function connectProjection(
   };
 
   const openTransport = (currentDeviceId: string): void => {
+    cancelSeatReconnect();
     // Refusal refresh may reconnect without a preceding close event. NPC input stays
     // readonly until this transport delivers the checked capabilities/projection pair.
     npc.suspend();
     publishNpc();
     retiredPeerSubscriptions.clear();
+    retiredSeatPeerIds.clear();
+    retiredSeatAcks.clear();
     peerSubscription = null;
     peerState = null;
     pendingPeerControl = null;
@@ -12686,6 +13330,7 @@ export function connectProjection(
       reconnectRequestId: requestId,
       supportedWorkflowCommandIds: [
         IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+        ORDINARY_SEAT_ACK,
         SET_DECIDE_WORKFLOW_COMMAND_ID,
         ROLL_COMMIT_WORKFLOW_COMMAND_ID,
         WEAPON_PROFILE_SUBMIT_WORKFLOW,
@@ -12808,6 +13453,44 @@ export function connectProjection(
     }
     openTransport(deviceId);
   };
+
+  const suspendOrdinarySeat = () => {
+    if (
+      disposed ||
+      terminal ||
+      lastSnapshot === null ||
+      !(
+        seatAuthorityKnown ||
+        (lastSnapshot.formId === 'PLY-001' &&
+          lastSnapshot.executableWorkflowCommandIds.includes(ORDINARY_SEAT_ACK))
+      )
+    )
+      return;
+    const old = socket;
+    socket = null;
+    resetSeatTransport();
+    if (lastSnapshot?.formId === 'APP-003') purgeSeatScreen();
+    old?.close(1000, 'local handoff suspended');
+    onState({
+      kind: 'disconnected',
+      code: null,
+      detail: 'Ожидание соединения с хостом.',
+      snapshot: null,
+    });
+  };
+  const resumeOrdinaryPage = (event: PageTransitionEvent) => {
+    if (event.persisted && !disposed && !terminal && socket === null && deviceId !== null)
+      openTransport(deviceId);
+  };
+  const reconnectOrdinaryOnline = () => {
+    if (lastSnapshot?.canResumeOrdinarySeat && socket?.readyState === WebSocket.OPEN)
+      resumeOrdinarySeat();
+    else scheduleSeatReconnect();
+  };
+  window.addEventListener?.('online', reconnectOrdinaryOnline);
+  window.addEventListener?.('offline', suspendOrdinarySeat);
+  window.addEventListener?.('pagehide', suspendOrdinarySeat);
+  window.addEventListener?.('pageshow', resumeOrdinaryPage);
 
   void start().catch((error: unknown) => {
     if (disposed || terminal) return;
@@ -13985,6 +14668,11 @@ export function connectProjection(
     disconnect: () => {
       if (disposed) return;
       disposed = true;
+      cancelSeatReconnect();
+      window.removeEventListener?.('online', reconnectOrdinaryOnline);
+      window.removeEventListener?.('offline', suspendOrdinarySeat);
+      window.removeEventListener?.('pagehide', suspendOrdinarySeat);
+      window.removeEventListener?.('pageshow', resumeOrdinaryPage);
       npc.dispose();
       onNpcControls(null, null);
       clearGmDraft();
@@ -14747,6 +15435,85 @@ export function connectProjection(
       notifyReady();
       return { ok: true };
     },
+    resumeOrdinarySeat,
+    returnOrdinaryLibrary: (selectedSourceUuids) => {
+      if (
+        disposed ||
+        terminal ||
+        seatControl !== null ||
+        pendingFormAction !== null ||
+        commandPending() ||
+        pendingAddressableRoute !== null ||
+        lastSnapshot?.formId !== 'APP-004' ||
+        lastSnapshot.projection['ordinarySeatView'] !== 'LIBRARY' ||
+        !lastSnapshot.availableActionKeys.includes('APP-004::CTA::002') ||
+        socket?.readyState !== WebSocket.OPEN
+      )
+        return { ok: false, detail: 'Выбор персонажей недоступен.' };
+      const view = ordinarySeatViewValue(lastSnapshot.projection);
+      if (
+        view.ordinarySeatView !== 'LIBRARY' ||
+        selectedSourceUuids.length < 1 ||
+        selectedSourceUuids.length > 3 ||
+        new Set(selectedSourceUuids).size !== selectedSourceUuids.length ||
+        selectedSourceUuids.some(
+          (id) => !view.candidates.some((candidate) => candidate.sourceUuid === id),
+        )
+      )
+        return { ok: false, detail: 'Выберите до трёх персонажей из подтверждённого списка.' };
+      try {
+        sendSeatControl({
+          protocolVersion: 3,
+          messageType: 'ordinary.seat.control',
+          operation: 'RETURN_LIBRARY',
+          requestId: createRequestId('navigation'),
+          expectedProjectionRevision: lastSnapshot.revisions.projectionRevision,
+          libraryContext: view.libraryContext,
+          selectedSourceUuids: [...selectedSourceUuids],
+        });
+        notifyReady();
+        return { ok: true };
+      } catch {
+        return { ok: false, detail: 'Выбор персонажей не отправлен.' };
+      }
+    },
+    selectOrdinarySeat: (targetSeatId) => {
+      if (
+        disposed ||
+        terminal ||
+        lastSnapshot === null ||
+        socket?.readyState !== WebSocket.OPEN ||
+        commandPending() ||
+        pendingFormAction !== null ||
+        pendingAddressableRoute !== null
+      )
+        return { ok: false, detail: 'Дождитесь подтверждения хоста.' };
+      const form = activePresentedForm(lastSnapshot);
+      if (form.formId !== 'PLY-027' || !form.availableActionKeys.includes('PLY-027::CTA::003'))
+        return { ok: false, detail: 'Выбор места недоступен.' };
+      const view = ordinarySeatViewValue(form.projection);
+      if (view.ordinarySeatView !== 'ROSTER' || view.activeSeatIdOrNull === null)
+        return { ok: false, detail: 'Выберите доступное место.' };
+      const target = eligibleSeatTargets(view).find((s) => s.seatId === targetSeatId);
+      if (!target) return { ok: false, detail: 'Выберите доступное место.' };
+      try {
+        selectedSeat = { sourceSeatId: view.activeSeatIdOrNull, targetOrdinal: target.ordinal };
+        const expectedProjectionRevision = lastSnapshot.revisions.projectionRevision;
+        seatCapabilities = lastSnapshot.executableWorkflowCommandIds;
+        purgeSeatScreen();
+        sendSeatControl({
+          protocolVersion: 3,
+          messageType: 'ordinary.seat.control',
+          operation: 'SELECT',
+          requestId: createRequestId('navigation'),
+          targetSeatId,
+          expectedProjectionRevision,
+        });
+        return { ok: true };
+      } catch {
+        return { ok: false, detail: 'Выбор места не отправлен.' };
+      }
+    },
     requestFormAction: (
       actionKey,
       manualFacesOrNull,
@@ -14784,6 +15551,31 @@ export function connectProjection(
       }
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
+      }
+      if (actionKey === 'PLY-027::CTA::003')
+        return { ok: false, detail: 'Выберите место для передачи.' };
+      if (actionKey === 'PLY-030::CTA::001') {
+        try {
+          const id = createNetworkCommandId();
+          if (id === null || !lastSnapshot.executableWorkflowCommandIds.includes(ORDINARY_SEAT_ACK))
+            throw new Error('Unavailable');
+          const request = seatAckRequest(
+            ordinarySeatViewValue(activeForm.projection),
+            lastSnapshot.revisions,
+            id,
+          );
+          const delivery: PendingSeatDelivery = {
+            request,
+            receiptIdOrNull: null,
+            completed: false,
+          };
+          setSeatDelivery(delivery);
+          sendSeatAck(delivery);
+          notifyReady();
+          return { ok: true };
+        } catch {
+          return { ok: false, detail: 'Подтверждение передачи не отправлено.' };
+        }
       }
       if (isEnemyAuthoringForm(activeForm.formId)) {
         try {
@@ -16359,31 +17151,80 @@ export function connectProjection(
         });
         return { ok: true };
       }
+      const returning =
+        actionKey === 'APP-002::CTA::003' &&
+        activeForm.formId === 'APP-002' &&
+        emptyReturn?.deviceId === deviceId
+          ? emptyReturn
+          : null;
       // CREATE binds its operation to the composition journal, whose domain reader requires UUID.
       const navigationRequestId =
         Object.hasOwn(NPC_NAV_TARGETS, actionKey) ||
         Object.hasOwn(ENEMY_AUTHORING_NAV_TARGETS, actionKey) ||
         actionKey === 'ENM-001::CTA::008'
           ? createNetworkCommandId()
-          : createRequestId('navigation');
+          : (returning?.request?.requestId ?? createRequestId('navigation'));
       if (navigationRequestId === null)
         return { ok: false, detail: 'Не удалось создать идентификатор перехода НПС.' };
       const request = {
         actionKey,
-        expectedProjectionRevision: lastSnapshot.revisions.projectionRevision,
+        expectedProjectionRevision:
+          returning?.request?.expectedProjectionRevision ??
+          lastSnapshot.revisions.projectionRevision,
         messageType: 'navigation.form-action',
         navigationRequestId,
         protocolVersion: WIRE_PROTOCOL_V2_VERSION,
         sourceFormId: activeForm.formId,
       } as const satisfies FormActionIntentV2Message;
-      const encoded = encodeClientMessageV2(request, WEB_PROTOCOL_VOCABULARY);
+      const encoded =
+        returning === null
+          ? encodeClientMessageV2(request, WEB_PROTOCOL_VOCABULARY)
+          : encodeClientMessageV3(
+              {
+                protocolVersion: 3,
+                messageType: 'ordinary.seat.control',
+                operation: 'RESUME_EMPTY',
+                requestId: navigationRequestId,
+                expectedProjectionRevision: request.expectedProjectionRevision,
+                exitNavigationId: returning.exitNavigationId,
+              },
+              WEB_PROTOCOL_VOCABULARY,
+            );
       if (!encoded.ok) {
         return {
           ok: false,
           detail: `form action failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
         };
       }
+      if (returning !== null)
+        setEmptyReturn({
+          ...returning,
+          request: {
+            requestId: navigationRequestId,
+            expectedProjectionRevision: request.expectedProjectionRevision,
+          },
+        });
       pendingFormAction = request;
+      const seatDestination =
+        activeForm.formId === 'APP-004' &&
+        activeForm.projection['ordinarySeatView'] === 'LIBRARY' &&
+        actionKey === 'APP-004::CTA::002'
+          ? 'SETUP'
+          : ORDINARY_NAV.get(actionKey);
+      if (seatDestination !== undefined) {
+        seatCapabilities = lastSnapshot.executableWorkflowCommandIds;
+        seatNavigation = { id: navigationRequestId, destination: seatDestination };
+        if (activeForm.formId === 'PLY-001') {
+          const previousIndicator = lastSnapshot.layers.find((layer) => layer.formId === 'PLY-029');
+          const previousRevision = previousIndicator?.projection['revision'];
+          seatNavigation.fromOwner = {
+            seatId: activeForm.projection['controllerSeat'] as string,
+            chooserRevision: typeof previousRevision === 'number' ? previousRevision + 1 : 1,
+          };
+          seatAuthorityKnown = true;
+          purgeSeatScreen();
+        }
+      }
       if (activeForm.formId === 'NET-017') {
         clearGmDraft();
         publishGmDraft();

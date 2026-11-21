@@ -160,7 +160,7 @@ export function validateEnemyAuthoringSource(
             event.mutation.cause.committedVersionOrNull?.kind === 'CUSTOM_MONSTER')),
     );
   if (monsterRelevant) {
-    if (![22, 23, 24, 25].includes(readAppliedMigrationVersion(db)))
+    if (![22, 23, 24, 25, 26].includes(readAppliedMigrationVersion(db)))
       return s.fail('SOURCE_CHANGED');
     catalog.assertMonsterCurrent();
   }
@@ -171,7 +171,7 @@ export function validateEnemyAuthoringSource(
         event.view.enemyAuthoring?.versionAttempt !== undefined ||
         (event.mutation.kind === 'NAV' && event.mutation.request.actionKey === 'ENM-001::CTA::008'),
     );
-  if (versionRelevant && ![23, 24, 25].includes(readAppliedMigrationVersion(db)))
+  if (versionRelevant && ![23, 24, 25, 26].includes(readAppliedMigrationVersion(db)))
     return s.fail('SOURCE_CHANGED');
   const statRollRelevant =
     source.viewOrNull?.enemyAuthoring?.monsterStatRoll !== undefined ||
@@ -181,7 +181,7 @@ export function validateEnemyAuthoringSource(
         (event.mutation.kind === 'ENEMY_AUTHORING' &&
           event.mutation.cause.preparedMonsterStatRoll !== undefined),
     );
-  if (statRollRelevant && ![24, 25].includes(readAppliedMigrationVersion(db)))
+  if (statRollRelevant && ![24, 25, 26].includes(readAppliedMigrationVersion(db)))
     return s.fail('SOURCE_CHANGED');
   validateEnemyArtUploads(db, source.scope, state.events);
   validateEnemyCompositionReservations(db, source.scope, state.events);

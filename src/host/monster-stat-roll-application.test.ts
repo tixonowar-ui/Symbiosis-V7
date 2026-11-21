@@ -437,7 +437,7 @@ for (const mode of ['MANUAL', 'AUTO'] as const)
           W: null,
           C: null,
         });
-        expect(readAppliedMigrationVersion(f.db)).toBe(25);
+        expect(readAppliedMigrationVersion(f.db)).toBe(26);
         const initial = h.view().enemyAuthoring?.attemptOrNull;
         expect(initial?.kind === 'CUSTOM_MONSTER' && initial.statsOrNull).toBeNull();
         vi.mocked(randomInt).mockClear();
@@ -845,6 +845,10 @@ it('refuses stale and foreign AUTO requests before native RNG, rolls back reache
     ).toThrow('IDEMPOTENCY_CONFLICT');
     expect(f.db.serialize().equals(replayBytes)).toBe(true);
     expect(randomInt).toHaveBeenCalledTimes(expectedCalls);
+    expect(f.db.prepare('SELECT * FROM local_seat_handoff_head').all()).toEqual([]);
+    expect(f.db.prepare('SELECT * FROM local_seat_handoff_event').all()).toEqual([]);
+    f.db.exec('DROP TABLE local_seat_handoff_head; DROP TABLE local_seat_handoff_event');
+    expect(f.db.prepare('DELETE FROM schema_migration WHERE version=26').run().changes).toBe(1);
     expect(f.db.prepare('SELECT * FROM campaign_enemy_art_upload').all()).toEqual([]);
     f.db.exec('DROP TABLE campaign_enemy_art_upload');
     expect(f.db.prepare('DELETE FROM schema_migration WHERE version=25').run().changes).toBe(1);

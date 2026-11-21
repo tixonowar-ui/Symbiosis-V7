@@ -177,6 +177,18 @@ export function AtlasForm({
     />
   );
 
+  if (model.type === 'component') {
+    return (
+      <section
+        aria-labelledby={`${model.id}-title`}
+        data-atlas-form-id={model.id}
+        data-atlas-form-type={model.type}
+      >
+        {content}
+      </section>
+    );
+  }
+
   if (model.type === 'screen') {
     return (
       <main data-atlas-form-id={model.id} data-atlas-form-type={model.type}>
