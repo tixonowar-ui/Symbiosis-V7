@@ -14,6 +14,7 @@ import {
 import { commitCreationFinalization } from '../../src/host/creation-finalization.js';
 import { loadNetworkApplicationConfig } from '../../src/host/network-application-config.js';
 import { loadNetworkInstallation } from '../../src/host/network-installation.js';
+import { readLocalNetworkApplicationEvent } from '../../src/persistence/network-local-application.js';
 
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 interface Ready {
@@ -187,6 +188,84 @@ export async function createNetworkBrowserProcess(finalCount: number) {
             commands: rows('hosted_network_command'),
             outbox: rows('local_network_outbox'),
             tabs: rows('local_network_tab'),
+          };
+        } finally {
+          db.close();
+        }
+      },
+      inspectAdmissionPublication() {
+        const db = new Database(databasePath, { readonly: true, fileMustExist: true });
+        try {
+          return {
+            gmDecisions: db
+              .prepare(
+                'SELECT admission_batch_id, command_id, receipt_id, decision, record_sha256 FROM campaign_admission_gm_decision ORDER BY rowid',
+              )
+              .all(),
+            ownerPublications: db
+              .prepare(
+                'SELECT request_id, admission_batch_id, network_scope_id, event_index, record_sha256 FROM local_admission_publication ORDER BY rowid',
+              )
+              .all(),
+          };
+        } finally {
+          db.close();
+        }
+      },
+      inspectLocalTabHead(networkScopeId: string) {
+        const db = new Database(databasePath, { readonly: true, fileMustExist: true });
+        try {
+          const { ownerDeviceId } = loadNetworkInstallation(db);
+          const head = db
+            .prepare<[string, string], { head_event_id: string }>(
+              'SELECT head_event_id FROM local_network_application WHERE owner_device_id=? AND network_scope_id=?',
+            )
+            .get(ownerDeviceId, networkScopeId);
+          if (!head) throw Error('No owned network application head');
+          const event = readLocalNetworkApplicationEvent(
+            db,
+            { ownerDeviceId, networkScopeId },
+            head.head_event_id,
+          );
+          if (!event) throw Error('Application head has no verified journal event');
+          return event;
+        } finally {
+          db.close();
+        }
+      },
+      inspectOrdinarySeats() {
+        const db = new Database(databasePath, { readonly: true, fileMustExist: true });
+        try {
+          return {
+            controllers: db
+              .prepare<
+                [],
+                {
+                  campaign_character_id: string;
+                  local_controller_seat_id: string;
+                  owner_device_id: string;
+                  input_lane_id: string;
+                }
+              >(
+                'SELECT campaign_character_id,local_controller_seat_id,owner_device_id,input_lane_id FROM campaign_admission_controller ORDER BY rowid',
+              )
+              .all(),
+            events: db
+              .prepare<
+                [],
+                {
+                  revision: number;
+                  command_id: string;
+                  receipt_id: string;
+                  kind: string;
+                  handoff_id: string;
+                  record_json: string;
+                  record_sha256: string;
+                }
+              >(
+                'SELECT revision,command_id,receipt_id,kind,handoff_id,record_json,record_sha256 FROM local_seat_handoff_event ORDER BY revision',
+              )
+              .all(),
           };
         } finally {
           db.close();

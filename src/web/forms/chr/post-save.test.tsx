@@ -21,6 +21,7 @@ import {
   expectedPostSaveActions,
   postSaveDestinationMatches,
   postSavePayload,
+  postSaveTerminalProof,
   RESTORE_FORMS,
 } from './post-save.js';
 import { creationFinalizationSnapshotMatchesReceipt } from './creation-validation.js';
@@ -356,6 +357,81 @@ describe('post-save terminal proof', () => {
       },
     },
   });
+  it('keeps only the metadata receipt binding after sending a private CHR-040 patch', () => {
+    const patch: PostSaveRequest = {
+      ...request('EXPORT'),
+      workflowCommandId: 'UI-CMD-CHAR-LOCAL-METADATA-PATCH',
+      payload: {
+        ...common,
+        stage: 'LOCAL_CHARACTER_POST_SAVE',
+        variant: 'METADATA_PATCH',
+        sourceFormId: 'CHR-040',
+        expectedMetadataRevisionOrNull: 4,
+        values: {
+          name: 'Имя владельца',
+          description: 'Личное описание',
+          artAssetKeyOrLocalFile: {
+            kind: 'local-file',
+            mediaType: 'image/png',
+            bytesBase64: 'iVBORw0KGgo=',
+          },
+        },
+      },
+    };
+    const proof = postSaveTerminalProof(patch);
+    expect(proof).toStrictEqual({
+      ...common,
+      commandId: patch.commandId,
+      expectedRevisions: version,
+      sourceFormId: 'CHR-040',
+      variant: 'METADATA_PATCH',
+      expectedMetadataRevisionOrNull: 4,
+    });
+    const target = {
+      ...version,
+      stateRevision: version.stateRevision + 1,
+      projectionRevision: version.projectionRevision + 1,
+    };
+    const committed: CommandReceipt<PostSaveCommandResult> = {
+      commandId: patch.commandId,
+      receiptId: 'committed-metadata',
+      revisions: target,
+      result: {
+        ...common,
+        stage: 'LOCAL_CHARACTER_POST_SAVE',
+        variant: 'METADATA_PATCH',
+        sourceFormId: 'CHR-040',
+        sourceRevisions: version,
+        nextFormId: 'CHR-040',
+        targetEntityId: common.sourceEntityId,
+        targetRevisions: target,
+        localMetadataRevision: 5,
+        restoredCheckpointOrNull: null,
+        createdVariantUuidOrNull: null,
+        downloadOrNull: null,
+      },
+    };
+    const replay = (r: CommandReceipt) =>
+      decodePostSaveTerminal(
+        {
+          protocolVersion: 1,
+          messageType: 'command.replay',
+          lifecycleState: 'IDEMPOTENT_REPLAY',
+          receipt: r,
+        },
+        proof,
+        {},
+      );
+    expect(replay(committed)).toEqual({ ok: true, value: committed });
+    for (const forged of [
+      { ...committed, commandId: 'different-command' },
+      { ...committed, result: { ...committed.result, sourceBindingHash: 'b'.repeat(64) } },
+      { ...committed, result: { ...committed.result, targetEntityId: 'other-FINAL' } },
+      { ...committed, result: { ...committed.result, localMetadataRevision: 4 } },
+      { ...committed, result: { ...committed.result, values: { name: 'чужое имя' } } },
+    ])
+      expect(replay(forged).ok).toBe(false);
+  });
   it('accepts lower target revisions only with the complete correlated restore proof', () => {
     const r = receipt();
     const terminal = {
@@ -364,7 +440,9 @@ describe('post-save terminal proof', () => {
       lifecycleState: 'COMMITTED',
       receipt: r,
     } as const;
-    expect(decodePostSaveTerminal(terminal, request('RESTORE'), restore).ok).toBe(true);
+    expect(
+      decodePostSaveTerminal(terminal, postSaveTerminalProof(request('RESTORE')), restore).ok,
+    ).toBe(true);
     const target = {
       formId: 'CHR-010',
       projection: { characterDraftId: common.sourceEntityId, wizardCheckpointId: 'checkpoint' },
@@ -392,7 +470,11 @@ describe('post-save terminal proof', () => {
       },
     ])
       expect(
-        decodePostSaveTerminal({ ...terminal, receipt: changed }, request('RESTORE'), restore).ok,
+        decodePostSaveTerminal(
+          { ...terminal, receipt: changed },
+          postSaveTerminalProof(request('RESTORE')),
+          restore,
+        ).ok,
       ).toBe(false);
   });
   it('restores the saved CHR-031 dialog only when its exact layer is signed by the restore receipt', () => {
@@ -417,7 +499,7 @@ describe('post-save terminal proof', () => {
           lifecycleState: 'COMMITTED',
           receipt: r,
         },
-        request('RESTORE'),
+        postSaveTerminalProof(request('RESTORE')),
         { ...restore, resumeFormId: 'CHR-023' },
       ).ok,
     ).toBe(true);

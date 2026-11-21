@@ -19,6 +19,8 @@ import {
   commitLocalAdmissionNetworkMutation,
   readLocalNetworkApplication,
   readLocalNetworkApplicationEvent,
+  readLocalNetworkZeroSeatReturn,
+  readLocalNetworkNavigationById,
   readLocalNetworkHostPin,
   readLocalNetworkOutbox,
   readLocalNetworkAcknowledgementEvent,
@@ -871,6 +873,110 @@ describe('owner request review enrichment and delivery', () => {
 });
 
 describe('local network application/outbox aggregate', () => {
+  it('restores only the unconsumed empty roster exit from the same technical session after reopen', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'network-empty-roster-'));
+    directories.push(dir);
+    const filename = join(dir, 'state.sqlite');
+    const p = setup(filename);
+    const state = connected(p);
+    expect(state.formId).toBe('NET-003');
+    expect(readLocalNetworkZeroSeatReturn(p.db, p.scope)).toBeNull();
+    const navigationRequestId = randomUUID();
+    const mutation = {
+      kind: 'NAVIGATE',
+      targetFormId: 'NET-001',
+      plannedAttemptIdOrNull: null,
+      singleCandidateOrNull: null,
+    } as const;
+    const input = {
+      ...p.scope,
+      eventId: `navigation:${navigationRequestId}`,
+      receiptId: randomUUID(),
+      expectedRevisions: vector(state),
+      expectedDraftRevision: state.draftRevision,
+      mutation,
+      clientRequestJsonOrNull: canonical({
+        messageType: 'navigation.form-action',
+        protocolVersion: 2,
+        navigationRequestId,
+        sourceFormId: 'PLY-027',
+        actionKey: 'PLY-027::CTA::006',
+        expectedProjectionRevision: 0,
+      }),
+    };
+    commitLocalNetworkMutation(p.db, input, allow);
+    p.db.close();
+    const restored = open(filename);
+    const reset = {
+      exitNavigationId: navigationRequestId,
+      networkScopeId: p.scope.networkScopeId,
+      technicalSessionId: state.sessionOrNull!.technicalSessionId,
+    };
+    expect(readLocalNetworkZeroSeatReturn(restored, p.scope)).toEqual(reset);
+    const otherScope = randomUUID();
+    commitLocalNetworkTabEntry(
+      restored,
+      {
+        ownerDeviceId: p.scope.ownerDeviceId,
+        networkScopeId: otherScope,
+        tabId: randomUUID(),
+        entryCommandId: randomUUID(),
+        entryReceiptId: randomUUID(),
+        sourceContextId: randomUUID(),
+        sourceRevisions: zero,
+      },
+      allow,
+    );
+    expect(
+      readLocalNetworkApplication(restored, {
+        ownerDeviceId: p.scope.ownerDeviceId,
+        networkScopeId: otherScope,
+      }).sessionOrNull,
+    ).toBeNull();
+    expect(
+      readLocalNetworkNavigationById(restored, p.scope.ownerDeviceId, navigationRequestId)?.input
+        .networkScopeId,
+    ).toBe(p.scope.networkScopeId);
+    expect(
+      readLocalNetworkNavigationById(restored, p.scope.ownerDeviceId, randomUUID()),
+    ).toBeNull();
+    const resume = {
+      protocolVersion: 3,
+      messageType: 'ordinary.seat.control',
+      operation: 'RESUME_EMPTY',
+      requestId: randomUUID(),
+      expectedProjectionRevision: 0,
+      exitNavigationId: navigationRequestId,
+    };
+    const retained = readLocalNetworkApplication(restored, p.scope);
+    const entered = commitLocalNetworkMutation(
+      restored,
+      {
+        ...input,
+        eventId: `navigation:${resume.requestId}`,
+        receiptId: randomUUID(),
+        expectedRevisions: vector(retained),
+        expectedDraftRevision: retained.draftRevision,
+        clientRequestJsonOrNull: canonical(resume),
+      },
+      allow,
+    );
+    expect(entered.current.sessionOrNull).toEqual(state.sessionOrNull);
+    expect(entered.current.tabId).toBe(p.tabId);
+    expect(readLocalNetworkZeroSeatReturn(restored, p.scope)).toBeNull();
+    expect(readLocalNetworkZeroSeatReturn(restored, p.scope, resume)).toEqual(reset);
+    expect(
+      readLocalNetworkZeroSeatReturn(restored, p.scope, { ...resume, requestId: randomUUID() }),
+    ).toBeNull();
+    expect(
+      readLocalNetworkZeroSeatReturn(restored, p.scope, {
+        ...resume,
+        exitNavigationId: randomUUID(),
+      }),
+    ).toBeNull();
+    commitLocalNetworkMutation(restored, input, allow);
+    expect(readLocalNetworkZeroSeatReturn(restored, p.scope)).toBeNull();
+  });
   it('does not reuse a digest for a mutable non-string native crypto input', () => {
     const s = networkApplicationStorage;
     const bytes = Buffer.alloc(2048, 1);
@@ -1552,7 +1658,7 @@ describe('local network application/outbox aggregate', () => {
     const before = p.db.serialize();
     // The current schema must retain the same unresolved-outbox close guard.
     expect(p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
-      version: 25,
+      version: 26,
     });
     expect(() => close(p, sent.current)).toThrow('CLOSE_UNAVAILABLE');
     expect(p.db.serialize().equals(before)).toBe(true);

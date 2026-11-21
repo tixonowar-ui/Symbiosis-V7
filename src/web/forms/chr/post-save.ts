@@ -591,36 +591,65 @@ export function postSavePayload(
   } as PostSavePayload;
 }
 
+export function postSaveTerminalProof(request: PostSaveRequest | PostSaveDraftRequest) {
+  const { commandId, expectedRevisions, payload } = request;
+  const binding = {
+    commandId,
+    expectedRevisions: {
+      stateRevision: expectedRevisions.stateRevision,
+      projectionRevision: expectedRevisions.projectionRevision,
+      actorVisibilityRevision: expectedRevisions.actorVisibilityRevision,
+    },
+  };
+  if (payload.variant === 'SAVE_VALID_DRAFT') {
+    return {
+      ...binding,
+      variant: payload.variant,
+      sourceFormId: payload.sourceFormId,
+      sourceEntityId: payload.characterDraftId,
+    };
+  }
+  return {
+    ...binding,
+    variant: payload.variant,
+    sourceFormId: payload.sourceFormId,
+    sourceEntityId: payload.sourceEntityId,
+    postSaveScopeId: payload.postSaveScopeId,
+    sourceBindingHash: payload.sourceBindingHash,
+    expectedMetadataRevisionOrNull: payload.expectedMetadataRevisionOrNull,
+  };
+}
+
 export function decodePostSaveTerminal(
   message: HostToClientMessage,
-  request: PostSaveRequest | PostSaveDraftRequest,
+  proof: ReturnType<typeof postSaveTerminalProof>,
   source: JsonObject,
 ): DecodeResult<CommandReceipt<PostSaveCommandResult>> {
   if (message.messageType !== 'command.result' && message.messageType !== 'command.replay')
     return refused('$.messageType', message.messageType);
   const receipt = message.receipt,
-    r = receipt.result,
-    p = request.payload;
-  const save = p.variant === 'SAVE_VALID_DRAFT';
-  const sourceId = save ? p.characterDraftId : p.sourceEntityId;
+    r = receipt.result;
+  const save = proof.variant === 'SAVE_VALID_DRAFT';
+  const sourceId = proof.sourceEntityId;
   const result = decodeProjection(r, '$.receipt.result', {
     ...common,
     stage: (v) => v === 'LOCAL_CHARACTER_POST_SAVE',
-    variant: (v) => v === p.variant,
-    sourceFormId: (v) => v === p.sourceFormId,
+    variant: (v) => v === proof.variant,
+    sourceFormId: (v) => v === proof.sourceFormId,
     sourceRevisions: revisions,
     nextFormId: (v) =>
       save
         ? v === 'CHR-026'
-        : p.variant === 'RESTORE'
+        : proof.variant === 'RESTORE'
           ? v === source['resumeFormId']
-          : v === (p.variant === 'METADATA_PATCH' ? 'CHR-040' : 'APP-010'),
+          : v === (proof.variant === 'METADATA_PATCH' ? 'CHR-040' : 'APP-010'),
     targetEntityId: (v) => v === sourceId,
     targetRevisions: revisions,
     localMetadataRevision: nullableInteger,
-    createdVariantUuidOrNull: p.variant === 'VARIANT_CREATE' ? isNonEmptyString : (v) => v === null,
+    createdVariantUuidOrNull:
+      proof.variant === 'VARIANT_CREATE' ? isNonEmptyString : (v) => v === null,
     restoredCheckpointOrNull: (v) =>
-      p.variant === 'RESTORE'
+      proof.variant === 'RESTORE'
         ? object(v, {
             ownerId: (x) => x === sourceId,
             ownerDeviceId: isNonEmptyString,
@@ -638,7 +667,7 @@ export function decodePostSaveTerminal(
           })
         : v === null,
     downloadOrNull: (v) =>
-      p.variant === 'EXPORT'
+      proof.variant === 'EXPORT'
         ? object(v, {
             fileName: (n) =>
               isNonEmptyString(n) && !/[\\/]/.test(n) && [...n].every((c) => c.charCodeAt(0) >= 32),
@@ -649,32 +678,32 @@ export function decodePostSaveTerminal(
         : v === null,
   });
   if (!result.ok) return result;
-  const mutation = p.variant === 'METADATA_PATCH' || p.variant === 'VARIANT_CREATE';
+  const mutation = proof.variant === 'METADATA_PATCH' || proof.variant === 'VARIANT_CREATE';
   const expectedReceiptRevisions = {
-    stateRevision: request.expectedRevisions.stateRevision + (mutation ? 1 : 0),
-    projectionRevision: request.expectedRevisions.projectionRevision + (mutation ? 1 : 0),
-    actorVisibilityRevision: request.expectedRevisions.actorVisibilityRevision,
+    stateRevision: proof.expectedRevisions.stateRevision + (mutation ? 1 : 0),
+    projectionRevision: proof.expectedRevisions.projectionRevision + (mutation ? 1 : 0),
+    actorVisibilityRevision: proof.expectedRevisions.actorVisibilityRevision,
   };
   if (
     !sameRevisions(receipt.revisions, expectedReceiptRevisions) ||
-    (p.variant !== 'RESTORE' &&
+    (proof.variant !== 'RESTORE' &&
       !sameRevisions(r['targetRevisions'] as unknown as RevisionVector, receipt.revisions))
   )
     return refused('$.receipt.revisions', receipt.revisions);
   if (
-    receipt.commandId !== request.commandId ||
-    (!save && r['postSaveScopeId'] !== p.postSaveScopeId) ||
-    (!save && r['sourceBindingHash'] !== p.sourceBindingHash) ||
+    receipt.commandId !== proof.commandId ||
+    (!save && r['postSaveScopeId'] !== proof.postSaveScopeId) ||
+    (!save && r['sourceBindingHash'] !== proof.sourceBindingHash) ||
     r['sourceEntityId'] !== sourceId ||
-    !sameRevisions(r['sourceRevisions'] as unknown as RevisionVector, request.expectedRevisions) ||
-    (p.variant === 'METADATA_PATCH' &&
-      r['localMetadataRevision'] !== p.expectedMetadataRevisionOrNull! + 1) ||
+    !sameRevisions(r['sourceRevisions'] as unknown as RevisionVector, proof.expectedRevisions) ||
+    (proof.variant === 'METADATA_PATCH' &&
+      r['localMetadataRevision'] !== proof.expectedMetadataRevisionOrNull! + 1) ||
     (!save &&
-      p.variant !== 'RESTORE' &&
-      p.variant !== 'METADATA_PATCH' &&
-      r['localMetadataRevision'] !== p.expectedMetadataRevisionOrNull) ||
-    (p.variant === 'VARIANT_CREATE' && r['createdVariantUuidOrNull'] === sourceId) ||
-    ((save || p.variant === 'RESTORE') && r['localMetadataRevision'] !== null)
+      proof.variant !== 'RESTORE' &&
+      proof.variant !== 'METADATA_PATCH' &&
+      r['localMetadataRevision'] !== proof.expectedMetadataRevisionOrNull) ||
+    (proof.variant === 'VARIANT_CREATE' && r['createdVariantUuidOrNull'] === sourceId) ||
+    ((save || proof.variant === 'RESTORE') && r['localMetadataRevision'] !== null)
   )
     return refused('$.receipt', receipt);
   return { ok: true, value: receipt as CommandReceipt<PostSaveCommandResult> };

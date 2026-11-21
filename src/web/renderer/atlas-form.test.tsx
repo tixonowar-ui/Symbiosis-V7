@@ -65,6 +65,9 @@ const TEST_IMPLEMENTED_FORM_IDS = [
   'CMP-016',
   'NET-023',
   'PLY-001',
+  'PLY-027',
+  'PLY-029',
+  'PLY-030',
   'NET-027',
   'NET-006',
   'NET-007',
@@ -271,6 +274,7 @@ describe('atlas implemented-form renderer', () => {
 
     let screens = 0;
     let dialogs = 0;
+    let components = 0;
     for (const id of TEST_IMPLEMENTED_FORM_IDS) {
       const { container } = renderAtlas(id);
       const form = requiredElement(
@@ -280,6 +284,7 @@ describe('atlas implemented-form renderer', () => {
 
       if (form.tagName === 'MAIN') screens += 1;
       if (form.tagName === 'DIALOG') dialogs += 1;
+      if (form.tagName === 'SECTION') components += 1;
     }
 
     // #174 adds CMP-008/016 and NET-008/009/010 screens, plus CMP-014/015/NET-023 dialogs.
@@ -291,6 +296,7 @@ describe('atlas implemented-form renderer', () => {
     // #260 adds the delivered ENM-018/019 screens; no dialog is added.
     expect(screens).toBe(103);
     expect(dialogs).toBe(10);
+    expect(components).toBe(3);
   });
 
   it('renders APP-001 actions once and emits only its exact atlas transition', () => {

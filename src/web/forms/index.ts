@@ -19,6 +19,12 @@ import {
   type NetworkApplicationFormId,
 } from '@shared/network-application.js';
 
+export const LOCAL_SEAT_COMPONENTS = [
+  'PLY-027',
+  'PLY-029',
+  'PLY-030',
+] as const satisfies readonly FormId[];
+
 export const IMPLEMENTED_FORM_IDS = [
   ...ENEMY_LIBRARY_FORMS,
   ...ENEMY_AUTHORING_FORMS,
@@ -27,6 +33,7 @@ export const IMPLEMENTED_FORM_IDS = [
   ...CAMPAIGN_LOBBY_GM_FORMS,
   ...CAMPAIGN_LIFECYCLE_FORMS,
   'PLY-001',
+  ...LOCAL_SEAT_COMPONENTS,
   ...ADMISSION_OWNER_FORM_IDS,
   ...ADMISSION_GM_VIEW_FORM_IDS,
   ...APP_FORM_IDS,
@@ -43,6 +50,7 @@ export type ImplementedFormId =
   | (typeof CAMPAIGN_LOBBY_GM_FORMS)[number]
   | (typeof CAMPAIGN_LIFECYCLE_FORMS)[number]
   | 'PLY-001'
+  | (typeof LOCAL_SEAT_COMPONENTS)[number]
   | (typeof ADMISSION_OWNER_FORM_IDS)[number]
   | (typeof ADMISSION_GM_VIEW_FORM_IDS)[number]
   | AppFormId
@@ -58,12 +66,14 @@ export type SupportedPresentationFormId =
   | (typeof CAMPAIGN_LOBBY_GM_FORMS)[number]
   | (typeof CAMPAIGN_LIFECYCLE_FORMS)[number]
   | 'PLY-001'
+  | (typeof LOCAL_SEAT_COMPONENTS)[number]
   | (typeof ADMISSION_OWNER_FORM_IDS)[number]
   | (typeof ADMISSION_GM_VIEW_FORM_IDS)[number]
   | NetworkApplicationFormId
   | 'NET-017'
   | 'APP-001'
   | 'APP-002'
+  | 'APP-003'
   | 'APP-004'
   | 'APP-009'
   | 'APP-010'
@@ -119,12 +129,14 @@ const SUPPORTED = new Set<FormId>([
   ...CAMPAIGN_LOBBY_GM_FORMS,
   ...CAMPAIGN_LIFECYCLE_FORMS,
   'PLY-001',
+  ...LOCAL_SEAT_COMPONENTS,
   ...ADMISSION_OWNER_FORM_IDS,
   ...ADMISSION_GM_VIEW_FORM_IDS,
   ...NETWORK_APPLICATION_FORM_IDS,
   'NET-017',
   'APP-001',
   'APP-002',
+  'APP-003',
   'APP-004',
   'APP-009',
   'APP-010',
@@ -185,7 +197,7 @@ export interface ImplementedFormAction {
 interface PresentedFormDefinition {
   readonly actions: readonly ImplementedFormAction[];
   readonly route: string;
-  readonly type: 'dialog' | 'screen';
+  readonly type: 'dialog' | 'screen' | 'component';
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -235,8 +247,12 @@ for (const formId of IMPLEMENTED_FORM_IDS) {
     return { actionKey: actionKey as ActionKey, label: text(row['label'], `${rowPath}.label`) };
   });
   const type = text(form['type'], `${path}.type`);
-  if (type !== 'screen' && type !== 'dialog') {
-    fail(`${path}.type`, `expected screen or dialog, received ${JSON.stringify(type)}`);
+  if (
+    type !== 'screen' &&
+    type !== 'dialog' &&
+    !(type === 'component' && LOCAL_SEAT_COMPONENTS.some((id) => id === formId))
+  ) {
+    fail(`${path}.type`, `expected screen, dialog or component, received ${JSON.stringify(type)}`);
   }
   definitions.set(formId, { actions, route: text(form['route'], `${path}.route`), type });
 }

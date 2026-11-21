@@ -13,6 +13,7 @@ import { migration0022 } from '../persistence/migrations/0022-custom-monster-v1.
 import { migration0023 } from '../persistence/migrations/0023-enemy-template-versions.js';
 import { migration0024 } from '../persistence/migrations/0024-monster-stat-roll-once.js';
 import { migration0025 } from '../persistence/migrations/0025-enemy-art-upload.js';
+import { migration0026 } from '../persistence/migrations/0026-local-seat-handoff.js';
 import type { GmRequestReviewScope } from '../persistence/campaign-creation.js';
 import { readGmRequestReviewSourceWith } from '../persistence/network-device-request.js';
 import { loadLocalCharacterExportBaseline } from './local-character-export.js';
@@ -101,10 +102,19 @@ it('physically opens genuine B15 schema21 empty V1 and open attempt under B18 an
                 name: migration0025.name,
                 checksum_sha256: createHash('sha256').update(migration0025.sql).digest('hex'),
               },
+              {
+                version: migration0026.version,
+                name: migration0026.name,
+                checksum_sha256: createHash('sha256').update(migration0026.sql).digest('hex'),
+              },
             ],
           },
     );
-    expectedRows.push({ name: 'campaign_enemy_art_upload', rows: [] });
+    expectedRows.push(
+      { name: 'campaign_enemy_art_upload', rows: [] },
+      { name: 'local_seat_handoff_event', rows: [] },
+      { name: 'local_seat_handoff_head', rows: [] },
+    );
     expectedRows.sort((left, right) =>
       Buffer.compare(Buffer.from(left.name), Buffer.from(right.name)),
     );
@@ -152,7 +162,7 @@ it('physically opens genuine B15 schema21 empty V1 and open attempt under B18 an
     expect(database().memory).toBe(false);
     expect(
       database().prepare('SELECT MAX(version) version,COUNT(*) count FROM schema_migration').get(),
-    ).toEqual({ version: 25, count: 25 });
+    ).toEqual({ version: 26, count: 26 });
     expect(database().pragma('user_version', { simple: true })).toBe(0);
     const view = enemyAuthoringProjectionValue(app().project().base.roleFilteredPayload);
     expect(storedBaselines).toEqual([BASELINE_FIXTURE_IDS.B15]);

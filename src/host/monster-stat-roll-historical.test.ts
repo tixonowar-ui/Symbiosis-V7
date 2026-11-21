@@ -25,6 +25,7 @@ import { readGmRequestReviewSourceWith } from '../persistence/network-device-req
 import { readAppliedMigrationVersion } from '../persistence/migrations/index.js';
 import { migration0024 } from '../persistence/migrations/0024-monster-stat-roll-once.js';
 import { migration0025 } from '../persistence/migrations/0025-enemy-art-upload.js';
+import { migration0026 } from '../persistence/migrations/0026-local-seat-handoff.js';
 
 vi.mock('node:crypto', async (original) => {
   const actual = await original<typeof NodeCrypto>();
@@ -65,7 +66,7 @@ for (const [kind, gzipSha256, inflatedSha256] of [
     'bf668fce4379cd3b941279065dabd000bd07c9ef4634dd235fb77cfa4d49fe93',
   ],
 ] as const)
-  it(`preserves genuine delivered259 ${kind} schema23 V1/V2/open attempt and exact original receipts through25 and physical reopen`, () => {
+  it(`preserves genuine delivered259 ${kind} schema23 V1/V2/open attempt and exact original receipts through26 and physical reopen`, () => {
     const root = join(process.cwd(), 'tests/fixtures/enemy-versioned-v2'),
       metadata = r.record(
         JSON.parse(readFileSync(join(root, 'metadata.json'), 'utf8')),
@@ -113,6 +114,8 @@ for (const [kind, gzipSha256, inflatedSha256] of [
       const expected = {
         ...before,
         campaign_enemy_art_upload: [],
+        local_seat_handoff_event: [],
+        local_seat_handoff_head: [],
         schema_migration: [
           ...(before['schema_migration'] ?? []),
           {
@@ -124,6 +127,11 @@ for (const [kind, gzipSha256, inflatedSha256] of [
             version: migration0025.version,
             name: migration0025.name,
             checksum_sha256: hash(migration0025.sql),
+          },
+          {
+            version: migration0026.version,
+            name: migration0026.name,
+            checksum_sha256: hash(migration0026.sql),
           },
         ],
       };
@@ -155,7 +163,7 @@ for (const [kind, gzipSha256, inflatedSha256] of [
           readCurrent,
           validateOwner: () => undefined,
         });
-      expect(readAppliedMigrationVersion(database())).toBe(25);
+      expect(readAppliedMigrationVersion(database())).toBe(26);
       expect(rows(database())).toEqual(expected);
       const originalResult = r.record(f['originalCommitResult'], '$.originalResult'),
         newResult = r.record(f['newVersionResult'], '$.newResult');

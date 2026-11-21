@@ -214,6 +214,7 @@ async function connectToFinal() {
   vi.stubGlobal('window', {
     sessionStorage: new MemoryStorage(),
     location: { href: 'http://localhost:3000/' },
+    history: { replaceState: vi.fn() },
   });
   vi.stubGlobal('WebSocket', Socket);
   vi.stubGlobal(
@@ -234,14 +235,80 @@ async function connectToFinal() {
 }
 
 describe('NET closure recovery to the actual local FINAL', () => {
+  it('sends private FINAL metadata once and reconciles only the command ID after an ordinary-seat disconnect', async () => {
+    const { socket, connection, states } = await connectToFinal();
+    const values = {
+      name: 'Новая личная метка',
+      description: 'Правка до потери ответа',
+      artAssetKeyOrLocalFile: {
+        kind: 'local-file',
+        mediaType: 'image/png',
+        bytesBase64:
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=',
+      },
+    } as const;
+    expect(connection.submitPostSave('METADATA_PATCH', values)).toEqual({ ok: true });
+    const original = sent(socket);
+    expect(original).toMatchObject({
+      messageType: 'command.request',
+      workflowCommandId: 'UI-CMD-CHAR-LOCAL-METADATA-PATCH',
+      payload: { sourceFormId: 'CHR-040', values },
+    });
+    socket.drop();
+    expect(states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+    expect(connection.reconnect()).toEqual({ ok: true });
+    const resumed = Socket.instances[1]!;
+    resumed.open();
+    const hello = sent(resumed);
+    expect(hello).toMatchObject({
+      messageType: 'session.reconnect',
+      unacknowledgedCommandIds: [original['commandId']],
+    });
+    const revisions = { stateRevision: 7, projectionRevision: 7, actorVisibilityRevision: 7 };
+    resumed.message({
+      messageType: 'session.reconnect.capabilities',
+      protocolVersion: 2,
+      reconnectRequestId: hello['reconnectRequestId'],
+      revisions,
+      executableWorkflowCommandIds: NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS,
+    });
+    resumed.message({
+      messageType: 'projection.snapshot',
+      protocolVersion: 2,
+      projectionRole: 'player',
+      revisions,
+      presentation: {
+        assignment: { reason: 'RECONNECT', correlationId: hello['reconnectRequestId'] },
+        base: {
+          formId: 'APP-003',
+          formType: 'screen',
+          routeTemplate: '/local/app-003',
+          routeBindings: [],
+          availableActionKeys: [],
+          roleFilteredPayload: { ordinarySeatView: 'WAITING', revision: 7 },
+        },
+        layers: [],
+      },
+    });
+    expect(states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { formId: 'APP-003', projection: { ordinarySeatView: 'WAITING' } },
+    });
+    expect(resumed.sent).toHaveLength(1);
+    const exposed = JSON.stringify([states.at(-1), resumed.sent]);
+    for (const text of [values.name, values.description, values.artAssetKeyOrLocalFile.bytesBase64])
+      expect(exposed).not.toContain(text);
+  });
   it.each(['cold', 'lost navigation', 'live navigation'] as const)(
     'recovers the own final through %s using original source checksum and fresh shell vector',
     async (mode) => {
       const storage = new MemoryStorage();
+      const replaceState = vi.fn();
       storage.setItem(NETWORK_CONTEXT_STORAGE_KEY, SCOPE);
       vi.stubGlobal('window', {
         sessionStorage: storage,
         location: { href: 'http://localhost:3000/' },
+        history: { replaceState },
       });
       vi.stubGlobal('WebSocket', Socket);
       vi.stubGlobal(
@@ -293,6 +360,7 @@ describe('NET closure recovery to the actual local FINAL', () => {
         expect(connection.requestFormAction('CHR-027::CTA::002')).toEqual({ ok: true });
         if (mode === 'lost navigation') {
           active.drop();
+          expect(replaceState).toHaveBeenCalledWith(null, '', '/local/app-003');
           connection.reconnect();
           active = Socket.instances[1]!;
           active.open();

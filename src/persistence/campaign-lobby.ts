@@ -60,6 +60,22 @@ export function readCampaignLobby(
   });
 }
 
+export function readCampaignLobbyCommand(
+  db: Database.Database,
+  scope: GmRequestReviewScope,
+  commandId: string,
+  validate: CampaignPrivateOwnerValidator,
+  rules: AdmissionPublicationRules,
+) {
+  return s.read(db, scope.ownerDeviceId, () => {
+    if (!hasCampaignLobbySchema(db)) return s.fail('UNAVAILABLE');
+    if (s.at(db, 'campaign_lobby_event', 'command_id', commandId) === undefined) return null;
+    const state = readCampaignLobby(db, scope, validate, rules);
+    const event = state.events.find((entry) => entry.request.commandId === commandId);
+    return event === undefined ? null : { state, event };
+  });
+}
+
 /** Exact replay is read-only; a fresh Start seals scene, receipt and checkpoint in one transaction. */
 export function commitCampaignLobbyCommand(
   db: Database.Database,
@@ -78,12 +94,9 @@ export function commitCampaignLobbyCommand(
   );
   const authority = s.input(() => JSON.parse(s.canonical(authorityValue)) as LobbyAuthority);
   const known = s.read(db, scope.ownerDeviceId, () => {
-    if (!hasCampaignLobbySchema(db)) return s.fail('UNAVAILABLE');
-    if (s.at(db, 'campaign_lobby_event', 'command_id', request.commandId) === undefined)
-      return null;
-    const state = readCampaignLobby(db, scope, validate, rules);
-    const event = state.events.find((event) => event.request.commandId === request.commandId);
-    if (event === undefined) return null;
+    const saved = readCampaignLobbyCommand(db, scope, request.commandId, validate, rules);
+    if (saved === null) return null;
+    const { event, state } = saved;
     if (!s.same(event.authority, authority)) return s.fail('FOREIGN_OWNER');
     if (
       !s.same(event.request, request) ||

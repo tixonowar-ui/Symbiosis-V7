@@ -29,6 +29,10 @@ const HOST_TRANSITION_KINDS = new Set([
   'read-only-command',
 ]);
 const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
+  'APP-003',
+  'PLY-027',
+  'PLY-029',
+  'PLY-030',
   'ENM-001',
   'ENM-003',
   'ENM-005',

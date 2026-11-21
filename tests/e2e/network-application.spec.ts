@@ -1,5 +1,9 @@
 import { createServer } from 'node:net';
 import { expect, test, type Page } from '@playwright/test';
+import {
+  createNetworkCampaign as createCampaign,
+  reviewNetworkAdmissionCopies,
+} from '../fixtures/network-admission-browser.js';
 import { networkFramesForPrivateDataCheck } from '../fixtures/network-browser-privacy.js';
 import {
   createNetworkBrowserScenario,
@@ -11,35 +15,6 @@ test.setTimeout(180_000);
 const action = (page: Page, key: string) =>
   page.locator(`[data-atlas-action-key="${key}"]`).click();
 const form = (page: Page, id: string) => page.locator(`[data-atlas-form-id="${id}"]`);
-
-async function createCampaign(page: Page, baseURL: string) {
-  await page.goto(baseURL);
-  await action(page, 'APP-001::CTA::002');
-  await action(page, 'APP-011::CTA::006');
-  await page.getByLabel('Название кампании', { exact: true }).fill('Два независимых устройства');
-  await action(page, 'CMP-001::CTA::001');
-  await page.getByLabel('Вместимость активных персонажей', { exact: true }).fill('3');
-  const loopback = page
-    .getByLabel('Сетевой интерфейс', { exact: true })
-    .locator('option')
-    .filter({ hasText: '127.0.0.1' });
-  await page
-    .getByLabel('Сетевой интерфейс', { exact: true })
-    .selectOption(await loopback.getAttribute('value'));
-  await page.getByLabel('Порт хоста', { exact: true }).fill(new URL(baseURL).port);
-  await action(page, 'CMP-002::CTA::002');
-  await page
-    .getByLabel('Секрет передачи мастера', { exact: true })
-    .fill('Network-test-master-secret');
-  await page
-    .getByLabel('Подтверждение секрета', { exact: true })
-    .fill('Network-test-master-secret');
-  await action(page, 'CMP-003::CTA::002');
-  await page.getByLabel('Режим будущих бросков', { exact: true }).selectOption('MANUAL');
-  await action(page, 'CMP-004::CTA::002');
-  await action(page, 'CMP-005::CTA::001');
-  await expect(form(page, 'CMP-006')).toBeVisible();
-}
 
 test('NET connects two real Node installations by manual address, submits own FINAL, restores it after both processes restart and cancels without copies', async ({
   browser,
@@ -297,51 +272,12 @@ for (const outcome of [
       await action(masterPage, 'NET-017::CTA::010');
       await expect(form(masterPage, 'NET-018')).toBeVisible();
       if (outcome !== 'REJECT') {
-        await action(masterPage, 'NET-018::CTA::002');
-        await masterPage
-          .getByLabel('Масса одобрена', { exact: true })
-          .setChecked(outcome !== 'ACCEPT_WITH_BLOCKERS');
-        await masterPage.getByLabel('Деньги определены', { exact: true }).check();
-        await masterPage.getByLabel('Сумма стартовых денег', { exact: true }).fill('42');
-        await masterPage.getByLabel('Состав имущества подтверждён', { exact: true }).check();
-        const unresolved = masterPage.getByRole('button', {
-          name: 'Исходные неопределённые позиции разобраны',
-          exact: true,
-        });
-        if (await unresolved.count()) await unresolved.click();
-        await masterPage
-          .getByRole('button', { name: 'Сохранить правки копии', exact: true })
-          .click();
-        await expect(
-          masterPage.getByRole('combobox', { name: 'Персонаж набора', exact: true }),
-        ).toBeEnabled();
-        while (await masterPage.locator('[data-atlas-action-key="NET-019::CTA::004"]').count()) {
-          await action(masterPage, 'NET-019::CTA::004');
-          const request = masterPage.getByRole('combobox', {
-            name: 'Исходная заявка',
-            exact: true,
-          });
-          await request.selectOption({ index: 1 });
-          await masterPage
-            .getByRole('button', { name: 'Проверить и сохранить решение по оружию', exact: true })
-            .click();
-          await action(masterPage, 'GM-019::CTA::005');
-          await expect(form(masterPage, 'NET-019')).toBeVisible();
-        }
-        await action(masterPage, 'NET-019::CTA::002');
-        await action(masterPage, 'NET-018::CTA::003');
-        const assignment = form(masterPage, 'NET-020');
-        await assignment
-          .getByRole('combobox', { name: 'Группа', exact: true })
-          .selectOption('START');
-        await assignment.getByLabel('Локация', { exact: true }).fill('Лагерь');
-        await assignment
-          .getByRole('button', { name: 'Сохранить правки копии', exact: true })
-          .click();
-        await expect(
-          assignment.getByRole('combobox', { name: 'Персонаж набора', exact: true }),
-        ).toBeEnabled(outcome === 'LIFECYCLE' ? { timeout: 30_000 } : {});
-        await action(masterPage, 'NET-020::CTA::002');
+        await reviewNetworkAdmissionCopies(
+          masterPage,
+          outcome !== 'ACCEPT_WITH_BLOCKERS',
+          ['Лагерь'],
+          outcome === 'LIFECYCLE' ? 30_000 : undefined,
+        );
       }
       await action(masterPage, 'NET-018::CTA::004');
       if (outcome === 'REJECT') {
@@ -488,6 +424,23 @@ for (const outcome of [
           playerPage.getByRole('region', { name: 'Мирная сцена персонажа' }),
         ).toContainText('Лагерь');
         firstPeace = lastPeace();
+        const roster = form(playerPage, 'PLY-027');
+        await expect(
+          roster.getByRole('heading', { name: 'Переключатель локальных игроков', exact: true }),
+        ).toBeVisible();
+        await expect(roster).toContainText('Ваше место: игрок 1.');
+        await expect(roster.getByRole('button')).toHaveCount(0);
+        await expect(playerPage.locator('[data-atlas-action-key="PLY-001::CTA::015"]')).toHaveCount(
+          0,
+        );
+        expect(gm.inspectOrdinarySeats().controllers).toEqual([
+          expect.objectContaining({
+            campaign_character_id: firstPeace['campaignCharacterId'],
+            local_controller_seat_id: firstPeace['controllerSeat'],
+            owner_device_id: player.deviceId,
+          }),
+        ]);
+        expect(player.inspectOrdinarySeats().events).toEqual([]);
         expect(firstPeace).toMatchObject({
           campaignTimestamp: 2707,
           clockMode: 'STOPPED',

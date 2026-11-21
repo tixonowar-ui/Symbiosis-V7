@@ -34,7 +34,7 @@ beforeEach(() => {
   );
   db = new Database(filename, { fileMustExist: true });
   configurePersistenceDatabase(db);
-  expect(applyMigrations(db)).toBe(25);
+  expect(applyMigrations(db)).toBe(26);
   const views = db
     .prepare<[], GmRequestReviewScope>(
       'SELECT owner_device_id AS ownerDeviceId, context_id AS gmLocalContextId, campaign_id AS campaignId FROM gm_request_queue_view',
@@ -127,6 +127,9 @@ it('refuses a missing blob for a stored upload on the open historical version at
 });
 
 it('refuses an unexpected empty upload table on an otherwise valid schema24 prefix', () => {
+  db.exec('DROP TABLE local_seat_handoff_head');
+  db.exec('DROP TABLE local_seat_handoff_event');
+  expect(db.prepare('DELETE FROM schema_migration WHERE version=26').run().changes).toBe(1);
   expect(db.prepare('DELETE FROM schema_migration WHERE version=25').run().changes).toBe(1);
   expect(readAppliedMigrationVersion(db)).toBe(24);
   expect(db.prepare('SELECT * FROM campaign_enemy_art_upload').all()).toEqual([]);

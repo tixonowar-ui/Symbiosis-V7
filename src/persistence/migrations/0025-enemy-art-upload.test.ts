@@ -6,7 +6,8 @@ import Database from 'better-sqlite3';
 import { expect, it } from 'vitest';
 import { LEGACY_SCHEMA_21_MIGRATIONS } from '../../../tests/fixtures/legacy-schema-21.js';
 import { configurePersistenceDatabase } from '../database.js';
-import { applyMigrationSequence, applyMigrations } from './index.js';
+import { applyMigrationSequence } from './index.js';
+import { migration0025 } from './0025-enemy-art-upload.js';
 import { migration0022 } from './0022-custom-monster-v1.js';
 import { migration0023 } from './0023-enemy-template-versions.js';
 import { migration0024 } from './0024-monster-stat-roll-once.js';
@@ -37,16 +38,23 @@ it('0025 preserves the existing enemy version and receipts and rolls back the up
     db.exec(
       "CREATE TRIGGER reject_registry25 BEFORE INSERT ON schema_migration WHEN NEW.version=25 BEGIN SELECT RAISE(ABORT,'REACHED_REGISTRY_25'); END",
     );
-    expect(() => applyMigrations(db)).toThrow('REACHED_REGISTRY_25');
+    const through25 = [
+      ...LEGACY_SCHEMA_21_MIGRATIONS,
+      migration0022,
+      migration0023,
+      migration0024,
+      migration0025,
+    ];
+    expect(() => applyMigrationSequence(db, through25)).toThrow('REACHED_REGISTRY_25');
     expect(
       db.prepare("SELECT 1 FROM sqlite_schema WHERE name='campaign_enemy_art_upload'").get(),
     ).toBeUndefined();
     db.exec('DROP TRIGGER reject_registry25');
-    expect(applyMigrations(db)).toBe(25);
+    expect(applyMigrationSequence(db, through25)).toBe(25);
     expect(db.prepare('SELECT * FROM campaign_enemy_art_upload').all()).toEqual([]);
     expect(versions.all()).toEqual(beforeVersions);
     expect(events.all()).toEqual(beforeEvents);
-    expect(applyMigrations(db)).toBe(25);
+    expect(applyMigrationSequence(db, through25)).toBe(25);
     expect(db.pragma('foreign_key_check')).toEqual([]);
   } finally {
     db.close();
