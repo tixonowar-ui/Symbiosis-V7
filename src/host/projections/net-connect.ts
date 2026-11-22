@@ -55,6 +55,7 @@ export const NET_CONNECT_FORM_CONTRACTS = [
       'connectionState',
       'campaignId',
       'campaignStatus',
+      'HOST_LOCAL_HANDOFF after owner CANCEL only: original request, technical session and committed cancellation. Separate pre-SUBMIT path uses the existing return to APP-003.',
     ],
   },
   {
@@ -91,6 +92,7 @@ export const NET_CONNECT_FORM_CONTRACTS = [
       'requestRevision',
       'cancelReason(required)',
       'commandId',
+      'HOST_LOCAL_HANDOFF request owner only: original request/session/SUBMIT receipt and current requestRevision; preliminary result additionally requires the confirmed rejection. No admission required.',
     ],
   },
   {
@@ -328,6 +330,15 @@ export const NET_CONNECT_ACTION_CONTRACTS = [
     [],
   ],
   [
+    'NET-003',
+    'NET-003::CTA::005',
+    'Вернуть устройство мастеру',
+    'PLY-030',
+    'normative',
+    'PLAYER, own HOST_LOCAL_CANDIDATE request CANCELLED; original technicalSessionId, requestId, SUBMIT receipt and committed owner CANCEL receipt match; return to initiating GM only, including HOSTING; no selection/admission/seat. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.',
+    [],
+  ],
+  [
     'NET-004',
     'NET-004::CTA::001',
     'Вернуться к «Выбор локальных персонажей и мест»',
@@ -379,6 +390,15 @@ export const NET_CONNECT_ACTION_CONTRACTS = [
     'NET-003',
     'safe-return',
     'projectionRole=player; requestOwnerDeviceId matches current installation owner; requestStatus=REJECTED; technical session valid for the same campaign; no campaign copy or admission; no mutation in flight; navigation only, preserve the old request and immutable receipt.',
+    [],
+  ],
+  [
+    'NET-005',
+    'NET-005::CTA::004',
+    'Вернуть устройство мастеру',
+    'PLY-030',
+    'normative',
+    'PLAYER, acknowledged original request owner, own PENDING or IN_REVIEW request or confirmed preliminary REJECTED by NET-017::CTA::008. Keep pending/review status unchanged; terminal return requires original SUBMIT and actual decision receipt/status. No unconfirmed owner command. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.',
     [],
   ],
   [
