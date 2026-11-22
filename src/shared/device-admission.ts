@@ -24,6 +24,7 @@ export type NetworkGmRequestReviewWorkflowId =
 /** Client implementation vocabulary across a local NET entry/exit; not a role or form grant. */
 export const NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS = Object.freeze([
   ...NETWORK_WORKFLOW_COMMAND_IDS,
+  'UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK',
   'UI-CMD-ADMISSION-PLAYER-DECIDE',
   'UI-CMD-CAMPAIGN-READY-SET',
   'UI-CMD-CHAR-WIZARD-CHECKPOINT',

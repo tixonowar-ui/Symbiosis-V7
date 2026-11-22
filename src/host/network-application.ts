@@ -1,4 +1,6 @@
 import { readGmRequestReviewSourceWith } from '../persistence/network-device-request.js';
+import { confirmOrdinaryRosterSource, createOrdinarySeatRuntime } from './ordinary-seat-runtime.js';
+import { createOrdinaryCandidateLibrary } from './ordinary-candidate-library.js';
 import {
   ENEMY_AUTHORING_NAV_TARGETS,
   ENEMY_AUTHORING_WORKFLOWS,
@@ -86,7 +88,11 @@ import {
   campaignLobbyCommandValue,
 } from '@shared/campaign-lobby.js';
 import { projectGmCampaignLobby } from './projections/net-application.js';
-import { commitCampaignLobbyCommand, readCampaignLobby } from '../persistence/campaign-lobby.js';
+import {
+  commitCampaignLobbyCommand,
+  readCampaignLobby,
+  readCampaignLobbyCommand,
+} from '../persistence/campaign-lobby.js';
 import { admissionDecisionStorage } from '../persistence/campaign-admission-decision.js';
 import type Database from 'better-sqlite3';
 import type {
@@ -117,6 +123,7 @@ import {
   commitLocalNetworkTabEntry,
   readLocalNetworkTabEntryByCommandId,
   readActiveLocalNetworkTab,
+  readOwnedLocalNetworkTab,
   commitLocalNetworkTabClose,
   readLocalNetworkTabClosure,
   readLocalNetworkTabCloseByCommandId,
@@ -126,11 +133,13 @@ import {
   commitLocalNetworkMutation,
   readLocalNetworkApplication,
   readLocalNetworkApplicationEvent,
+  readLocalNetworkZeroSeatReturn,
   readLocalNetworkOutbox,
   readLocalNetworkAcknowledgementEvent,
   readLocalNetworkDeliverySnapshot,
   readLocalNetworkRequestDeliverySnapshot,
   readLocalNetworkShellExitByNavigationId,
+  readLocalNetworkNavigationById,
   readLocalNetworkAttemptCount,
   readLocalNetworkOpenOutboxByAttempt,
   readLocalRequestLaneBinding,
@@ -213,8 +222,10 @@ export type LocalNetworkHostMessage =
 export interface LocalNetworkConnection {
   networkScopeId: string | null;
   contextId: string | null;
+  zeroSeatReturn?: NonNullable<ReturnType<typeof readLocalNetworkZeroSeatReturn>>;
   executableWorkflowCommandIds: readonly WorkflowCommandCapabilityId[];
   readonly trusted: () => boolean;
+  readonly transportClosed?: () => boolean;
 }
 export interface LocalNetworkShell {
   readonly formId: string | null;
@@ -263,9 +274,15 @@ class LocalNetworkPublicationError extends Error {
     super('Network publication failed after durable acknowledgement', { cause });
   }
 }
+class LocalNetworkTransportClosedError extends NetworkApplicationStoreError {
+  constructor() {
+    super('UNAVAILABLE');
+  }
+}
 /** One own host serializes local intents; only the authenticated Node peer crosses the LAN. */
 export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
   const db = d.database;
+  const zeroReturnConnections = new Map<string, LocalNetworkConnection>();
   const commandLimits = {
     maxSubmitBodyBytes: d.config.transfer.maxSubmitBodyBytes,
     maxWitnessBytes: d.config.transfer.maxWitnessBytes,
@@ -276,7 +293,8 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
   const discovery = new Map<string, CampaignDiscoveryScan | null>(),
     discoveryFailures = new Set<string>();
   const trust = (c: LocalNetworkConnection) => {
-    if (closed || !c.trusted()) unavailable();
+    if (closed || c.transportClosed?.()) throw new LocalNetworkTransportClosedError();
+    if (!c.trusted()) unavailable();
   };
   const owner = (c: LocalNetworkConnection) => {
     trust(c);
@@ -337,6 +355,15 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       maxWitnessBytes: d.config.transfer.maxWitnessBytes,
     });
   }
+  function ownedAvailableFinals(s: LocalNetworkApplication) {
+    const imported = d.peer.admissionCapacity(s.networkScopeId)?.alreadyImportedSourceUuids;
+    return listLocalCharacters(db).filter(
+      (row) =>
+        row.lifecycleState === 'FINAL' &&
+        readLocalCharacterOwner(db, row.localCharacterId)?.ownerDeviceId === s.ownerDeviceId &&
+        !imported?.includes(row.localCharacterId),
+    );
+  }
   function candidates(
     c: LocalNetworkConnection,
     s: LocalNetworkApplication,
@@ -345,16 +372,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       return s.preparedBatchOrNull?.candidates ?? [];
     if (s.formId === 'CHR-027') return s.selectedCandidates.map((r) => prepared(c, r.sourceUuid));
     if (s.formId !== 'NET-003') return [];
-    return listLocalCharacters(db)
-      .filter(
-        (row) =>
-          row.lifecycleState === 'FINAL' &&
-          readLocalCharacterOwner(db, row.localCharacterId)?.ownerDeviceId === s.ownerDeviceId &&
-          !d.peer
-            .admissionCapacity(s.networkScopeId)
-            ?.alreadyImportedSourceUuids.includes(row.localCharacterId),
-      )
-      .map((row) => prepared(c, row.localCharacterId));
+    return ownedAvailableFinals(s).map((row) => prepared(c, row.localCharacterId));
   }
   const project = (
     c: LocalNetworkConnection,
@@ -406,7 +424,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
   ): ProjectionSnapshotV2Message => {
     const s = verifiedCurrent ?? current(c),
       base = project(c, s, verifiedAdmission);
-    return {
+    return ordinary.decorate(c, {
       messageType: 'projection.snapshot',
       protocolVersion: 2,
       projectionRole: 'player',
@@ -415,7 +433,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           ? vector(base.roleFilteredPayload as unknown as RevisionVector)
           : vector(s),
       presentation: { assignment: { reason, correlationId: id }, base, layers: [] },
-    };
+    });
   };
   function fresh(
     c: LocalNetworkConnection,
@@ -498,6 +516,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     c: LocalNetworkConnection,
     force = false,
     verifiedSource?: LocalNetworkDeliverySnapshot,
+    reconciliation: 'RECOVER' | 'REQUIRE_CURRENT' = 'RECOVER',
   ) {
     const s = verifiedSource?.current ?? current(c),
       bound = scope(c),
@@ -524,6 +543,11 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       out?.intent.operation !== 'OPEN' && s.requestOrNull !== null
         ? readLocalCampaignConnection(db, bound)
         : null;
+    if (
+      reconciliation === 'REQUIRE_CURRENT' &&
+      (s.pendingCommandIdOrNull !== null || savedConnection?.pendingOrNull !== null)
+    )
+      return unavailable();
     const address =
       out?.intent.operation === 'OPEN'
         ? out.intent.canonicalOrigin
@@ -535,6 +559,8 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     if (s.requestOrNull !== null) {
       verify();
       const continuation = readLocalCampaignConnection(db, bound);
+      if (reconciliation === 'REQUIRE_CURRENT' && continuation.pendingOrNull !== null)
+        return unavailable();
       const status =
         continuation.pendingOrNull === null
           ? await d.peer.readConnection(bound, guard(c))
@@ -548,7 +574,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     // before it can issue another command against that session's generation.
     if (out?.intent.operation !== 'OPEN' && s.requestOrNull !== null) {
       verify();
-      await refreshRequest(c);
+      await refreshRequest(c, undefined, undefined, reconciliation);
     } else if (out?.intent.operation !== 'OPEN' && s.sessionOrNull !== null) {
       verify();
       const opening = readLocalNetworkOpenOutboxByAttempt(db, scope(c), s.sessionOrNull.attemptId);
@@ -762,6 +788,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     c: LocalNetworkConnection,
     verifiedBefore?: LocalNetworkDeliverySnapshot,
     consumeVerifiedCurrent?: (current: LocalNetworkApplication) => void,
+    reconciliation: 'RECOVER' | 'REQUIRE_CURRENT' = 'RECOVER',
   ): Promise<boolean> {
     const before = verifiedBefore ?? readLocalNetworkRequestDeliverySnapshot(db, scope(c)),
       s = before.current,
@@ -791,9 +818,13 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     exact(response.receipt.semanticBodySha256, submit.semanticBodySha256);
     exact(response.receipt.request, submit.acknowledgementOrNull.request);
     if (response.current.kind === 'REQUEST') exact(response.current.request, request);
-    else if (response.current.kind === 'REQUEST_REVIEW')
-      return applyRequestCurrent(c, response, after, consumeVerifiedCurrent);
-    else unavailable();
+    else if (response.current.kind === 'REQUEST_REVIEW') {
+      if (reconciliation === 'RECOVER')
+        return applyRequestCurrent(c, response, after, consumeVerifiedCurrent);
+      // The chooser can confirm its saved proof, but cannot settle a command on the owner's behalf.
+      const checked = requestProof(c, response, after) ?? unavailable();
+      exact(checked.proof, after.requestCurrentOrNull?.proof);
+    } else unavailable();
     return false;
   }
 
@@ -965,18 +996,13 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         refusal: { code: 'GUARD_REJECTED' },
       });
   }
-  async function refreshOwnerLobby(
+  function lobbyRootConnection(
     c: LocalNetworkConnection,
-    verifiedOwned?: NonNullable<ReturnType<typeof readLocalAdmissionPresentation>>,
-  ): Promise<LocalAdmissionRead | null> {
-    // Private callers may reuse a complete read only before any intervening await or write.
-    let owned = verifiedOwned ?? readLocalAdmissionPresentation(db, scope(c));
-    if (owned?.admission.receiptOrNull?.decision !== 'ACCEPT') return owned?.admission ?? null;
-    const bound = scope(c),
-      contextId = c.contextId,
-      root = owned.admission.record.scope;
-    // A prepared tab borrows its proved original transport; no session or controller is allocated.
-    const rootConnection: LocalNetworkConnection = {
+    bound: LocalNetworkScope,
+    root: LocalNetworkScope,
+  ): LocalNetworkConnection {
+    const contextId = c.contextId;
+    return {
       ...c,
       networkScopeId: root.networkScopeId,
       trusted: () => {
@@ -986,8 +1012,20 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         return current !== null && isDeepStrictEqual(current.admission.record.scope, root);
       },
     };
+  }
+  async function refreshOwnerLobby(
+    c: LocalNetworkConnection,
+    verifiedOwned?: NonNullable<ReturnType<typeof readLocalAdmissionPresentation>>,
+  ): Promise<LocalAdmissionRead | null> {
+    // Private callers may reuse a complete read only before any intervening await or write.
+    let owned = verifiedOwned ?? readLocalAdmissionPresentation(db, scope(c));
+    if (owned?.admission.receiptOrNull?.decision !== 'ACCEPT') return owned?.admission ?? null;
+    const bound = scope(c),
+      verify = guard(c),
+      root = owned.admission.record.scope;
+    // A prepared tab borrows its proved original transport; no session or controller is allocated.
     if (d.peer.current(root.networkScopeId) === null) {
-      await reconnect(rootConnection, true);
+      await reconnect(lobbyRootConnection(c, bound, root), true);
       owned = readLocalAdmissionPresentation(db, bound)!;
     }
     guard(c)();
@@ -1031,42 +1069,56 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         );
       } else throw new LocalNetworkPeerError('UNCONFIRMED_OUTCOME');
     }
-    const observed = localLobbyState(owned.admission).observations.find(
-      (v) => v.selectedCopy.controller.localControllerSeatId === owned.tab.tabId,
-    );
-    if (pending === null && observed !== undefined) {
-      const checked = await d.peer.checkLobbyObservation(root, owned.tab.tabId, observed);
-      guard(c)();
-      if (c.contextId !== contextId || c.networkScopeId !== bound.networkScopeId) unavailable();
-      if (checked.outcome === 'UNCHANGED') {
-        const fresh = readLocalAdmissionPresentation(db, bound);
-        if (fresh === null || !isDeepStrictEqual(fresh.admission.record.scope, root)) unavailable();
-        return fresh.admission;
-      }
-      const verify = guard(c);
-      return commitLocalLobbyEvent(
-        db,
-        bound,
-        randomUUID(),
-        checked.hostIdentity,
-        { kind: 'LOBBY_OBSERVATION', observation: checked.observation },
-        (actual) => {
-          verify();
-          // The writer checks this same root against its full replay before and after append.
-          if (!isDeepStrictEqual(actual.record.scope, root)) unavailable();
-        },
+    const result = await observeOwnerLobby(owned, bound, verify, pending === null);
+    if (result !== 'UNCHANGED') return result;
+    verify();
+    const fresh = readLocalAdmissionPresentation(db, bound);
+    if (fresh === null || !isDeepStrictEqual(fresh.admission.record.scope, root)) unavailable();
+    return fresh.admission;
+  }
+
+  async function observeOwnerLobby(
+    owned: NonNullable<ReturnType<typeof readLocalAdmissionPresentation>>,
+    bound: LocalNetworkScope,
+    verify: () => void,
+    checkKnown: boolean,
+    checkHandoff?: (actual: LocalAdmissionRead) => void,
+    recoverRead?: (error: unknown) => Promise<typeof owned>,
+  ) {
+    const root = owned.admission.record.scope;
+    const handoffRead = checkHandoff === undefined ? undefined : 'HANDOFF_READ';
+    const read = (view: typeof owned) => {
+      const observed = localLobbyState(view.admission).observations.find(
+        (v) => v.selectedCopy.controller.localControllerSeatId === view.tab.tabId,
       );
-    }
-    const response = await d.peer.fetchAdmission(root, owned.tab.tabId);
-    guard(c)();
-    if (response.outcome !== 'LOBBY') throw new LocalNetworkPeerError('UNCONFIRMED_OUTCOME');
+      return checkKnown && observed !== undefined
+        ? d.peer.checkLobbyObservation(root, view.tab.tabId, observed, handoffRead)
+        : d.peer.fetchAdmission(root, view.tab.tabId, handoffRead);
+    };
+    const result = await read(owned).catch(async (error: unknown) => {
+      if (recoverRead === undefined) throw error;
+      return read(await recoverRead(error));
+    });
+    verify();
+    if (result.outcome === 'UNCHANGED') return 'UNCHANGED' as const;
+    if (result.outcome !== 'CHANGED' && result.outcome !== 'LOBBY')
+      throw new LocalNetworkPeerError('UNCONFIRMED_OUTCOME');
+    let checkedHandoff = false;
     return commitLocalLobbyEvent(
       db,
       bound,
       randomUUID(),
-      response.hostIdentity,
-      { kind: 'LOBBY_OBSERVATION', observation: response.observation },
-      guard(c),
+      result.hostIdentity,
+      { kind: 'LOBBY_OBSERVATION', observation: result.observation },
+      (actual) => {
+        verify();
+        if (!isDeepStrictEqual(actual.record.scope, root)) unavailable();
+        // An IMMEDIATE transaction encloses both guard calls and only writes this observation.
+        if (checkHandoff !== undefined && !checkedHandoff) {
+          checkHandoff(actual);
+          checkedHandoff = true;
+        }
+      },
     );
   }
   async function ownerReady(
@@ -2140,7 +2192,10 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       draftRevision: result.current.draftRevision,
       revisions: vector(result.current),
       projectionRole: 'player',
-      presentation: { base: project(c, result.current), layers: [] },
+      presentation: {
+        base: snapshot(c, m.draftUpdateId, 'FORM_ACTION', result.current).presentation.base,
+        layers: [],
+      },
     });
   }
   async function enter(
@@ -2148,11 +2203,18 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     c: LocalNetworkConnection,
     shell: LocalNetworkShell,
     send: (m: LocalNetworkHostMessage) => void,
+    retained?: {
+      tab: NonNullable<ReturnType<typeof readOwnedLocalNetworkTab>>;
+      clientRequestJson: string;
+      replayingOnThisSocket: boolean;
+    },
   ) {
     const ownerDeviceId = owner(c),
       fromFinal = m.sourceFormId === 'CHR-040';
     const known = readLocalNetworkTabEntryByCommandId(db, ownerDeviceId, m.navigationRequestId);
-    let tab = known?.currentTab ?? null;
+    if (retained && known !== null) return unavailable();
+    const wire = retained?.clientRequestJson ?? canonicalPostSaveJson(m);
+    let tab = retained?.tab ?? known?.currentTab ?? null;
     let sourceId: string | null = null;
     if (known !== null) {
       const entry = known.request.applicationEntry;
@@ -2173,10 +2235,11 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       )
         unavailable();
       if (
-        shell.formId !== m.sourceFormId ||
-        shell.deviceId !== ownerDeviceId ||
-        shell.contextId === null ||
-        shell.revisions.projectionRevision !== m.expectedProjectionRevision
+        !retained?.replayingOnThisSocket &&
+        (shell.formId !== m.sourceFormId ||
+          shell.deviceId !== ownerDeviceId ||
+          shell.contextId === null ||
+          shell.revisions.projectionRevision !== m.expectedProjectionRevision)
       )
         unavailable();
       if (fromFinal) {
@@ -2193,7 +2256,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         }
       }
       if (tab === null) {
-        const sourceContextId = shell.contextId,
+        const sourceContextId = shell.contextId ?? unavailable(),
           sourceRevisions = vector(shell.revisions);
         const entry = commitLocalNetworkTabEntry(
           db,
@@ -2228,10 +2291,10 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       }
     }
     c.networkScopeId = tab.networkScopeId;
-    c.contextId = randomUUID();
+    if (!retained?.replayingOnThisSocket) c.contextId = randomUUID();
     const saved = readLocalNetworkApplicationEvent(db, scope(c), eventId(m.navigationRequestId));
     if (saved !== null) {
-      exact(saved.input.clientRequestJsonOrNull, canonicalPostSaveJson(m));
+      exact(saved.input.clientRequestJsonOrNull, wire);
       commitLocalNetworkMutation(db, saved.input, guard(c));
     } else {
       if (fromFinal && sourceId === null) unavailable();
@@ -2255,8 +2318,12 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           singleCandidateOrNull: ref,
         },
         eventId(m.navigationRequestId),
-        canonicalPostSaveJson(m),
+        wire,
       );
+    }
+    if (retained) {
+      delete c.zeroSeatReturn;
+      zeroReturnConnections.delete(tab.networkScopeId);
     }
     const entered = current(c);
     if (entered.shellExitOrNull !== null)
@@ -2272,7 +2339,8 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
         verify();
         discoveryFailures.add(tab.networkScopeId);
       }
-    } else if (current(c).sessionOrNull !== null)
+    }
+    if ((fromFinal || retained !== undefined) && entered.sessionOrNull !== null)
       try {
         await reconnect(c);
       } catch {
@@ -2280,6 +2348,59 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       }
     trust(c);
     send(snapshot(c, m.navigationRequestId, 'FORM_ACTION'));
+  }
+  async function resumeEmpty(
+    request: Extract<LocalNetworkClientMessage, { operation: 'RESUME_EMPTY' }>,
+    c: LocalNetworkConnection,
+    shell: LocalNetworkShell,
+    send: (message: LocalNetworkHostMessage) => void,
+  ) {
+    if (
+      ordinary.locked(c) ||
+      !c.executableWorkflowCommandIds.includes('UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK')
+    )
+      return unavailable();
+    const ownerDeviceId = owner(c);
+    const exit = readLocalNetworkNavigationById(db, ownerDeviceId, request.exitNavigationId);
+    if (exit === null) return unavailable();
+    const bound = { ownerDeviceId, networkScopeId: exit.input.networkScopeId };
+    const tab = readOwnedLocalNetworkTab(db, ownerDeviceId, bound.networkScopeId);
+    if (tab?.lifecycleState !== 'UNBOUND') return unavailable();
+    const clientRequestJson = canonicalPostSaveJson(request),
+      id = eventId(request.requestId);
+    const reset = readLocalNetworkZeroSeatReturn(db, bound, request);
+    if (reset?.exitNavigationId !== request.exitNavigationId) return unavailable();
+    const holder = zeroReturnConnections.get(bound.networkScopeId);
+    if (holder?.trusted() && !holder.transportClosed?.()) {
+      if (holder !== c || shell.lastNetworkExitNavigationIdOrNull !== reset.exitNavigationId)
+        return unavailable();
+      exact(c.zeroSeatReturn, reset);
+    } else if (
+      shell.lastNetworkExitNavigationIdOrNull !== null &&
+      shell.lastNetworkExitNavigationIdOrNull !== reset.exitNavigationId
+    )
+      return unavailable();
+    const saved = readLocalNetworkApplicationEvent(db, bound, id);
+    if (saved !== null) exact(saved.input.clientRequestJsonOrNull, clientRequestJson);
+    const replayingOnThisSocket =
+      saved !== null &&
+      shell.formId === null &&
+      c.networkScopeId === bound.networkScopeId &&
+      c.contextId !== null;
+    await enter(
+      {
+        messageType: 'navigation.form-action',
+        protocolVersion: 2,
+        sourceFormId: 'APP-002',
+        actionKey: 'APP-002::CTA::003',
+        navigationRequestId: request.requestId,
+        expectedProjectionRevision: request.expectedProjectionRevision,
+      },
+      c,
+      shell,
+      send,
+      { tab, clientRequestJson, replayingOnThisSocket },
+    );
   }
   async function navigate(
     m: FormActionIntentV2Message,
@@ -2834,6 +2955,9 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       } else unavailable();
     } catch (error) {
       if (error instanceof LocalNetworkPublicationError) throw error;
+      // A queued frame can outlive its socket while awaiting the peer. Its replacement resumes independently.
+      if (error instanceof LocalNetworkTransportClosedError) return true;
+      if (closed || c.transportClosed?.()) throw error;
       let revisions = shell.revisions;
       try {
         if (c.trusted() && c.networkScopeId !== null) revisions = currentVector(c);
@@ -3023,6 +3147,266 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       presentation: { base: ProjectionSnapshotV2Message['presentation']['base'] };
     }
   >();
+  const ordinaryCampaign = (deviceId: string, campaignId: string) => {
+    const pin = readLocalNetworkHostPin(db, deviceId, campaignId);
+    return pin !== null && pin.identity.ownerDeviceId !== deviceId;
+  };
+  const canSelectLibrary = (c: LocalNetworkConnection, app = current(c)) => {
+    return (
+      app.formId === 'NET-003' &&
+      app.sessionOrNull !== null &&
+      app.pendingCommandIdOrNull === null &&
+      ordinaryCampaign(app.ownerDeviceId, app.sessionOrNull.campaignProof.campaignId) &&
+      (
+        d.peer.admissionCapacity(app.networkScopeId)?.campaign ??
+        d.peer.current(app.networkScopeId)?.campaign
+      )?.status === 'PAUSED'
+    );
+  };
+  const candidateLibrary = createOrdinaryCandidateLibrary(
+    (c) => {
+      const application = current(c);
+      if (!canSelectLibrary(c, application)) return unavailable();
+      const available = ownedAvailableFinals(application).flatMap((row) => {
+        // Retain the summary only, so preparing the next FINAL can release the previous full export.
+        const candidate = prepared(c, row.localCharacterId);
+        return candidate.descriptor.baselineVersion === d.baseline.baselineVersion
+          ? [candidateSummary(candidate, application.tabId)]
+          : [];
+      });
+      return { application, candidates: available };
+    },
+    (c, request, refs, application) => {
+      selected(c, refs);
+      mutate(
+        c,
+        { kind: 'SELECTION', selectedCandidates: refs },
+        request.requestId,
+        canonicalPostSaveJson(request),
+        application,
+      );
+    },
+  );
+  const ordinary = createOrdinarySeatRuntime({
+    ordinaryCampaign,
+    canSelectLibrary,
+    candidateLibrary,
+    db,
+    owner,
+    peek: snapshot,
+    confirmSource: async (c, expected, targetSeatId, id) => {
+      const bound = scope(c);
+      const verify = guard(c);
+      const original = readLocalAdmissionPresentation(db, bound) ?? unavailable();
+      const root = original.admission.record.scope;
+      const receipt = original.admission.receiptOrNull;
+      if (
+        receipt?.decision !== 'ACCEPT' ||
+        receipt.requestOwnerDeviceId !== bound.ownerDeviceId ||
+        receipt.campaignId !== expected.campaignId
+      )
+        return unavailable();
+      const tabId = original.tab.tabId;
+      const observed = localLobbyState(original.admission).observations.find(
+        (v) => v.selectedCopy.controller.localControllerSeatId === tabId,
+      );
+      if (observed === undefined || observed.peaceOrNull?.sceneId !== expected.sceneId)
+        return unavailable();
+      const checkBinding = (view: typeof original) => {
+        if (
+          view.tab.tabId !== expected.seatId ||
+          view.admission.events.length !== original.admission.events.length ||
+          !isDeepStrictEqual(vector(view.application), vector(original.application)) ||
+          view.admission.receiptOrNull?.receiptId !== receipt.receiptId ||
+          !isDeepStrictEqual(view.admission.record.scope, root) ||
+          view.admission.returnedOrNull !== null ||
+          view.admission.pendingDecisionOrNull !== null ||
+          view.application.pendingCommandIdOrNull !== null ||
+          localLobbyPendingCommandId(view.admission, tabId) !== null ||
+          readLocalCampaignConnection(db, root).pendingOrNull !== null
+        )
+          unavailable();
+      };
+      const reread = () => {
+        verify();
+        const fresh = readLocalAdmissionPresentation(db, bound) ?? unavailable();
+        checkBinding(fresh);
+        return fresh;
+      };
+      checkBinding(original);
+      const check = () => d.peer.checkLobbyObservation(root, tabId, observed, 'HANDOFF_READ');
+      const restore = async () => {
+        reread();
+        await reconnect(lobbyRootConnection(c, bound, root), true, undefined, 'REQUIRE_CURRENT');
+        reread();
+        return check();
+      };
+      const source = await confirmOrdinaryRosterSource(
+        expected,
+        snapshot(c, id, 'FORM_ACTION', original.application, original),
+        async () => {
+          const channel = d.peer.current(root.networkScopeId);
+          let checked: Awaited<ReturnType<typeof check>> | undefined;
+          if (channel !== null) {
+            try {
+              checked = await check();
+            } catch (error) {
+              if (!d.peer.lostReadChannel(root.networkScopeId, channel, error)) throw error;
+            }
+          }
+          checked ??= await restore();
+          if (checked.outcome !== 'UNCHANGED') return unavailable();
+          const fresh = reread();
+          return snapshot(c, id, 'FORM_ACTION', fresh.application, fresh);
+        },
+      );
+      if (source === null) return unavailable();
+      const sameReceipt = receipt.copies.some(
+        (copy) =>
+          copy.lifecycleState === 'ACTIVE' &&
+          copy.controllerBindingOrNull?.deviceId === bound.ownerDeviceId &&
+          copy.controllerBindingOrNull.localControllerSeatId === targetSeatId,
+      );
+      return { source, sameReceipt };
+    },
+    selectedCount: (c) => current(c).selectedCandidates.length,
+    resetEmptySetup: (c, nav) => {
+      const bound = scope(c);
+      const app = current(c);
+      const tab = readOwnedLocalNetworkTab(db, bound.ownerDeviceId, bound.networkScopeId);
+      if (
+        tab?.networkScopeId !== bound.networkScopeId ||
+        tab.lifecycleState !== 'UNBOUND' ||
+        app.sessionOrNull === null ||
+        app.selectedCandidates.length !== 0 ||
+        app.pendingCommandIdOrNull !== null
+      )
+        return unavailable();
+      if (
+        app.formId !== 'NET-003' &&
+        readLocalNetworkZeroSeatReturn(db, bound)?.exitNavigationId !== nav.navigationRequestId
+      )
+        return unavailable();
+      mutate(
+        c,
+        {
+          kind: 'NAVIGATE',
+          targetFormId: 'NET-001',
+          singleCandidateOrNull: null,
+          plannedAttemptIdOrNull: null,
+        },
+        eventId(nav.navigationRequestId),
+        canonicalPostSaveJson(nav),
+        app,
+      );
+      c.zeroSeatReturn = {
+        networkScopeId: bound.networkScopeId,
+        exitNavigationId: nav.navigationRequestId,
+        technicalSessionId: app.sessionOrNull.technicalSessionId,
+      };
+      zeroReturnConnections.set(bound.networkScopeId, c);
+    },
+    target: async (c, binding, contextId, id, reason) => {
+      const deviceId = owner(c);
+      const originScopeId = c.networkScopeId;
+      const originContextId = c.contextId;
+      const target = {
+        ...c,
+        networkScopeId: binding.networkScopeId,
+        contextId,
+        trusted: () =>
+          c.trusted() && c.networkScopeId === originScopeId && c.contextId === originContextId,
+      };
+      const bound = scope(target);
+      const verify = guard(target);
+      const checkTarget = (admission: LocalAdmissionRead, application: LocalNetworkApplication) => {
+        const receipt = admission.receiptOrNull;
+        if (
+          receipt?.decision !== 'ACCEPT' ||
+          receipt.receiptId !== binding.admissionReceiptId ||
+          receipt.requestOwnerDeviceId !== deviceId ||
+          receipt.campaignId !== binding.campaignId ||
+          !receipt.copies.some(
+            (copy) =>
+              copy.lifecycleState === 'ACTIVE' &&
+              copy.campaignCharacterId === binding.campaignCharacterId &&
+              copy.controllerBindingOrNull?.deviceId === deviceId &&
+              copy.controllerBindingOrNull.localControllerSeatId === binding.localControllerSeatId,
+          ) ||
+          admission.returnedOrNull !== null ||
+          admission.pendingDecisionOrNull !== null ||
+          application.pendingCommandIdOrNull !== null ||
+          localLobbyState(admission).pendingOrNull !== null ||
+          readLocalCampaignConnection(db, admission.record.scope).pendingOrNull !== null
+        )
+          unavailable();
+      };
+      const readTarget = () => {
+        verify();
+        const owned = readLocalAdmissionPresentation(db, bound) ?? unavailable();
+        if (
+          owned.tab.tabId !== binding.localControllerSeatId ||
+          owned.tab.networkScopeId !== binding.networkScopeId
+        )
+          return unavailable();
+        checkTarget(owned.admission, owned.application);
+        return owned;
+      };
+      let owned = readTarget();
+      const root = owned.admission.record.scope;
+      const currentTarget = () => {
+        const fresh = readTarget();
+        if (!isDeepStrictEqual(fresh.admission.record.scope, root)) return unavailable();
+        return fresh;
+      };
+      const restore = async () => {
+        await reconnect(
+          lobbyRootConnection(target, bound, root),
+          true,
+          undefined,
+          'REQUIRE_CURRENT',
+        );
+        return currentTarget();
+      };
+      const channel = d.peer.current(root.networkScopeId);
+      if (channel === null) owned = await restore();
+      await observeOwnerLobby(
+        owned,
+        bound,
+        verify,
+        true,
+        (actual) => checkTarget(actual, readLocalNetworkApplication(db, root)),
+        channel === null
+          ? undefined
+          : async (error) => {
+              if (!d.peer.lostReadChannel(root.networkScopeId, channel, error)) throw error;
+              currentTarget();
+              return restore();
+            },
+      );
+      owned = currentTarget();
+      return {
+        connection: target,
+        snapshot: snapshot(target, id, reason, owned.application, owned),
+      };
+    },
+    unwatch: (c) => {
+      ownerViews.delete(c);
+      peerViews.delete(c);
+      publishedPeerSnapshots.delete(c);
+    },
+    activePublished: (c, message, send) => {
+      recordPeerPublication(c, message);
+      ownerViews.set(c, {
+        contextId: c.contextId!,
+        scopeId: c.networkScopeId!,
+        publishedToken: ownerViewToken(message.revisions, message.presentation.base),
+        publishedPendingCommandId: null,
+        terminalCommandIds: new Set(),
+        send: (next) => ordinary.ownerPublication(c, send, next),
+      });
+    },
+  });
   function recordPeerPublication(
     c: LocalNetworkConnection,
     message: {
@@ -3031,6 +3415,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     },
   ): void {
     const formId = message.presentation.base.formId;
+    if (!ordinary.canCache(c)) return;
     publishedPeerSnapshots.set(c, message);
     if (!(formId === 'NET-005' || isAdmissionOwnerForm(formId) || formId === 'PLY-001'))
       peerViews.delete(c);
@@ -3711,6 +4096,18 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
   scheduleOwnerPoll();
   return {
     currentVector,
+    ordinaryLocked: ordinary.locked,
+    ordinaryParticipant: ordinary.inSeatView,
+    observeLocalShell: ordinary.observeLocalShell,
+    disconnect(c: LocalNetworkConnection) {
+      const reset = c.zeroSeatReturn;
+      if (reset && zeroReturnConnections.get(reset.networkScopeId) === c)
+        zeroReturnConnections.delete(reset.networkScopeId);
+      ordinary.forget(c);
+      ownerViews.delete(c);
+      peerViews.delete(c);
+      publishedPeerSnapshots.delete(c);
+    },
     handle(
       m: LocalNetworkClientMessage,
       c: LocalNetworkConnection,
@@ -3718,6 +4115,41 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
       send: (m: LocalNetworkHostMessage) => void,
     ) {
       const next = frames.then(async () => {
+        if (m.messageType === 'ordinary.seat.control' && m.operation === 'RESUME_EMPTY') {
+          const previousForm = shell.formId;
+          let published = false;
+          try {
+            await resumeEmpty(m, c, shell, (message) => {
+              published = true;
+              send(message);
+              if (message.messageType === 'projection.snapshot' && message.protocolVersion === 2) {
+                ordinary.observe(c, send, message);
+                recordPeerPublication(c, message);
+              }
+            });
+          } catch (error) {
+            // A committed return can be replayed by its exact request after discovery loses the socket.
+            if (!published && error instanceof LocalNetworkTransportClosedError) return true;
+            if (
+              published ||
+              closed ||
+              c.transportClosed?.() ||
+              shell.formId !== previousForm ||
+              !c.trusted()
+            )
+              throw error;
+            send({
+              messageType: 'navigation.form-action.refusal',
+              protocolVersion: 2,
+              navigationRequestId: m.requestId,
+              revisions: shell.revisions,
+              presentationUnchanged: true,
+              refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+            });
+          }
+          return true;
+        }
+        if (await ordinary.handle(m, c, shell, send)) return true;
         const previous = ownerViews.get(c);
         let watching =
           previous !== undefined &&
@@ -3743,6 +4175,19 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           terminalCommandIds.add(m.commandId);
         const handled = await handle(m, c, shell, (message) => {
           send(message);
+          if (message.messageType === 'projection.snapshot' && message.protocolVersion === 2)
+            ordinary.observe(c, send, message);
+          if (message.messageType === 'network.draft.result')
+            ordinary.observe(c, send, {
+              messageType: 'projection.snapshot',
+              protocolVersion: 2,
+              projectionRole: 'player',
+              revisions: message.revisions,
+              presentation: {
+                ...message.presentation,
+                assignment: { reason: 'FORM_ACTION', correlationId: message.draftUpdateId },
+              },
+            });
           if (message.messageType === 'projection.snapshot' && message.protocolVersion === 2)
             recordPeerPublication(c, message);
           if (message.messageType === 'command.result' || message.messageType === 'command.replay')
@@ -3776,6 +4221,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
           watchedContextId === c.contextId &&
           watchedScopeId === c.networkScopeId &&
           !closed &&
+          !c.transportClosed?.() &&
           c.trusted() &&
           c.networkScopeId !== null &&
           c.contextId !== null
@@ -3786,7 +4232,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
             publishedToken,
             publishedPendingCommandId,
             terminalCommandIds,
-            send,
+            send: (message) => ordinary.ownerPublication(c, send, message),
           });
         else ownerViews.delete(c);
         return handled;
@@ -3799,6 +4245,7 @@ export function createLocalNetworkRuntime(d: LocalNetworkRuntimeDependencies) {
     },
     close() {
       closed = true;
+      ordinary.close();
       clearTimeout(ownerTimer);
       ownerViews.clear();
       peerViews.clear();
@@ -4156,12 +4603,13 @@ export function createGmNetworkRuntime(d: {
       validateEnemyAuthoringSource(db, source, state, d.enemyAuthoring, d.baseline);
     else if (state.events.some((event) => event.mutation.kind === 'ENEMY_AUTHORING')) unavailable();
   };
-  const verifiedSource = (c: CampaignConnection): GmRequestReviewSource => {
-    return readGmRequestReviewSourceWith(db, scope(c), validateOwner, (source, state) => {
+  const verifiedReview = (c: CampaignConnection) =>
+    readGmRequestReviewSourceWith(db, scope(c), validateOwner, (source, state) => {
       verifiedQueue(source.queue);
       validateEnemySources(source, state);
-    }).source;
-  };
+      return state.events;
+    });
+  const verifiedSource = (c: CampaignConnection): GmRequestReviewSource => verifiedReview(c).source;
   const enemyRelevant = (m: LocalNetworkClientMessage) =>
     m.messageType === 'network.enemy-selection.replace' ||
     (m.messageType === 'command.request' &&
@@ -4334,17 +4782,17 @@ export function createGmNetworkRuntime(d: {
     return db
       .transaction(() => {
         const own = scope(c);
-        verifiedSource(c);
-        const enemyEvent = readGmRequestReviewViewStateInTransaction(db, own).events.find(
+        const reviewEvents = verifiedReview(c).observed;
+        const enemyEvent = reviewEvents.find(
           (event) => event.eventId === id && event.mutation.kind === 'ENEMY_AUTHORING',
         );
         if (enemyEvent?.mutation.kind === 'ENEMY_AUTHORING')
           return enemyAuthoringReceipt(enemyEvent.mutation.cause, vector(enemyEvent.view));
-        const npcSource = readGmRequestReviewViewStateInTransaction(db, own).events.some(
+        const npcSource = reviewEvents.some(
           (e) => e.mutation.kind === 'NPC_SOURCE' && e.mutation.cause.operationId === id,
         );
         if (npcSource) return npcApplication(c).receipt(id);
-        const lifecycleSource = readGmRequestReviewViewStateInTransaction(db, own).events.find(
+        const lifecycleSource = reviewEvents.find(
           (event) =>
             event.mutation.kind === 'LIFECYCLE_SOURCE' && event.mutation.cause.commandId === id,
         );
@@ -4362,7 +4810,7 @@ export function createGmNetworkRuntime(d: {
             result: { ...event.receipt, contextId: own.gmLocalContextId },
           };
         }
-        const lobbySource = readGmRequestReviewViewStateInTransaction(db, own).events.find(
+        const lobbySource = reviewEvents.find(
           (event) =>
             event.mutation.kind === 'LOBBY_SOURCE' && event.mutation.cause.commandId === id,
         );
@@ -5550,13 +5998,14 @@ export function createGmNetworkRuntime(d: {
           workflowCommandId: m.workflowCommandId,
           commandId: m.commandId,
         });
-        const known = readCampaignLobby(
+        const known = readCampaignLobbyCommand(
           db,
           own,
+          request.commandId,
           validateOwner,
           admissionService().rules,
-        ).events.find((event) => event.request.commandId === request.commandId);
-        if (known === undefined) {
+        );
+        if (known === null) {
           const view = verifiedSource(c).viewOrNull;
           if (view === null || view.formId !== 'NET-016') unavailable();
           exact(vector(view), m.expectedRevisions);

@@ -5,9 +5,24 @@ import type { StoredCampaignLifecycleCommand } from '../shared/campaign-lifecycl
 import { readCampaignLobby, commitCampaignLobbyCommand } from '../persistence/campaign-lobby.js';
 import type { LobbyAuthority } from '../persistence/campaign-lobby-state.js';
 import type { CampaignLobbyCommand } from '@shared/campaign-lobby.js';
+import type { ProjectionSnapshotV2Message } from '@shared/wire-v2-protocol.js';
+import { createOrdinarySeatRuntime } from './ordinary-seat-runtime.js';
+import { readOrdinarySceneRoster } from '../persistence/local-seat-roster.js';
 import { commitGmRequestReviewNavigation } from '../persistence/network-device-request.js';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
+import { initializeNetworkInstallation } from './network-installation.js';
+import { createHost } from './server.js';
+import { openLocalHostWebSocket } from '../../tests/fixtures/local-host-websocket.js';
+import { ORDINARY_SEAT_ACK } from '../shared/ordinary-seat.js';
+import {
+  commitOrdinarySeatHandoff,
+  ordinaryHandoffPresentAtStartup,
+  readOrdinaryActiveSeat,
+  readOrdinarySeatHandoff,
+  readOrdinarySeatRoster,
+  type OrdinarySeatCommand,
+} from '../persistence/local-seat-handoff.js';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -54,7 +69,7 @@ import {
   createCampaignAdmissionRules,
   admissionSelectedGroupLabels,
 } from './campaign-admission-service.js';
-import { projectGmAdmission } from './projections/net-application.js';
+import { projectGmAdmission, projectLocalCampaignLobby } from './projections/net-application.js';
 import { admissionGmProjectionValue } from '@shared/campaign-admission-presentation.js';
 import { readHostedCurrentPausedCampaign } from '../persistence/current-paused-campaign.js';
 import {
@@ -85,6 +100,7 @@ import {
   readLocalAdmissionDelivery,
   prepareLocalAdmissionDecision,
   acknowledgeLocalAdmissionDecision,
+  commitLocalLobbyEvent,
   returnFromLocalAdmission,
 } from '../persistence/local-campaign-admission.js';
 import {
@@ -125,6 +141,7 @@ import {
 } from '../persistence/network-device-request.js';
 import {
   readCampaignCreationCursor,
+  readGmRequestReviewViewStateInTransaction,
   readGmAdmissionViewStateInTransaction,
   appendGmAdmissionViewEventInTransaction,
   returnGmAdmissionViewInTransaction,
@@ -2287,6 +2304,397 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
         f.allow,
       ).current;
     });
+    it('returns one redacted refusal per malformed frame on a purged socket and resumes its curtain', async () => {
+      const db = owner.db,
+        device = owner.scope.ownerDeviceId,
+        receipt = accepted.playerDecisionOrNull!.receipt;
+      acknowledgeLocalAdmissionDecision(
+        db,
+        owner.scope,
+        f.batch.requestId,
+        randomUUID(),
+        owner.hostIdentity,
+        { kind: 'ACK', receipt },
+        f.allow,
+      );
+      initializeNetworkInstallation(db);
+      const [source, target] = receipt.copies.map(
+        (copy) => copy.controllerBindingOrNull!.localControllerSeatId,
+      );
+      const saved = commitOrdinarySeatHandoff(
+        db,
+        device,
+        {
+          kind: 'BEGIN',
+          commandId: randomUUID(),
+          expectedRevision: 0,
+          targetSeatId: target!,
+          sourceSeatIdOrNull: source!,
+          sourceContextId: randomUUID(),
+          targetContextId: randomUUID(),
+          sceneId: randomUUID(),
+          pendingCommandOwner: null,
+          activeProofOrNull: null,
+        },
+        f.allow,
+      );
+      const before = readOrdinarySeatHandoff(db, device);
+      const staticRoot = mkdtempSync(join(tmpdir(), 'ordinary-refusal-static-'));
+      directories.push(staticRoot);
+      const zero = { stateRevision: 0, projectionRevision: 0, actorVisibilityRevision: 0 };
+      const frameErrors = vi.fn();
+      const app = await createHost({
+        database: db,
+        projectRoot: process.cwd(),
+        staticRoot,
+        readRevisions: () => zero,
+        advanceRevisions: () => {
+          throw new Error('Unexpected revision change');
+        },
+        allocateCreationBranchUuid: randomUUID,
+        allocateCreationRollRequestId: randomUUID,
+        allocateContextId: randomUUID,
+        allocateLocalCharacterId: randomUUID,
+        allocateReceiptId: randomUUID,
+        allocateWizardCheckpointId: randomUUID,
+        sampleCreationD20: () => 1,
+        onFrameError: frameErrors,
+      });
+      const socket = await openLocalHostWebSocket(app);
+      const frames: unknown[] = [];
+      socket.on('message', (data) => {
+        if (!Buffer.isBuffer(data)) throw new Error('Expected a text frame from the host');
+        frames.push(JSON.parse(data.toString('utf8')) as unknown);
+      });
+      try {
+        const entry = randomUUID();
+        socket.send(
+          JSON.stringify({
+            messageType: 'session.reconnect',
+            protocolVersion: 2,
+            reconnectRequestId: entry,
+            deviceId: device,
+            knownRevisions: zero,
+            unacknowledgedCommandIds: [],
+            supportedWorkflowCommandIds: [ORDINARY_SEAT_ACK],
+          }),
+        );
+        await vi.waitFor(() => expect(frames).toHaveLength(2), { timeout: 5000 });
+        const requestId = randomUUID();
+        const resume = {
+          messageType: 'ordinary.seat.control',
+          protocolVersion: 3,
+          operation: 'RESUME',
+          requestId,
+          deliveryKeyOrNull: null,
+        };
+        socket.send(JSON.stringify({ ...resume, operation: 'unrecognized-private-operation' }));
+        socket.send(JSON.stringify({ ...resume, privateField: 'unpublished value' }));
+        socket.send(JSON.stringify(resume));
+        // The host processes frames on one queue. The final live response bounds the exact refusal count.
+        await vi.waitFor(
+          () =>
+            expect(frames.at(-1)).toMatchObject({
+              presentation: { assignment: { correlationId: requestId } },
+            }),
+          { timeout: 5000 },
+        );
+        const refusal = {
+          messageType: 'protocol.refusal',
+          protocolVersion: 1,
+          relatedCommandId: null,
+          refusal: { code: 'UNRECOGNIZED', path: '$', value: null },
+        };
+        const revisions = {
+          stateRevision: before.revision,
+          projectionRevision: before.revision,
+          actorVisibilityRevision: before.revision,
+        };
+        const curtain = (correlationId: string) => ({
+          messageType: 'projection.snapshot',
+          protocolVersion: 2,
+          projectionRole: 'player',
+          revisions,
+          presentation: {
+            assignment: { reason: 'RECONNECT', correlationId },
+            base: {
+              formId: 'APP-003',
+              formType: 'screen',
+              routeTemplate: '/local/app-003',
+              routeBindings: [],
+              roleFilteredPayload: { ordinarySeatView: 'WAITING', revision: before.revision },
+              availableActionKeys: [],
+            },
+            layers: [
+              {
+                formId: 'PLY-030',
+                formType: 'component',
+                routeTemplate: '@component/ply-030',
+                routeBindings: [],
+                availableActionKeys: ['PLY-030::CTA::001'],
+                roleFilteredPayload: {
+                  ordinarySeatView: 'CURTAIN',
+                  revision: before.revision,
+                  handoffId: saved.receipt.handoffId,
+                  targetSeatId: target,
+                  targetOrdinal: 2,
+                  sourceSeatIdOrNull: source,
+                  signedReturnContext: before.pendingOrNull!.signedReturnContext,
+                  pendingCommandOwner: null,
+                },
+              },
+            ],
+          },
+        });
+        expect(frames).toEqual([
+          {
+            messageType: 'session.reconnect.capabilities',
+            protocolVersion: 2,
+            reconnectRequestId: entry,
+            executableWorkflowCommandIds: [ORDINARY_SEAT_ACK],
+            revisions,
+          },
+          curtain(entry),
+          refusal,
+          refusal,
+          curtain(requestId),
+        ]);
+        expect(readOrdinarySeatHandoff(db, device)).toEqual(before);
+        expect(frameErrors).not.toHaveBeenCalled();
+      } finally {
+        socket.terminate();
+        await app.close();
+      }
+    });
+    it('reopens an addressed two-seat handoff, replays its lost ACK and rolls back a failed delivery', () => {
+      const db = owner.db,
+        device = owner.scope.ownerDeviceId;
+      const receipt = accepted.playerDecisionOrNull!.receipt;
+      acknowledgeLocalAdmissionDecision(
+        db,
+        owner.scope,
+        f.batch.requestId,
+        randomUUID(),
+        owner.hostIdentity,
+        { kind: 'ACK', receipt },
+        f.allow,
+      );
+      initializeNetworkInstallation(db);
+      const seats = readOrdinarySeatRoster(db, device);
+      expect(readOrdinarySeatRoster(db, device, receipt.campaignId)).toEqual(seats);
+      expect(readOrdinarySeatRoster(db, device, randomUUID())).toEqual([]);
+      expect(seats).toEqual(
+        receipt.copies.map((copy, index) => ({
+          ordinal: index + 1,
+          localControllerSeatId: copy.controllerBindingOrNull!.localControllerSeatId,
+        })),
+      );
+      expect(seats).toHaveLength(2);
+      const sourceSeat = seats[0]!.localControllerSeatId,
+        targetSeat = seats[1]!.localControllerSeatId;
+      const begin: OrdinarySeatCommand = {
+        kind: 'BEGIN',
+        commandId: randomUUID(),
+        expectedRevision: 0,
+        targetSeatId: targetSeat,
+        sourceSeatIdOrNull: sourceSeat,
+        sourceContextId: randomUUID(),
+        targetContextId: randomUUID(),
+        sceneId: randomUUID(),
+        pendingCommandOwner: sourceSeat,
+        activeProofOrNull: null,
+      };
+      const targetProof = postSaveSha256(randomUUID());
+      const blank = db.serialize();
+      expect(ordinaryHandoffPresentAtStartup(db)).toBe(false);
+      expect(() =>
+        commitOrdinarySeatHandoff(db, device, begin, () => {
+          throw new Error('unsafe boundary');
+        }),
+      ).toThrow();
+      expect(db.serialize().equals(blank)).toBe(true);
+      const first = commitOrdinarySeatHandoff(db, device, begin, f.allow);
+      expect(first.replayed).toBe(false);
+      const pending = readOrdinarySeatHandoff(db, device);
+      expect(ordinaryHandoffPresentAtStartup(db)).toBe(true);
+      expect(
+        db.transaction(() => {
+          db.exec('DELETE FROM local_seat_handoff_head');
+          expect(() => ordinaryHandoffPresentAtStartup(db)).toThrow();
+          throw new Error('restore test journal');
+        }),
+      ).toThrow('restore test journal');
+      expect(pending).toMatchObject({
+        revision: 1,
+        activeSeatIdOrNull: null,
+        pendingOrNull: {
+          sourceSeatIdOrNull: sourceSeat,
+          targetSeatId: targetSeat,
+          pendingCommandOwner: sourceSeat,
+          sourceContextId: begin.sourceContextId,
+          targetContextId: begin.targetContextId,
+          sceneId: begin.sceneId,
+          returnFormId: 'PLY-001',
+        },
+      });
+      expect(readOrdinaryActiveSeat(db, device, targetProof)).toBeNull();
+      const file = db.name;
+      db.close();
+      const restored = openPersistenceDatabase(file);
+      admissionDatabases.push(restored);
+      expect(readOrdinarySeatHandoff(restored, device)).toEqual(pending);
+      const ack: OrdinarySeatCommand = {
+        kind: 'ACK',
+        commandId: randomUUID(),
+        targetSeatId: targetSeat,
+        expectedRevision: 1,
+        handoffId: first.receipt.handoffId,
+        decision: 'ACTIVATE_TARGET',
+        signedReturnContext: pending.pendingOrNull!.signedReturnContext,
+        recipientProof: targetProof,
+      };
+      const commit = (command: OrdinarySeatCommand) =>
+        commitOrdinarySeatHandoff(restored, device, command, f.allow);
+      const original = restored.serialize();
+      for (const wrong of [
+        { ...ack, targetSeatId: sourceSeat },
+        { ...ack, expectedRevision: 0 },
+        { ...ack, handoffId: randomUUID() },
+        { ...ack, signedReturnContext: 'foreign' },
+      ]) {
+        expect(() => commit(wrong)).toThrow();
+        expect(restored.serialize().equals(original)).toBe(true);
+      }
+      expect(() => commitOrdinarySeatHandoff(restored, randomUUID(), ack, f.allow)).toThrow();
+      restored.exec(
+        "CREATE TRIGGER reject_handoff_head BEFORE UPDATE ON local_seat_handoff_head BEGIN SELECT RAISE(ABORT,'injected handoff write fault'); END",
+      );
+      const prior = restored.serialize();
+      expect(() => commit(ack)).toThrow();
+      expect(restored.serialize().equals(prior)).toBe(true);
+      restored.exec('DROP TRIGGER reject_handoff_head');
+      const applied = commit(ack);
+      expect(applied.replayed).toBe(false);
+      restored.close();
+      const after = openPersistenceDatabase(file);
+      admissionDatabases.push(after);
+      const stable = after.serialize();
+      expect(commitOrdinarySeatHandoff(after, device, ack, f.allow)).toEqual({
+        receipt: applied.receipt,
+        replayed: true,
+      });
+      expect(() =>
+        commitOrdinarySeatHandoff(
+          after,
+          device,
+          { ...ack, recipientProof: postSaveSha256('foreign') },
+          f.allow,
+        ),
+      ).toThrow();
+      expect(readOrdinaryActiveSeat(after, device, postSaveSha256('foreign'))).toBeNull();
+      expect(readOrdinaryActiveSeat(after, device, targetProof)).toMatchObject({
+        localControllerSeatId: targetSeat,
+        campaignCharacterId: receipt.copies[1]!.campaignCharacterId,
+        targetContextId: begin.targetContextId,
+        sceneId: begin.sceneId,
+      });
+      expect(after.serialize().equals(stable)).toBe(true);
+      const openRoster: OrdinarySeatCommand = {
+        kind: 'ROSTER',
+        commandId: randomUUID(),
+        expectedRevision: 2,
+        targetSeatId: targetSeat,
+        sourceSeatIdOrNull: targetSeat,
+        sourceContextId: begin.targetContextId,
+        sceneId: begin.sceneId,
+        pendingCommandOwner: null,
+        activeProofOrNull: targetProof,
+      };
+      expect(() =>
+        commitOrdinarySeatHandoff(
+          after,
+          device,
+          { ...openRoster, activeProofOrNull: null },
+          f.allow,
+        ),
+      ).toThrow();
+      const opened = commitOrdinarySeatHandoff(after, device, openRoster, f.allow);
+      expect(commitOrdinarySeatHandoff(after, device, ack, f.allow)).toEqual({
+        receipt: applied.receipt,
+        replayed: true,
+      });
+      expect(readOrdinaryActiveSeat(after, device, targetProof)).toBeNull();
+      after.close();
+      const reopened = openPersistenceDatabase(file);
+      admissionDatabases.push(reopened);
+      const dispatch = (command: OrdinarySeatCommand) =>
+        commitOrdinarySeatHandoff(reopened, device, command, f.allow);
+      expect(dispatch(openRoster)).toEqual({ receipt: opened.receipt, replayed: true });
+      expect(readOrdinarySeatHandoff(reopened, device)).toEqual({
+        revision: 3,
+        activeSeatIdOrNull: null,
+        pendingOrNull: null,
+        rosterOrNull: {
+          sourceSeatId: targetSeat,
+          sourceContextId: begin.targetContextId,
+          sceneId: begin.sceneId,
+        },
+      });
+      const back: OrdinarySeatCommand = {
+        ...begin,
+        commandId: randomUUID(),
+        expectedRevision: 3,
+        targetSeatId: sourceSeat,
+        sourceSeatIdOrNull: targetSeat,
+        sourceContextId: begin.targetContextId,
+        targetContextId: randomUUID(),
+        pendingCommandOwner: null,
+        activeProofOrNull: null,
+      };
+      const rosterBytes = reopened.serialize();
+      for (const wrong of [
+        { ...back, sourceContextId: randomUUID() },
+        { ...back, sceneId: randomUUID() },
+        { ...back, activeProofOrNull: targetProof },
+        { ...back, pendingCommandOwner: sourceSeat },
+      ]) {
+        expect(() => dispatch(wrong)).toThrow();
+        expect(reopened.serialize().equals(rosterBytes)).toBe(true);
+      }
+      const returned = dispatch(back);
+      const next = readOrdinarySeatHandoff(reopened, device);
+      expect(next).toMatchObject({
+        revision: 4,
+        rosterOrNull: null,
+        pendingOrNull: { targetSeatId: sourceSeat },
+      });
+      const freshProof = postSaveSha256(randomUUID());
+      const returnAck: OrdinarySeatCommand = {
+        ...ack,
+        commandId: randomUUID(),
+        expectedRevision: 4,
+        targetSeatId: sourceSeat,
+        handoffId: returned.receipt.handoffId,
+        signedReturnContext: next.pendingOrNull!.signedReturnContext,
+        recipientProof: freshProof,
+      };
+      const waitingForReturn = reopened.serialize();
+      expect(() =>
+        dispatch({ ...returnAck, commandId: randomUUID(), recipientProof: targetProof }),
+      ).toThrow();
+      expect(reopened.serialize().equals(waitingForReturn)).toBe(true);
+      expect(readOrdinarySeatHandoff(reopened, device)).toEqual(next);
+      expect(readOrdinaryActiveSeat(reopened, device, targetProof)).toBeNull();
+      expect(readOrdinaryActiveSeat(reopened, device, freshProof)).toBeNull();
+      dispatch(returnAck);
+      expect(dispatch(openRoster)).toEqual({ receipt: opened.receipt, replayed: true });
+      expect(readOrdinaryActiveSeat(reopened, device, targetProof)).toBeNull();
+      expect(readOrdinaryActiveSeat(reopened, device, freshProof)).toMatchObject({
+        localControllerSeatId: sourceSeat,
+        targetContextId: back.targetContextId,
+        sceneId: back.sceneId,
+      });
+    });
     describe('#173 mixed ACTIVE and blocked PROPOSED device', () => {
       const read = () => readCampaignLobby(f.db, f.scope, f.allow, f.rules);
       const commit = (
@@ -2367,7 +2775,7 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
           ready: true,
         });
       });
-      it('starts only the ACTIVE copy while preserving both admitted controllers and the blocked lobby copy', () => {
+      it('starts only the ACTIVE copy and preserves its PEACE when the other admitted controller is blocked', async () => {
         const before = read(),
           copies = accepted.playerDecisionOrNull!.receipt.copies;
         expect(before.copies).toHaveLength(2);
@@ -2400,6 +2808,168 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
           lifecycleState: 'PROPOSED',
           controller: copies[1]!.controllerBindingOrNull,
         });
+        const db = owner.db,
+          device = owner.scope.ownerDeviceId,
+          receipt = accepted.playerDecisionOrNull!.receipt;
+        acknowledgeLocalAdmissionDecision(
+          db,
+          owner.scope,
+          f.batch.requestId,
+          randomUUID(),
+          owner.hostIdentity,
+          { kind: 'ACK', receipt },
+          f.allow,
+        );
+        initializeNetworkInstallation(db);
+        const scene = saved.receipt.scene,
+          source = after.includedCopies[0]!;
+        commitLocalLobbyEvent(
+          db,
+          owner.scope,
+          randomUUID(),
+          owner.hostIdentity,
+          {
+            kind: 'LOBBY_OBSERVATION',
+            observation: {
+              schemaVersion: 1,
+              campaignId: receipt.campaignId,
+              ownerDeviceId: device,
+              campaignRevision: after.checkpoint.stateRevision,
+              lobbyEventRevision: after.eventRevision,
+              lobbySnapshotRevision: after.lobbySnapshotRevision,
+              readinessRevision: after.readinessRevision,
+              initialCampaignTimeOrNull: after.initialCampaignTimeOrNull,
+              campaignStarted: true,
+              ownCopies: after.copies.map(
+                ({ campaignCharacterId, name, lifecycleState, blockers }) => ({
+                  campaignCharacterId,
+                  name,
+                  lifecycleState,
+                  blockers,
+                }),
+              ),
+              includedCampaignCharacterIds: scene.includedCopies.map(
+                (copy) => copy.campaignCharacterId,
+              ),
+              ready: after.readyByDevice[0]!.ready,
+              selectedCopy: source,
+              groupNameOrNull: null,
+              peaceOrNull: {
+                sceneId: scene.sceneId,
+                campaignTimestamp: scene.campaignTimestamp,
+                clockMode: scene.clockMode,
+                dayPhase: scene.dayPhase,
+              },
+            },
+          },
+          f.allow,
+        );
+        const view = readLocalAdmissionPresentation(db, owner.scope)!;
+        const connection = {
+          contextId: randomUUID(),
+          networkScopeId: owner.scope.networkScopeId,
+          trusted: () => true,
+          executableWorkflowCommandIds: ['UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK'] as const,
+        };
+        const seatId = source.controller.localControllerSeatId;
+        expect(
+          readOrdinarySceneRoster(db, device, {
+            seatId,
+            scopeId: connection.networkScopeId,
+            campaignId: receipt.campaignId,
+            sceneId: scene.sceneId,
+          }),
+        ).toEqual({
+          roster: copies.map((copy, index) => ({
+            seatId: copy.controllerBindingOrNull!.localControllerSeatId,
+            ordinal: index + 1,
+          })),
+          eligibleTargetSeatIds: [],
+        });
+        const base = projectLocalCampaignLobby({
+          ...view,
+          ...connection,
+          controllerSeat: seatId,
+          connected: true,
+          supported: connection.executableWorkflowCommandIds,
+          itemLabels: canonicalFiveStartingPositionsCatalog()
+            .entries.filter((entry) => entry.kind === 'CATALOGUE')
+            .map((entry) => ({ itemTypeId: entry.itemTypeIdOrStoryType, name: entry.name })),
+        })!;
+        expect(base.formId).toBe('PLY-001');
+        const { projectionRevision, stateRevision, actorVisibilityRevision } = view.application;
+        const revisions = { projectionRevision, stateRevision, actorVisibilityRevision };
+        const initial: ProjectionSnapshotV2Message = {
+          messageType: 'projection.snapshot',
+          protocolVersion: 2,
+          projectionRole: 'player',
+          revisions,
+          presentation: {
+            base,
+            layers: [],
+            assignment: { reason: 'RECONNECT', correlationId: randomUUID() },
+          },
+        };
+        const unexpected = vi.fn((): never => {
+          throw new Error('Unexpected ordinary seat transition');
+        });
+        const runtime: ReturnType<typeof createOrdinarySeatRuntime> = createOrdinarySeatRuntime({
+          db,
+          owner: () => device,
+          ordinaryCampaign: () => true,
+          peek: () => runtime.decorate(connection, initial),
+          confirmSource: unexpected,
+          target: unexpected,
+          selectedCount: unexpected,
+          canSelectLibrary: unexpected,
+          candidateLibrary: { open: unexpected, apply: unexpected, cancel: unexpected },
+          resetEmptySetup: unexpected,
+          unwatch: unexpected,
+          activePublished: unexpected,
+        });
+        expect(runtime.decorate(connection, initial)).toEqual(initial);
+        const send = vi.fn();
+        runtime.observe(connection, send, initial);
+        const navigationRequestId = randomUUID();
+        const beforeNavigation = db.serialize();
+        await runtime.handle(
+          {
+            messageType: 'navigation.form-action',
+            protocolVersion: 2,
+            navigationRequestId,
+            sourceFormId: 'PLY-001',
+            actionKey: 'PLY-001::CTA::015',
+            expectedProjectionRevision: projectionRevision,
+          },
+          connection,
+          {
+            formId: 'PLY-001',
+            contextId: connection.contextId,
+            deviceId: device,
+            revisions,
+            sourceFinalIdOrNull: null,
+            lastNetworkExitNavigationIdOrNull: null,
+            enterNetwork: unexpected,
+            exitToPlayer: unexpected,
+            returnToFinal: unexpected,
+          },
+          send,
+        );
+        expect(send).toHaveBeenCalledExactlyOnceWith({
+          messageType: 'navigation.form-action.refusal',
+          protocolVersion: 2,
+          navigationRequestId,
+          revisions: {
+            projectionRevision,
+            stateRevision: projectionRevision,
+            actorVisibilityRevision: projectionRevision,
+          },
+          presentationUnchanged: true,
+          refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+        });
+        expect(runtime.locked(connection)).toBe(false);
+        expect(unexpected).not.toHaveBeenCalled();
+        expect(db.serialize().equals(beforeNavigation)).toBe(true);
       });
     });
     it('selects the first actual PROPOSED copy and preserves the original whole-batch order', () => {
@@ -3328,6 +3898,9 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
           f.allow,
         );
         expect(saved.receiptOrNull).toEqual(ack.input.receipt);
+        expect(readOrdinarySeatRoster(owner.db, owner.scope.ownerDeviceId)).toEqual([
+          { localControllerSeatId: owner.tabId, ordinal: 1 },
+        ]);
         expect(saved.pendingDecisionOrNull).toBeNull();
         expect(ack.input.receipt.copies[0]!.occupiesCampaignPlace).toBe(true);
         expect(
@@ -3698,6 +4271,7 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
         ).toBe(entry.tabId);
       }
       expect(prepared.receiptOrNull).toBeNull();
+      expect(readOrdinarySeatRoster(owner.db, owner.scope.ownerDeviceId)).toEqual([]);
       expect(readActiveLocalNetworkTab(owner.db, owner.scope.ownerDeviceId)?.tabId).toBe(
         owner.tabId,
       );
@@ -3775,6 +4349,33 @@ describe('NET-027 whole-batch decision from a real immutable FINAL', () => {
           f.allow,
         );
         expect(saved.receiptOrNull!.controllerProofOrNull!.controllerBindings).toEqual(bindings);
+        expect(readOrdinarySeatRoster(owner.db, owner.scope.ownerDeviceId)).toEqual(
+          bindings.map((binding, index) => ({
+            localControllerSeatId: binding.localControllerSeatId,
+            ordinal: index + 1,
+          })),
+        );
+        const beforeFourth = owner.db.serialize();
+        expect(() =>
+          commitLocalNetworkTabEntry(
+            owner.db,
+            {
+              ownerDeviceId: owner.scope.ownerDeviceId,
+              tabId: randomUUID(),
+              networkScopeId: randomUUID(),
+              entryCommandId: randomUUID(),
+              entryReceiptId: randomUUID(),
+              sourceContextId: randomUUID(),
+              sourceRevisions: {
+                stateRevision: 0,
+                projectionRevision: 0,
+                actorVisibilityRevision: 0,
+              },
+            },
+            f.allow,
+          ),
+        ).toThrow('TAB_LIMIT');
+        expect(owner.db.serialize().equals(beforeFourth)).toBe(true);
         expect(readActiveLocalNetworkTab(owner.db, owner.scope.ownerDeviceId)).toEqual({
           ...original,
           stateRevision: original!.stateRevision + 1,
@@ -4649,6 +5250,26 @@ describe('NET-021 complete publication from a real immutable FINAL', () => {
       expect(
         readRevisions(f.db, { entity: 'campaign', entityId: f.scope.campaignId }).stateRevision,
       ).toBe(1);
+    });
+    it('checks the batch opening again after a write between two queue replays', () => {
+      const f = preparedReview;
+      commitAdmissionGmDecision(f.db, f.scope, f.input, f.allow, f.rules, randomUUID, f.allow);
+      f.db.transaction(() => {
+        const replay = () => readGmRequestReviewViewStateInTransaction(f.db, f.scope);
+        expect(
+          replay().events.some(
+            (event) =>
+              event.mutation.kind === 'SOURCE_ADVANCE' &&
+              event.mutation.cause.commandId === f.input.request.commandId,
+          ),
+        ).toBe(true);
+        f.db
+          .prepare(
+            'UPDATE campaign_admission_batch SET open_command_id=? WHERE admission_batch_id=?',
+          )
+          .run(randomUUID(), f.input.request.admissionBatchId);
+        expect(replay).toThrow(/CORRUPT_STORAGE/);
+      })();
     });
     it('rebuilds the full sheet and receipt instead of trusting rehashed stored JSON', () => {
       const f = preparedReview;

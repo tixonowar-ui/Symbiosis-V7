@@ -39,6 +39,7 @@ import { loadNetworkInstallation } from './network-installation.js';
 import { parseCampaignLanAddress, type CampaignLanAddress } from './campaign-lan-address.js';
 import {
   connectCampaignPeerChannel,
+  CampaignPeerChannelError,
   CAMPAIGN_PEER_CHANNEL_MAX_BYTES,
   type CampaignPeerClientChannel,
 } from './campaign-peer-channel.js';
@@ -84,6 +85,12 @@ export class LocalNetworkPeerError extends Error {
 const fail = (code: NetworkPublicErrorCode): never => {
   throw new LocalNetworkPeerError(code);
 };
+function transportFailure(error: unknown): boolean {
+  return (
+    error instanceof CampaignPeerChannelError &&
+    (error.code === 'CLOSED' || error.code === 'TIMEOUT' || error.code === 'TRANSPORT_ERROR')
+  );
+}
 
 /** Public locator reads do not create a session and are never a substitute for the signed challenge. */
 export async function readManualCampaignLocator(
@@ -262,6 +269,14 @@ export function createLocalNetworkPeer(d: {
     const c = channels.get(scope.networkScopeId)?.channel;
     return c !== undefined && !c.closed ? c : fail('PEER_UNAVAILABLE');
   }
+  function stillCurrentAfterReply(
+    scope: LocalNetworkScope,
+    channel: CampaignPeerClientChannel,
+    handoffRead?: 'HANDOFF_READ',
+  ) {
+    // Once bytes arrived, a later close cannot prove their correlation, validity or checksum.
+    return !(handoffRead === 'HANDOFF_READ' && channel.closed) && live(scope) === channel;
+  }
   async function call(
     scope: LocalNetworkScope,
     command: DeviceAdmissionPeerCommand,
@@ -281,13 +296,18 @@ export function createLocalNetworkPeer(d: {
   async function admissionCall(
     scope: LocalNetworkScope,
     command: AdmissionPeerCommand,
+    handoffChannel?: CampaignPeerClientChannel,
   ): Promise<AdmissionPeerResponse> {
     const channel = live(scope);
+    if (handoffChannel !== undefined && handoffChannel !== channel)
+      return fail('UNCONFIRMED_OUTCOME');
+    let awaitingPeer = false;
     try {
-      const response = decodeAdmissionPeerResponse(
-        await channel.call(encodeAdmissionPeerCommand(command)),
-        admissionLimits,
-      );
+      const request = encodeAdmissionPeerCommand(command);
+      awaitingPeer = true;
+      const wire = await channel.call(request);
+      awaitingPeer = false;
+      const response = decodeAdmissionPeerResponse(wire, admissionLimits);
       owned(scope);
       if (
         live(scope) !== channel ||
@@ -298,7 +318,9 @@ export function createLocalNetworkPeer(d: {
       )
         return fail('UNCONFIRMED_OUTCOME');
       return response;
-    } catch {
+    } catch (error) {
+      // Only a handoff read may expose its own RPC transport failure to the bounded recovery.
+      if (awaitingPeer && handoffChannel === channel && transportFailure(error)) throw error;
       return fail('UNCONFIRMED_OUTCOME');
     }
   }
@@ -383,11 +405,20 @@ export function createLocalNetworkPeer(d: {
     channel: ReturnType<typeof live>,
     suppliedManifest?: Extract<AdmissionPeerResponse, { outcome: 'MANIFEST' }>,
     verifiedApplication?: LocalNetworkApplication,
+    handoffRead?: 'HANDOFF_READ',
   ) {
+    if (handoffRead !== undefined && admittedTabIdOrNull === null)
+      return fail('UNCONFIRMED_OUTCOME');
+    const handoffChannel = handoffRead === 'HANDOFF_READ' ? channel : undefined;
     // Only CHECK supplies this immediately after its complete post-RPC read, before any await/write.
     const current = verifiedApplication ?? readLocalNetworkApplication(d.database, scope),
       request = current.requestOrNull;
-    if (live(scope) !== channel) return fail('UNCONFIRMED_OUTCOME');
+    if (
+      suppliedManifest === undefined
+        ? live(scope) !== channel
+        : !stillCurrentAfterReply(scope, channel, handoffRead)
+    )
+      return fail('UNCONFIRMED_OUTCOME');
     if (
       request === null ||
       current.requestReviewOrNull?.requestStatus !== 'IN_REVIEW' ||
@@ -402,19 +433,24 @@ export function createLocalNetworkPeer(d: {
     };
     const manifest =
       suppliedManifest ??
-      (await admissionCall(scope, {
-        schemaVersion: 1,
-        ...(admittedTabIdOrNull === null
-          ? { operation: 'ADMISSION_PUBLICATION_BEGIN' as const }
-          : { operation: 'ADMISSION_LOBBY_BEGIN' as const, admittedTabId: admittedTabIdOrNull }),
-        ...binding,
-      }));
+      (await admissionCall(
+        scope,
+        {
+          schemaVersion: 1,
+          ...(admittedTabIdOrNull === null
+            ? { operation: 'ADMISSION_PUBLICATION_BEGIN' as const }
+            : { operation: 'ADMISSION_LOBBY_BEGIN' as const, admittedTabId: admittedTabIdOrNull }),
+          ...binding,
+        },
+        handoffChannel,
+      ));
     if (manifest.outcome === 'REFUSED' || manifest.outcome === 'NOT_READY') return manifest;
     if (manifest.outcome !== 'MANIFEST') return fail('UNCONFIRMED_OUTCOME');
     if (
       manifest.requestId !== binding.requestId ||
       manifest.technicalSessionId !== binding.technicalSessionId ||
       manifest.submitCommandId !== binding.submitCommandId ||
+      (admittedTabIdOrNull !== null && manifest.publicationChecksum !== manifest.bodySha256) ||
       manifest.operation !==
         (admittedTabIdOrNull === null ? 'ADMISSION_PUBLICATION_BEGIN' : 'ADMISSION_LOBBY_BEGIN')
     )
@@ -426,21 +462,25 @@ export function createLocalNetworkPeer(d: {
     receivingBytes += reservation;
     try {
       for (let index = 0; index < manifest.chunkCount; index++) {
-        const response = await admissionCall(scope, {
-          schemaVersion: 1,
-          operation: 'ADMISSION_PUBLICATION_CHUNK',
-          ...binding,
-          transferId: manifest.transferId,
-          publicationChecksum: manifest.publicationChecksum,
-          chunkIndex: index,
-        });
+        const response = await admissionCall(
+          scope,
+          {
+            schemaVersion: 1,
+            operation: 'ADMISSION_PUBLICATION_CHUNK',
+            ...binding,
+            transferId: manifest.transferId,
+            publicationChecksum: manifest.publicationChecksum,
+            chunkIndex: index,
+          },
+          handoffChannel,
+        );
         if (response.outcome === 'REFUSED') return response;
         if (
           response.outcome !== 'CHUNK' ||
           response.transferId !== manifest.transferId ||
           response.publicationChecksum !== manifest.publicationChecksum ||
           response.chunkIndex !== index ||
-          live(scope) !== channel
+          !stillCurrentAfterReply(scope, channel, handoffRead)
         )
           return fail('UNCONFIRMED_OUTCOME');
         const part = Buffer.from(response.bytesBase64, 'base64'),
@@ -457,11 +497,10 @@ export function createLocalNetworkPeer(d: {
         const observation = campaignLobbyOwnerObservationValue(JSON.parse(text));
         if (
           canonicalPostSaveJson(observation) !== text ||
-          manifest.publicationChecksum !== manifest.bodySha256 ||
           observation.campaignId !== channel.campaign.campaignId ||
           observation.ownerDeviceId !== scope.ownerDeviceId ||
           observation.selectedCopy.controller.localControllerSeatId !== admittedTabIdOrNull ||
-          live(scope) !== channel
+          !stillCurrentAfterReply(scope, channel, handoffRead)
         )
           return fail('UNCONFIRMED_OUTCOME');
         return { outcome: 'LOBBY' as const, observation, hostIdentity: channel.hostIdentity };
@@ -483,7 +522,8 @@ export function createLocalNetworkPeer(d: {
         hostIdentity: channel.hostIdentity,
       };
     } catch (error: unknown) {
-      if (error instanceof LocalNetworkPeerError) throw error;
+      if (error instanceof LocalNetworkPeerError || (handoffChannel && transportFailure(error)))
+        throw error;
       return fail('UNCONFIRMED_OUTCOME');
     } finally {
       bytes.fill(0);
@@ -602,6 +642,7 @@ export function createLocalNetworkPeer(d: {
       scope: LocalNetworkScope,
       admittedTabId: string,
       observation: CampaignLobbyOwnerObservation,
+      handoffRead?: 'HANDOFF_READ',
     ) {
       // CHECK may allocate a PUBLICATION, so the same scope lock covers it and all chunks.
       return withDownload(scope, async () => {
@@ -658,7 +699,7 @@ export function createLocalNetworkPeer(d: {
         );
         const fresh = read();
         if (
-          live(scope) !== channel ||
+          !stillCurrentAfterReply(scope, channel, handoffRead) ||
           canonicalPostSaveJson(fresh.request) !== canonicalPostSaveJson(request)
         )
           return fail('UNCONFIRMED_OUTCOME');
@@ -672,6 +713,7 @@ export function createLocalNetworkPeer(d: {
           channel,
           response.manifest,
           fresh.app,
+          handoffRead,
         );
         if (delivered.outcome !== 'LOBBY') return fail('UNCONFIRMED_OUTCOME');
         return {
@@ -681,8 +723,21 @@ export function createLocalNetworkPeer(d: {
         };
       });
     },
-    async fetchAdmission(scope: LocalNetworkScope, admittedTabIdOrNull: string | null = null) {
-      return withDownload(scope, () => downloadAdmission(scope, admittedTabIdOrNull, live(scope)));
+    async fetchAdmission(
+      scope: LocalNetworkScope,
+      admittedTabIdOrNull: string | null = null,
+      handoffRead?: 'HANDOFF_READ',
+    ) {
+      return withDownload(scope, () =>
+        downloadAdmission(
+          scope,
+          admittedTabIdOrNull,
+          live(scope),
+          undefined,
+          undefined,
+          handoffRead,
+        ),
+      );
     },
     async deliverLobbyReady(
       scope: LocalNetworkScope,
@@ -807,6 +862,14 @@ export function createLocalNetworkPeer(d: {
     current(networkScopeId: string) {
       const c = channels.get(networkScopeId)?.channel;
       return c !== undefined && !c.closed ? c : null;
+    },
+    lostReadChannel(networkScopeId: string, channel: CampaignPeerClientChannel, error: unknown) {
+      return (
+        channel.closed &&
+        channels.get(networkScopeId)?.channel === channel &&
+        (transportFailure(error) ||
+          (error instanceof LocalNetworkPeerError && error.code === 'PEER_UNAVAILABLE'))
+      );
     },
     call,
     async deliverLaneBinding(

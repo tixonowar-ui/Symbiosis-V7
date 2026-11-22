@@ -312,13 +312,17 @@ for (const [folder, file, kind, variant] of [
             ),
           ).toBe(true);
           expect(db.prepare('SELECT MAX(version) n FROM schema_migration').get()).toEqual({
-            n: 25,
+            n: 26,
           });
           expect(
             structural.events.some(
               (event) => event.view.enemyAuthoring?.monsterStatRoll !== undefined,
             ),
           ).toBe(false);
+          expect(db.prepare('SELECT * FROM local_seat_handoff_head').all()).toEqual([]);
+          expect(db.prepare('SELECT * FROM local_seat_handoff_event').all()).toEqual([]);
+          db.exec('DROP TABLE local_seat_handoff_head; DROP TABLE local_seat_handoff_event');
+          expect(db.prepare('DELETE FROM schema_migration WHERE version=26').run().changes).toBe(1);
           expect(db.prepare('SELECT * FROM campaign_enemy_art_upload').all()).toEqual([]);
           db.exec('DROP TABLE campaign_enemy_art_upload');
           expect(db.prepare('DELETE FROM schema_migration WHERE version=25').run().changes).toBe(1);

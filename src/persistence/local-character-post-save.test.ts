@@ -283,7 +283,7 @@ describe('receipt-backed restore cursor', () => {
     'missing-review-table',
     'unknown-version',
   ] as const)(
-    'does not downgrade the schema25 store when %s invalidates cursor retirement',
+    'does not downgrade the schema26 store when %s invalidates cursor retirement',
     (damage) => {
       const p = setup('DRAFT');
       const original = readLocalCharacter(p.db, p.scope.entityId);
@@ -304,16 +304,16 @@ describe('receipt-backed restore cursor', () => {
           .prepare<[], { version: number }>('SELECT * FROM schema_migration ORDER BY version')
           .all();
         expect(registry.map((row) => row.version)).toEqual(
-          Array.from({ length: 25 }, (_, index) => index + 1),
+          Array.from({ length: 26 }, (_, index) => index + 1),
         );
         p.db
           .prepare('INSERT INTO schema_migration VALUES(?,?,?)')
-          .run(26, 'future', 'f'.repeat(64));
+          .run(27, 'future', 'f'.repeat(64));
         expect(
-          p.db.prepare('SELECT * FROM schema_migration WHERE version<=25 ORDER BY version').all(),
+          p.db.prepare('SELECT * FROM schema_migration WHERE version<=26 ORDER BY version').all(),
         ).toEqual(registry);
         expect(p.db.prepare('SELECT MAX(version) AS version FROM schema_migration').get()).toEqual({
-          version: 26,
+          version: 27,
         });
         futureBytes = p.db.serialize();
       }

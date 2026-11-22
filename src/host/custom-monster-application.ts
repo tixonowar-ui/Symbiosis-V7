@@ -67,7 +67,7 @@ export function prepareCustomMonsterCommand(
     request.workflowCommandId === 'UI-CMD-MONSTER-STATS-ROLL-ONCE' ||
     request.payload.stage === 'MONSTER_STAT_DRAFT'
   ) {
-    if (![24, 25].includes(readAppliedMigrationVersion(db))) return s.fail('SOURCE_CHANGED');
+    if (![24, 25, 26].includes(readAppliedMigrationVersion(db))) return s.fail('SOURCE_CHANGED');
     const prepared = prepareMonsterStatRollCommand(
       source.viewOrNull?.enemyAuthoring ?? s.fail('UNAVAILABLE'),
       form ?? s.fail('UNAVAILABLE'),

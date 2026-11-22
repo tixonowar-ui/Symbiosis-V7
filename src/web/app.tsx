@@ -100,6 +100,9 @@ import {
 import { CHR_023_SUBMIT_ACTION_KEY } from './forms/chr/weapon-profile.js';
 import { CHR_022_ROLL_ACTION_KEY } from './forms/chr/starting-weapon.js';
 import type { StartingWeaponDraft } from './forms/chr/starting-weapon.js';
+import { flushSync } from 'react-dom';
+import { ordinarySeatViewValue } from '@shared/ordinary-seat.js';
+import { OrdinarySeatPanel } from './forms/ply/ordinary-seat-panel.js';
 import { AtlasForm } from './renderer/atlas-form.js';
 import { connectProjection, LOCAL_ROLE_CHOICE_DETAIL } from './ws-client.js';
 import type {
@@ -174,6 +177,13 @@ function ConnectionBanner({ state }: { readonly state: WebClientState }): ReactE
         </section>
       );
     case 'awaiting-snapshot':
+      if (state.localHandoff)
+        return (
+          <section role="status" data-client-state={state.kind}>
+            <h1>Передача устройства</h1>
+            <p>Ожидание подтверждения хоста.</p>
+          </section>
+        );
       return (
         <section role="status" data-client-state={state.kind}>
           <h1>Ожидание APP-001</h1>
@@ -2710,8 +2720,26 @@ export function App(): ReactElement {
   const enemyStatsDraftRef = useRef<JsonObject | null>(null);
 
   useEffect(() => {
+    let projectionVisible = false;
     const connection = connectProjection(
-      setState,
+      (next) => {
+        if (next.kind === 'awaiting-snapshot' && next.localHandoff && projectionVisible) {
+          // Remove the sheet before sending the navigation intent or freezing the page for back/forward cache.
+          projectionVisible = false;
+          flushSync(() => {
+            setActionNotice(null);
+            setState(next);
+          });
+          return;
+        }
+        projectionVisible = confirmedSnapshot(next) !== null;
+        if (
+          next.kind === 'awaiting-snapshot' ||
+          (next.kind === 'ready' && next.snapshot.formId === 'APP-003')
+        )
+          setActionNotice(null);
+        setState(next);
+      },
       setIdentityDraft,
       setCreationChoiceDraft,
       setCreationRollDraft,
@@ -2826,6 +2854,33 @@ export function App(): ReactElement {
     lobbyTimeRef.current = value;
   }, []);
   const layers = snapshot?.layers ?? [];
+  if (
+    snapshot?.formId === 'APP-003' ||
+    (snapshot?.formId === 'APP-004' && snapshot.projection['ordinarySeatView'] === 'LIBRARY')
+  ) {
+    const form = layers[0] ?? snapshot;
+    const view = ordinarySeatViewValue(form.projection);
+    return (
+      <>
+        <ConnectionBanner state={state} />
+        {state.kind === 'disconnected' ? (
+          <button onClick={() => connectionRef.current?.reconnect()}>Переподключиться</button>
+        ) : snapshot.canResumeOrdinarySeat && interactive ? (
+          <button onClick={() => connectionRef.current?.resumeOrdinarySeat()}>
+            Переподключиться
+          </button>
+        ) : null}
+        <OrdinarySeatPanel
+          key={form.formId + ':' + view.revision}
+          formId={form.formId}
+          view={view}
+          enabled={interactive}
+          actions={form.availableActionKeys}
+          getConnection={() => connectionRef.current}
+        />
+      </>
+    );
+  }
   const activeCreationChoice =
     creationChoiceDraft?.formId === snapshot?.formId ? creationChoiceDraft : null;
   return (
@@ -2844,7 +2899,7 @@ export function App(): ReactElement {
       {state.kind === 'disconnected' ? (
         <button onClick={() => connectionRef.current?.reconnect()}>Переподключиться</button>
       ) : null}
-      {snapshot === null ? (
+      {state.kind === 'awaiting-snapshot' && state.localHandoff ? null : snapshot === null ? (
         <section data-app-001-data="missing">
           <h2>Данные APP-001 отсутствуют</h2>
           <p>Клиент не вычисляет и не кэширует обязательные поля вместо хоста.</p>
@@ -2868,7 +2923,7 @@ export function App(): ReactElement {
             disabled={
               !interactive ||
               peerBlocked ||
-              layers.length > 0 ||
+              (layers.length > 0 && snapshot.formId !== 'PLY-001') ||
               networkImageReadPending ||
               enemyArtReadPending
             }
@@ -3609,70 +3664,82 @@ export function App(): ReactElement {
               }}
             />
           </fieldset>
-          {layers.map((layer) => (
-            <fieldset
-              key={layer.formId}
-              disabled={!interactive || layer !== layers.at(-1)}
-              data-presentation-layer
-            >
-              <legend>AtlasForm {layer.formId}</legend>
-              <AtlasForm
-                playerContentOnly={
-                  isAdmissionGmForm(layer.formId) || isCampaignLifecycleForm(layer.formId)
-                }
-                availableActionKeys={layer.availableActionKeys}
+          {layers.map((layer) =>
+            snapshot.formId === 'PLY-001' &&
+            (layer.formId === 'PLY-029' || layer.formId === 'PLY-027') ? (
+              <OrdinarySeatPanel
+                key={layer.formId}
                 formId={layer.formId}
-                projectionContent={
-                  isCampaignLifecycleForm(layer.formId) ? (
-                    <CampaignLifecycleFields
-                      key={
-                        layer.formId +
-                        ':' +
-                        (layer.projection['contextId'] as string) +
-                        ':' +
-                        snapshot.revisions.stateRevision
-                      }
-                      formId={layer.formId}
-                      projection={layer.projection}
-                      onEditor={setLifecycleEditor}
-                    />
-                  ) : isAdmissionGmForm(layer.formId) ? (
-                    <AdmissionGmFields
-                      key={`admission:${layer.formId}:${layer.projection['admissionBatchId'] as string}:${layer.projection['selectedReviewCopyId'] as string}:${snapshot.revisions.stateRevision}`}
-                      formId={layer.formId}
-                      projection={layer.projection}
-                      onEdit={(edit) => {
-                        const result = connectionRef.current?.replaceAdmissionDraft(edit);
-                        setActionNotice(
-                          result?.ok
-                            ? null
-                            : 'Правки допуска не сохранены. Проверьте поля и соединение.',
-                        );
-                      }}
-                    />
-                  ) : layer.formId === 'CHR-031' ? (
-                    <InvalidWeaponProfileFields layer={layer} />
-                  ) : (
-                    <AbandonmentDialogFields layer={layer} />
-                  )
-                }
-                onAction={(selection) => {
-                  const connection = connectionRef.current;
-                  if (connection === null) {
-                    setActionNotice('Переход не отправлен: соединение ещё не готово.');
-                    return;
-                  }
-                  const result = connection.requestFormAction(
-                    selection.actionKey,
-                    undefined,
-                    null,
-                    isCampaignLifecycleForm(layer.formId) ? takeLifecycleInputs() : undefined,
-                  );
-                  setActionNotice(result.ok ? null : `Переход не отправлен: ${result.detail}.`);
-                }}
+                view={ordinarySeatViewValue(layer.projection)}
+                actions={[]}
+                enabled={false}
+                getConnection={() => null}
               />
-            </fieldset>
-          ))}
+            ) : (
+              <fieldset
+                key={layer.formId}
+                disabled={!interactive || layer !== layers.at(-1)}
+                data-presentation-layer
+              >
+                <legend>AtlasForm {layer.formId}</legend>
+                <AtlasForm
+                  playerContentOnly={
+                    isAdmissionGmForm(layer.formId) || isCampaignLifecycleForm(layer.formId)
+                  }
+                  availableActionKeys={layer.availableActionKeys}
+                  formId={layer.formId}
+                  projectionContent={
+                    isCampaignLifecycleForm(layer.formId) ? (
+                      <CampaignLifecycleFields
+                        key={
+                          layer.formId +
+                          ':' +
+                          (layer.projection['contextId'] as string) +
+                          ':' +
+                          snapshot.revisions.stateRevision
+                        }
+                        formId={layer.formId}
+                        projection={layer.projection}
+                        onEditor={setLifecycleEditor}
+                      />
+                    ) : isAdmissionGmForm(layer.formId) ? (
+                      <AdmissionGmFields
+                        key={`admission:${layer.formId}:${layer.projection['admissionBatchId'] as string}:${layer.projection['selectedReviewCopyId'] as string}:${snapshot.revisions.stateRevision}`}
+                        formId={layer.formId}
+                        projection={layer.projection}
+                        onEdit={(edit) => {
+                          const result = connectionRef.current?.replaceAdmissionDraft(edit);
+                          setActionNotice(
+                            result?.ok
+                              ? null
+                              : 'Правки допуска не сохранены. Проверьте поля и соединение.',
+                          );
+                        }}
+                      />
+                    ) : layer.formId === 'CHR-031' ? (
+                      <InvalidWeaponProfileFields layer={layer} />
+                    ) : (
+                      <AbandonmentDialogFields layer={layer} />
+                    )
+                  }
+                  onAction={(selection) => {
+                    const connection = connectionRef.current;
+                    if (connection === null) {
+                      setActionNotice('Переход не отправлен: соединение ещё не готово.');
+                      return;
+                    }
+                    const result = connection.requestFormAction(
+                      selection.actionKey,
+                      undefined,
+                      null,
+                      isCampaignLifecycleForm(layer.formId) ? takeLifecycleInputs() : undefined,
+                    );
+                    setActionNotice(result.ok ? null : `Переход не отправлен: ${result.detail}.`);
+                  }}
+                />
+              </fieldset>
+            ),
+          )}
           {actionNotice === null ? null : <p role="status">{actionNotice}</p>}
         </>
       )}

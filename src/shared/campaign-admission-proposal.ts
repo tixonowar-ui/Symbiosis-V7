@@ -15,6 +15,7 @@ import {
 } from './campaign-admission-codec.js';
 import { redactProtocolInputRefusal, wireCodecPrimitives } from './wire-codec.js';
 import type { DecodeResult } from './wire-protocol.js';
+import { reconnectFingerprint } from './reconnect-fingerprint.js';
 
 /** Closed NET-019 blocker shape. Invalid mechanics never become lobby blockers. */
 export interface AdmissionBlocker {
@@ -586,14 +587,89 @@ export function admissionOwnerPublicationValue(
   return validated(row);
 }
 
+function decisionReceiptSource<L>(
+  publication: AdmissionOwnerPublication,
+  path: string,
+  locationEvidence: (location: AdmissionLocationAssignment | null) => L,
+  idEvidence: (id: string) => string,
+) {
+  admissionOwnerPublicationValue(publication);
+  const proposal = publication.proposalOrNull;
+  if (proposal === null) return invalid(path, 'published proposal before a player receipt', null);
+  return {
+    campaignId: proposal.campaignId,
+    admissionBatchId: proposal.admissionBatchId,
+    ownerProvenance: { ...proposal.ownerProvenance },
+    proposalRevision: proposal.proposalRevision,
+    proposalChecksum: proposal.proposalChecksum,
+    copies: proposal.fullCampaignCopyDiffs.map((diff) => {
+      const group = diff.afterSheet.groupAssignmentOrNull;
+      return {
+        id:
+          diff.campaignCharacterIdOrNull === null
+            ? null
+            : idEvidence(diff.campaignCharacterIdOrNull),
+        blocked: diff.blockers.length !== 0,
+        group:
+          group?.kind === 'NEW'
+            ? { kind: group.kind, groupDraftId: idEvidence(group.groupDraftId) }
+            : group?.kind === 'EXISTING'
+              ? { kind: group.kind, groupId: idEvidence(group.groupId) }
+              : group === null
+                ? null
+                : { kind: group.kind },
+        location: locationEvidence(diff.afterSheet.locationAssignmentOrNull),
+      };
+    }),
+  };
+}
+
+/** The closed source validator runs before this bound reader can retain any receipt evidence. */
+export function admissionPlayerDecisionReceiptCheck(publication: AdmissionOwnerPublication) {
+  return checkedLocationReceipt(
+    decisionReceiptSource(publication, '$', reconnectFingerprint, reconnectFingerprint),
+  );
+}
+function checkedLocationReceipt(source: ReturnType<typeof decisionReceiptSource<string>>) {
+  return (value: unknown, path = '$') =>
+    readPlayerDecisionReceipt(
+      source,
+      (location, hash) => reconnectFingerprint(location) === hash,
+      reconnectFingerprint,
+      value,
+      path,
+    );
+}
+
 export function admissionPlayerDecisionReceiptValue(
   value: unknown,
   publication: AdmissionOwnerPublication,
   path = '$',
 ): AdmissionPlayerDecisionReceipt {
-  admissionOwnerPublicationValue(publication);
-  const proposal = publication.proposalOrNull;
-  if (proposal === null) return invalid(path, 'published proposal before a player receipt', null);
+  return readPlayerDecisionReceipt(
+    decisionReceiptSource(
+      publication,
+      path,
+      (location) => location,
+      (id) => id,
+    ),
+    (actual, expected) =>
+      expected !== null &&
+      actual.location === expected.location &&
+      actual.subLocationOrNull === expected.subLocationOrNull,
+    (id) => id,
+    value,
+    path,
+  );
+}
+
+function readPlayerDecisionReceipt<L>(
+  proposal: ReturnType<typeof decisionReceiptSource<L>>,
+  sameLocation: (actual: AdmissionLocationAssignment, expected: L) => boolean,
+  idEvidence: (id: string) => string,
+  value: unknown,
+  path = '$',
+): AdmissionPlayerDecisionReceipt {
   const row = exact(
     value,
     'receiptId commandId workflowCommandId campaignId admissionBatchId requestId requestOwnerDeviceId proposalRevision proposalChecksum decision capacityProofOrNull controllerProofOrNull copies campaignRevision timestamp',
@@ -633,11 +709,11 @@ export function admissionPlayerDecisionReceiptValue(
     if (
       // Atlas CMP-001/002: a campaign has one through five player places.
       limit > 5 ||
-      capacity['candidateCount'] !== proposal.fullCampaignCopyDiffs.length ||
+      capacity['candidateCount'] !== proposal.copies.length ||
       capacity['fitsCurrentCapacity'] !== true ||
       capacity['evaluatedCampaignRevision'] !== revision - 1 ||
       active > occupied ||
-      occupied + proposal.fullCampaignCopyDiffs.length > limit
+      occupied + proposal.copies.length > limit
     )
       invalid(p, 'fresh capacity for every accepted copy including blocked copies', null);
     const c = `${path}.controllerProofOrNull`,
@@ -660,15 +736,16 @@ export function admissionPlayerDecisionReceiptValue(
         binding = exact(v, 'campaignCharacterId deviceId localControllerSeatId inputLaneId', b);
       uuid(binding['localControllerSeatId'], `${b}.localControllerSeatId`);
       if (
-        binding['campaignCharacterId'] !==
-          proposal.fullCampaignCopyDiffs[i]?.campaignCharacterIdOrNull ||
+        (typeof binding['campaignCharacterId'] === 'string'
+          ? idEvidence(binding['campaignCharacterId'])
+          : binding['campaignCharacterId']) !== proposal.copies[i]?.id ||
         binding['deviceId'] !== proposal.ownerProvenance.requestOwnerDeviceId ||
         binding['inputLaneId'] !== binding['localControllerSeatId']
       )
         invalid(b, 'complete ordered owner tab mapping', null);
       return binding;
     });
-    if (bindings.length !== proposal.fullCampaignCopyDiffs.length)
+    if (bindings.length !== proposal.copies.length)
       invalid(c, 'one controller per published copy', null);
     unique(
       bindings.map((b) => text(b['localControllerSeatId'], c)),
@@ -677,10 +754,9 @@ export function admissionPlayerDecisionReceiptValue(
   } else if (row['capacityProofOrNull'] !== null || row['controllerProofOrNull'] !== null)
     invalid(path, 'no admission authority on DECLINE', null);
   const copies = list(row['copies'], `${path}.copies`);
-  if (copies.length !== proposal.fullCampaignCopyDiffs.length)
-    invalid(path, 'complete whole-batch result', null);
+  if (copies.length !== proposal.copies.length) invalid(path, 'complete whole-batch result', null);
   const groups: {
-    assignment: NonNullable<AdmissionMechanicalSheetV1['groupAssignmentOrNull']>;
+    assignment: NonNullable<(typeof proposal.copies)[number]['group']>;
     id: string;
   }[] = [];
   for (const [i, value] of copies.entries()) {
@@ -690,12 +766,13 @@ export function admissionPlayerDecisionReceiptValue(
         'campaignCharacterId lifecycleState occupiesCampaignPlace groupIdOrNull locationAssignmentOrNull controllerBindingOrNull',
         p,
       ),
-      diff = proposal.fullCampaignCopyDiffs[i]!;
+      diff = proposal.copies[i]!;
     if (
-      copy['campaignCharacterId'] !== diff.campaignCharacterIdOrNull ||
+      (typeof copy['campaignCharacterId'] === 'string'
+        ? idEvidence(copy['campaignCharacterId'])
+        : copy['campaignCharacterId']) !== diff.id ||
       copy['occupiesCampaignPlace'] !== accepted ||
-      copy['lifecycleState'] !==
-        (!accepted ? 'DECLINED' : diff.blockers.length === 0 ? 'ACTIVE' : 'PROPOSED')
+      copy['lifecycleState'] !== (!accepted ? 'DECLINED' : diff.blocked ? 'PROPOSED' : 'ACTIVE')
     )
       invalid(p, 'unchanged copy identity and blocker-aware admission result', null);
     if (!accepted) {
@@ -708,8 +785,8 @@ export function admissionPlayerDecisionReceiptValue(
       continue;
     }
     const groupId = uuid(copy['groupIdOrNull'], `${p}.groupIdOrNull`),
-      assignment = diff.afterSheet.groupAssignmentOrNull!;
-    if (assignment.kind === 'EXISTING' && groupId !== assignment.groupId)
+      assignment = diff.group ?? invalid(p, 'reviewed group assignment', null);
+    if (assignment.kind === 'EXISTING' && idEvidence(groupId) !== assignment.groupId)
       invalid(p, 'selected existing group identity', null);
     for (const previous of groups) {
       const sameDraft =
@@ -730,14 +807,10 @@ export function admissionPlayerDecisionReceiptValue(
     }
     groups.push({ assignment, id: groupId });
     const location = admissionLocationAssignmentValue(
-        copy['locationAssignmentOrNull'],
-        `${p}.locationAssignmentOrNull`,
-      ),
-      expectedLocation = diff.afterSheet.locationAssignmentOrNull!;
-    if (
-      location.location !== expectedLocation.location ||
-      location.subLocationOrNull !== expectedLocation.subLocationOrNull
-    )
+      copy['locationAssignmentOrNull'],
+      `${p}.locationAssignmentOrNull`,
+    );
+    if (!sameLocation(location, diff.location))
       invalid(p, 'the exact reviewed location labels', null);
     const binding = exact(
       copy['controllerBindingOrNull'],

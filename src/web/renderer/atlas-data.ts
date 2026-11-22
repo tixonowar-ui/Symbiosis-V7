@@ -4,12 +4,16 @@ import transitionsSource from '@generated/spec/atlas/renderer/transitions-by-for
 import { FORM_IDS } from '@generated/types/atlas.js';
 import type { FormId, FormType } from '@generated/types/atlas.js';
 
-import { IMPLEMENTED_FORM_IDS, isImplementedFormId } from '../forms/index.js';
+import {
+  IMPLEMENTED_FORM_IDS,
+  isImplementedFormId,
+  LOCAL_SEAT_COMPONENTS,
+} from '../forms/index.js';
 import type { ImplementedFormId } from '../forms/index.js';
 
 type JsonRecord = Record<string, unknown>;
 
-export type ImplementedFormType = Extract<FormType, 'screen' | 'dialog'>;
+export type ImplementedFormType = Extract<FormType, 'screen' | 'dialog' | 'component'>;
 
 export interface AtlasState {
   readonly name: string;
@@ -127,10 +131,14 @@ function own(object: JsonRecord, key: string): boolean {
 
 function implementedType(value: unknown, formId: string): ImplementedFormType {
   const type = string(value, `forms-by-id[${JSON.stringify(formId)}].type`);
-  if (type !== 'screen' && type !== 'dialog') {
+  if (
+    type !== 'screen' &&
+    type !== 'dialog' &&
+    !(type === 'component' && LOCAL_SEAT_COMPONENTS.some((id) => id === formId))
+  ) {
     fail(
       `form ${JSON.stringify(formId)} has unsupported type ${JSON.stringify(type)}; ` +
-        'implemented types: screen, dialog',
+        'implemented types: screen, dialog, component',
     );
   }
   return type;

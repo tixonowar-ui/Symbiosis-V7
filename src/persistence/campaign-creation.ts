@@ -1,3 +1,4 @@
+import { LOCAL_SEAT_HANDOFF_IDENTITIES } from './migrations/0026-local-seat-handoff.js';
 import {
   ENEMY_AUTHORING_FORMS,
   ENEMY_AUTHORING_NAV_TARGETS,
@@ -674,7 +675,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 22 ||
     version === 23 ||
     version === 24 ||
-    version === 25
+    version === 25 ||
+    version === 26
       ? ([
           ['local_network_application_event', ['event_id', 'receipt_id']],
           ['hosted_network_command', ['command_id', 'receipt_id']],
@@ -700,7 +702,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 22 ||
     version === 23 ||
     version === 24 ||
-    version === 25
+    version === 25 ||
+    version === 26
       ? ([
           ['hosted_device_request_decision', ['command_id', 'receipt_id']],
           ['hosted_device_request_lane_binding', ['command_id', 'receipt_id']],
@@ -722,8 +725,9 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 22 ||
     version === 23 ||
     version === 24 ||
-    version === 25
-      ? CAMPAIGN_ADMISSION_IDENTITIES
+    version === 25 ||
+    version === 26
+      ? [...CAMPAIGN_ADMISSION_IDENTITIES, ...(version === 26 ? LOCAL_SEAT_HANDOFF_IDENTITIES : [])]
       : [];
   if (
     version === 13 ||
@@ -738,7 +742,8 @@ function assertUnusedId(db: Database.Database, id: string): void {
     version === 22 ||
     version === 23 ||
     version === 24 ||
-    version === 25
+    version === 25 ||
+    version === 26
   )
     for (const [table, columns] of [
       ...CAMPAIGN_LOBBY_IDENTITIES,
@@ -2051,8 +2056,9 @@ function verifyAdmissionCause(
   db: Database.Database,
   scope: GmRequestReviewScope,
   cause: GmAdmissionSourceCause,
+  batchAnchor = (id: string) => admissionBatchAnchor(db, scope, id),
 ) {
-  admissionBatchAnchor(db, scope, cause.admissionBatchId);
+  batchAnchor(cause.admissionBatchId);
   const row = rowAt(db, admissionCauseTables[cause.kind], 'command_id', cause.commandId) ?? fail();
   const saved = checkedJson(row),
     request = object(saved['request']);
@@ -2674,12 +2680,24 @@ function queueSourceProofs(
   scope: GmRequestReviewScope,
   npcSession?: NpcGmPrimitiveReadSession,
 ) {
+  // The batch primary key identifies one sealed opening within this read and owner scope.
+  const batches = new Map<string, ReturnType<typeof admissionBatchAnchor>>();
+  const batchAnchor = (id: string) => {
+    const known = batches.get(id);
+    if (known !== undefined) return known;
+    const checked = admissionBatchAnchor(db, scope, id);
+    batches.set(id, checked);
+    return checked;
+  };
   let lobby: ReturnType<typeof readCampaignLobbyLedger> | undefined;
   let lifecycle: ReturnType<typeof readCampaignLifecycleLedger> | undefined;
   const lobbyEvents = () => (lobby ??= readCampaignLobbyLedger(db, scope.campaignId));
   const lifecycleEvents = () => (lifecycle ??= readCampaignLifecycleLedger(db, scope.campaignId));
   return {
     npcSession,
+    batchAnchor,
+    admission: (cause: GmAdmissionSourceCause) =>
+      verifyAdmissionCause(db, scope, cause, batchAnchor),
     lobbyEvents,
     lifecycleEvents,
     lobby: (cause: GmLobbySourceCause) => verifyLobbyCause(db, scope, cause, lobbyEvents()),
@@ -2881,7 +2899,7 @@ function reduceQueue(
         : old.actorVisibilityRevision,
     };
   } else if (mutation.kind === 'SOURCE_ADVANCE') {
-    const proof = verifyAdmissionCause(db, scope, mutation.cause);
+    const proof = proofs.admission(mutation.cause);
     document = {
       ...document,
       stateRevision: next(old.stateRevision),
@@ -3111,7 +3129,8 @@ function queueSchema(db: Database.Database): void {
     row['version'] !== 22 &&
     row['version'] !== 23 &&
     row['version'] !== 24 &&
-    row['version'] !== 25
+    row['version'] !== 25 &&
+    row['version'] !== 26
   )
     return fail();
   for (const table of DEVICE_REQUEST_REVIEW_TABLES)
@@ -3130,7 +3149,8 @@ function queueSchema(db: Database.Database): void {
     row['version'] === 22 ||
     row['version'] === 23 ||
     row['version'] === 24 ||
-    row['version'] === 25
+    row['version'] === 25 ||
+    row['version'] === 26
   )
     for (const table of CAMPAIGN_ADMISSION_TABLES)
       db.prepare(`SELECT 1 FROM ${table} LIMIT 1`).get();
@@ -3278,6 +3298,7 @@ function verifyAdmissionSourceMirrors(
 ): void {
   if (!db.inTransaction) return fail('INVALID_INPUT');
   const scope = queueScope(value);
+  const proofs = reads?.proofs ?? queueSourceProofs(db, scope);
   const events = (reads?.queue() ?? readGmRequestReviewViewStateInTransaction(db, scope)).events;
   const actual = new Map<string, GmAdmissionSourceCause>();
   for (const kind of Object.keys(admissionCauseTables) as (keyof typeof admissionCauseTables)[]) {
@@ -3293,7 +3314,7 @@ function verifyAdmissionSourceMirrors(
         commandId: text(row['command_id']),
         recordSha256: queueHash(row['record_sha256']),
       };
-      verifyAdmissionCause(db, scope, cause);
+      proofs.admission(cause);
       if (actual.has(cause.commandId)) return fail();
       actual.set(cause.commandId, cause);
     }
@@ -3301,12 +3322,9 @@ function verifyAdmissionSourceMirrors(
   const batches = new Map<string, { reviewRevision: number; gm: boolean; player: boolean }>();
   let checkpointRevision = 0;
   // Even an empty queue must verify the current ledger heads and mirror coverage.
-  const lifecycleEvents =
-    reads?.proofs.lifecycleEvents() ?? readCampaignLifecycleLedger(db, scope.campaignId);
+  const lifecycleEvents = proofs.lifecycleEvents();
   verifyCampaignLifecycleMirrors(db, scope, lifecycleEvents);
-  const lobbyEvents = hasCampaignLobbySchema(db)
-    ? (reads?.proofs.lobbyEvents() ?? readCampaignLobbyLedger(db, scope.campaignId))
-    : [];
+  const lobbyEvents = hasCampaignLobbySchema(db) ? proofs.lobbyEvents() : [];
   for (const event of events) {
     if (event.mutation.kind === 'LIFECYCLE_SOURCE') {
       const proof = verifyLifecycleCause(db, scope, event.mutation.cause, lifecycleEvents);
@@ -3329,7 +3347,7 @@ function verifyAdmissionSourceMirrors(
         db,
         scope,
         event.mutation.cause,
-        reads?.proofs.npcSession,
+        proofs.npcSession,
       ).operation;
       if (
         npc.beforeCheckpoint.stateRevision !== checkpointRevision ||
@@ -3344,7 +3362,7 @@ function verifyAdmissionSourceMirrors(
     const cause = event.mutation.cause;
     if (!actual.has(cause.commandId) || !same(actual.get(cause.commandId), cause)) return fail();
     actual.delete(cause.commandId);
-    const proof = verifyAdmissionCause(db, scope, cause);
+    const proof = proofs.admission(cause);
     if (
       proof.client !== null &&
       db
@@ -4037,6 +4055,7 @@ function publishedAdmissionAnchor(
   db: Database.Database,
   scope: GmRequestReviewScope,
   mutation: Extract<GmAdmissionViewMutation, { kind: 'ENTER_PUBLISHED' }>,
+  proofs: ReturnType<typeof queueSourceProofs>,
 ): AdmissionGmViewFormId {
   const row =
     rowAt(db, 'campaign_admission_gm_decision', 'admission_batch_id', mutation.admissionBatchId) ??
@@ -4059,11 +4078,11 @@ function publishedAdmissionAnchor(
     commandId: text(row['command_id']),
     recordSha256: mutation.publicationRecordSha256,
   };
-  verifyAdmissionCause(db, scope, cause);
+  proofs.admission(cause);
   const prefix =
     rowAt(db, 'gm_request_queue_event', 'event_id', mutation.queuePrefix.eventId) ?? fail();
   const causeIndex = (value: GmAdmissionSourceCause): number => {
-    verifyAdmissionCause(db, scope, value);
+    proofs.admission(value);
     const id = admissionCauseEventId(scope, value);
     const mirror = rowAt(db, 'gm_request_queue_event', 'event_id', id) ?? fail();
     const document = checkedJson(mirror);
@@ -4206,7 +4225,7 @@ function reduceAdmissionView(
   if (mutation.kind === 'ENTER' || mutation.kind === 'ENTER_PUBLISHED') {
     if (old?.active === true) return fail('DRAFT_UNAVAILABLE');
     const queue = admissionQueueAnchor(db, scope, mutation.queuePrefix),
-      batch = admissionBatchAnchor(db, scope, mutation.admissionBatchId);
+      batch = proofs.batchAnchor(mutation.admissionBatchId);
     if (queue.values.selectedRequestIdOrNull !== batch.requestId) return fail('STALE_REVISION');
     let formId: AdmissionGmViewFormId = 'NET-018';
     let selectedReviewCopyId = batch.copies[0]!.reviewCopyId;
@@ -4222,7 +4241,7 @@ function reduceAdmissionView(
     } else {
       if (mutation.request.expectedProjectionRevision !== queue.projectionRevision)
         return fail('STALE_REVISION');
-      formId = publishedAdmissionAnchor(db, scope, mutation);
+      formId = publishedAdmissionAnchor(db, scope, mutation, proofs);
       selectedReviewCopyId = mutation.selectedReviewCopyId;
     }
     return admissionView(scope, {
@@ -4252,7 +4271,7 @@ function reduceAdmissionView(
       !same(presentationRevisions(old), mutation.expectedRevisions)
     )
       return fail('STALE_REVISION');
-    const batch = admissionBatchAnchor(db, scope, old.admissionBatchId);
+    const batch = proofs.batchAnchor(old.admissionBatchId);
     if (!batch.copies.some((copy) => copy.reviewCopyId === mutation.values.selectedReviewCopyId))
       return fail('FOREIGN_OWNER');
     if (old.formId !== 'NET-022' && old.values.rejectionReason !== mutation.values.rejectionReason)
@@ -4530,7 +4549,7 @@ function admissionQueueAdvance(
     prefix.eventId !== admissionCauseEventId(scope, mutation.cause)
   )
     return fail();
-  return verifyAdmissionCause(db, scope, mutation.cause);
+  return proofs.admission(mutation.cause);
 }
 /** Both queue and admission appends are private halves of the same synchronous source write. */
 function appendAdmissionSourceView(

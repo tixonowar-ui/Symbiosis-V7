@@ -27,6 +27,7 @@ import {
   createBaselineLineageFixture,
 } from '../../tests/fixtures/baseline-lineage.js';
 import { createCampaignBindManager } from './campaign-bind.js';
+import { confirmedHostedContext } from './server.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import {
   createCampaignCreationRuntime,
@@ -339,6 +340,25 @@ async function freePort() {
 }
 
 describe('campaign creation runtime with real SQLite and TCP bind', () => {
+  it('routes the ordinary lock to the active hosted GM only after campaign creation', async () => {
+    const h = await setup();
+    const gm = { gmLocalContextId: h.ctx(), networkScopeId: null, ordinaryParticipant: false };
+    expect(confirmedHostedContext(h.db, gm)).toBe(false);
+
+    await ready(h, await freePort());
+    expect((await h.send(h.createRequest()))[0]?.messageType).toBe('command.result');
+    expect(h.cursor().kind).toBe('CAMPAIGN');
+    expect(confirmedHostedContext(h.db, gm)).toBe(true);
+    expect(confirmedHostedContext(h.db, { ...gm, networkScopeId: randomUUID() })).toBe(false);
+    expect(confirmedHostedContext(h.db, { ...gm, ordinaryParticipant: true })).toBe(false);
+    expect(confirmedHostedContext(h.db, { ...gm, gmLocalContextId: randomUUID() })).toBe(false);
+    expect(confirmedHostedContext(h.db, { ...gm, gmLocalContextId: null })).toBe(false);
+
+    resetDeviceIdentity(h.db, () => undefined);
+    bootstrapDeviceIdentity(h.db);
+    expect(confirmedHostedContext(h.db, gm)).toBe(false);
+  });
+
   it('serializes metadata frames across two connections and emits independently decodable revision-consistent results', async () => {
     const h = await setup();
     const at = h.draft();

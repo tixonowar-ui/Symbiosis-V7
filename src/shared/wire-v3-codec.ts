@@ -6,6 +6,7 @@ import { npcTechnicalRequestValue, npcTechnicalResponseValue } from './npc-comma
 import { npcArtReadMessageValue, NpcProjectionDecodeError } from './npc-presentation-codec.js';
 import type { NpcArtReadRequest, NpcArtReadResult, NpcArtReadRefusal } from './npc-presentation.js';
 import { campaignPeerControlValue, campaignPeerStateValue } from './campaign-lifecycle.js';
+import { ordinarySeatControlValue } from './ordinary-seat.js';
 import { wireCodecPrimitives } from './wire-codec.js';
 import { admissionGmClientValue, admissionGmHostValue } from './campaign-admission-review.js';
 import { redactProtocolInputRefusal } from './wire-codec.js';
@@ -475,6 +476,7 @@ const clientValue = (value: unknown): ClientToHostV3Message => {
   const object = base(value);
   if (object['messageType'] === 'network.enemy-selection.replace')
     return enemyLibrarySelectionRequestValue(value);
+  if (object['messageType'] === 'ordinary.seat.control') return ordinarySeatControlValue(value);
   if (object['messageType'] === 'network.peer-control') return campaignPeerControlValue(value);
   if (
     object['messageType'] === 'network.admission-review.edit' ||
