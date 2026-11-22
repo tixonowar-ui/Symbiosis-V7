@@ -1546,7 +1546,8 @@
           "PLY-030::CTA::008"
         ],
         "TARGET_OWNER_ADMISSION": [
-          "APP-003::CTA::009"
+          "APP-003::CTA::009",
+          "APP-003::CTA::014"
         ]
       },
       "profile": {
@@ -1572,6 +1573,144 @@
         "visibility": "UNASSIGNED_IMMUTABLE_FINAL_ONLY"
       },
       "source": "ADR 0095 / #249 / B18"
+    }
+  },
+  {
+    "contractId": "hostLocalHandoff",
+    "value": {
+      "actionGuards": {
+        "APP-003::CTA::014": "PLAYER, fresh target ACK current and targetLocalOwnerId matches this profile; own APP-004 or pre-submit NET-003 signed return to APP-003; SUBMIT has not committed; no in-flight command; preserve profile, checkpoints and FINAL. TARGET_OWNER_ADMISSION fresh branch only: zero to three (0..3) currently selected own FINAL, including the empty library; exact acknowledged profile and its current signed bootstrap return. The separate APP-003::CTA::009 still requires 1..3 distinct current own FINAL. No selector, grant-based admission, request or seat authority. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+        "NET-003::CTA::005": "PLAYER, own HOST_LOCAL_CANDIDATE request CANCELLED; original technicalSessionId, requestId, SUBMIT receipt and committed owner CANCEL receipt match; return to initiating GM only, including HOSTING; no selection/admission/seat. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+        "NET-005::CTA::004": "PLAYER, acknowledged original request owner, own PENDING or IN_REVIEW request or confirmed preliminary REJECTED by NET-017::CTA::008. Keep pending/review status unchanged; terminal return requires original SUBMIT and actual decision receipt/status. No unconfirmed owner command. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+        "NET-006::CTA::005": "PLAYER, actual ACCEPT receipt matches this campaign copy and controller. PRE_START: PAUSED, no Start receipt, Ready or Not ready → same campaign GM NET-016. POST_START: current confirmed PEACE, committed Start, this admitted blocked PROPOSED copy excluded from included ACTIVE IDs → current GM-001. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+        "NET-007::CTA::005": "PLAYER, own host-local DEVICE_REQUEST; final GM_REJECTED from NET-022::CTA::003 or PLAYER_DECLINED from NET-027::CTA::004 with corresponding confirmed receipt; signed return to original GM. MASTER_IMPORT keeps NET-007::CTA::004. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+        "NET-016::CTA::006": "GM, sole current authority for the same locally hosted PAUSED campaign, PRE_START, no Start receipt; explicitly selected actual local owner and controller from confirmed ACCEPT/copy/seat rows, Ready or Not ready. Zero seats has no target. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+        "NET-017::CTA::011": "GM, sole current authority, explicitly selected original local HOST_LOCAL_CANDIDATE request and exact targetLocalOwnerId. Verify original ACK, tab, network scope, technicalSessionId, requestId, SUBMIT receipt and current requestRevision. Deliver only PENDING/IN_REVIEW/preliminary REJECTED to NET-005, published own proposal to NET-027 or confirmed GM_REJECTED/PLAYER_DECLINED to NET-007. Derive selectable recipients from durable local SUBMIT and verified outcomes, including final decisions already removed from the live PENDING queue; retain addressed delivery after restart. GM sees only permitted profile label/profile ID and request ID, never the candidate’s private diff. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain."
+      },
+      "address": {
+        "commandId": "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK",
+        "common": [
+          "installationId",
+          "deviceId",
+          "campaignId",
+          "sourceContextId",
+          "handoffId",
+          "signedReturnContext",
+          "dispatchCase",
+          "pendingCommandOwner",
+          "stateRevision",
+          "projectionRevision",
+          "actorVisibilityRevision"
+        ],
+        "decision": "ACTIVATE_TARGET",
+        "gm": [
+          "gmLocalContextId",
+          "masterAuthorityRevision"
+        ],
+        "handoffType": "HOST_LOCAL_HANDOFF",
+        "neutral": [
+          "targetProfileLabel",
+          "targetLocalOwnerId",
+          "GM designation",
+          "opaque addressed confirmation"
+        ],
+        "phase": "Profile ACK binds the real fresh profile before SUBMIT. Add the actual original request and SUBMIT receipt only after commit; require proposal identity only when a proposal exists. A terminal without a proposal uses its own SUBMIT plus verified outcome. Only actual accepted copy/controller rows authorize an admitted seat. A GM destination requires the signed initiating/current sole GM. ACK does not authenticate a human or grant any additional role.",
+        "profile": [
+          "targetLocalOwnerId",
+          "targetProfileLabel",
+          "targetHandoffReceiptId"
+        ],
+        "proposal": [
+          "admissionBatchId",
+          "proposalRevision",
+          "proposalChecksum"
+        ],
+        "request": [
+          "originalTabId",
+          "networkScopeId",
+          "technicalSessionId",
+          "requestId",
+          "submitReceiptId",
+          "requestRevision"
+        ],
+        "seat": [
+          "admissionReceiptId",
+          "campaignCharacterId",
+          "controllerBindingOrNull.deviceId",
+          "controllerBindingOrNull.localControllerSeatId",
+          "controllerBindingOrNull.inputLaneId"
+        ]
+      },
+      "dispatch": {
+        "CANCELLED_RETURN": {
+          "formId": "NET-017",
+          "guard": "Own successful CANCEL in NET-005::CTA::001 reached NET-003; restore signed initiating GM queue after GM ACK. Preserve CANCEL receipt; removed CANCELLED request never reappears as selected.",
+          "role": "gm"
+        },
+        "GM_PROPOSAL": {
+          "formId": "NET-027",
+          "guard": "Current committed NET-021::CTA::005 publication for this exact admissionBatchId, proposalRevision and proposalChecksum on the original request tab. Own whole-batch diff only, before player ACCEPT.",
+          "role": "player"
+        },
+        "GM_REJECTED": {
+          "formId": "NET-007",
+          "guard": "Final GM rejection from NET-022::CTA::003 for this request and batch; own decision receipt and reason only. No admitted tab.",
+          "role": "player"
+        },
+        "PLAYER_DECLINED": {
+          "formId": "NET-007",
+          "guard": "Original owner declined the full batch in NET-027::CTA::004; verified exact player decision receipt and proposal. No admitted tab.",
+          "role": "player"
+        },
+        "POST_START_BLOCKED_GM": {
+          "formId": "GM-001",
+          "guard": "Confirmed Start and current peaceful scene, accepted local blocked PROPOSED source excluded from Start included ACTIVE IDs; original current GM, exact signed GM-001.",
+          "role": "gm"
+        },
+        "POST_START_BLOCKED_PLAYER": {
+          "formId": "NET-006",
+          "guard": "From actual GM-001 PEACE through PLY-027/PLY-028::CTA::003, selected admitted local blocked PROPOSED target excluded from confirmed Start included ACTIVE IDs; same campaign and controller. Own lobby only; never PLY-001.",
+          "role": "player"
+        },
+        "PRELIMINARY_REJECTED": {
+          "formId": "NET-005",
+          "guard": "Confirmed preliminary REJECTED receipt/status of original SUBMIT at NET-017::CTA::008; no GM publication or seat required.",
+          "role": "player"
+        },
+        "PRE_START_GM": {
+          "formId": "NET-016",
+          "guard": "Current PAUSED/PRE_START, no Start receipt, confirmed accepted local player source; sole current GM of the same campaign. Ready and Not ready both allow a safe handoff.",
+          "role": "gm"
+        },
+        "PRE_START_PLAYER": {
+          "formId": "NET-006",
+          "guard": "Current PAUSED/PRE_START, no Start receipt, selected local profile with actual ACCEPT receipt/campaignCharacterId/controller. Own admitted lobby only; Ready may have changed.",
+          "role": "player"
+        },
+        "PRE_SUBMIT_RETURN": {
+          "formId": "CMP-009",
+          "guard": "Fresh owner before SUBMIT, signed bootstrap initiator at CMP-009, original GM authority current; preserve profile, drafts and FINAL.",
+          "role": "gm"
+        },
+        "REQUEST_IN_REVIEW": {
+          "formId": "NET-005",
+          "guard": "Same owner and current IN_REVIEW, no published final decision; waiting or signed GM return. Owner CANCEL is unavailable.",
+          "role": "player"
+        },
+        "REQUEST_OWNER_RETURN": {
+          "formId": "NET-017",
+          "guard": "From addressed NET-005 waiting/confirmed preliminary result or NET-007 terminal result, restore exact signed issuing GM queue after GM ACK. Preserve application status, receipt and owner.",
+          "role": "gm"
+        },
+        "REQUEST_PENDING": {
+          "formId": "NET-005",
+          "guard": "Current PENDING on original selected request and requestRevision; only its acknowledged provisional owner can cancel or return to GM leaving PENDING. No seat.",
+          "role": "player"
+        }
+      },
+      "replay": "One durable handoff journal. Before ACK restore only the addressed neutral curtain. After fresh explicit target ACK commit one active context and one receipt, then PLY-029 dispatches only its current signed destination. Exact duplicate returns the identical receipt; historical ACK never reactivates an old tab. Stale/foreign/changed requests or revoked authority refuse without partial writes. Unknown delivery preserves pending-command ownership until the verified outcome; CANCEL competes with accept-to-review/reject by requestRevision. Raw WS, DOM, accessibility tree, hotkeys, local caches and background subscriptions never expose another owner’s private data. Unrelated installations keep their authorized publications. The host rechecks verified events first. A concurrent publication cannot readdress an active or pending session. Inspect new raw WS frames starting at the purge boundary; previously delivered bytes are historical.",
+      "safety": "Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+      "source": "ADR 0096 / #297 / B19"
     }
   }
 ]

@@ -162,6 +162,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       'cfc0fcb8828783a29516dc263e63dc103e22ebf521561bf10ba5de0d6688ffa0',
   },
+  // ADR 0096 / #297: addressed host-local handoff in the admission and pre-Start lobbies.
+  hostLocalLobbyBaselineVersion:
+    'sha256:e170d196cba960e7294cc687cb54fda019237035a71bf1e4efdfd6d2a00a9c49',
+  hostLocalLobbyAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      'a177808f239457d35a61c320493f4e75d4cf6a12541db1404e9883b5a916ac04',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      '3ba9e49a2e42e2b9ba2106ff89ef7acdfc6117e1bce2b06486c9e06b7fd37251',
+  },
   gmSourceAddedArtifacts: {
     'gm-entity-portraits/manifest.json':
       '30b4df3f3bc7ffeff017fc28538dcf09f98c1e032ff94cd1e9cfc141c4714554',

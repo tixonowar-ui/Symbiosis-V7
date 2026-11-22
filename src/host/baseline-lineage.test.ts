@@ -37,7 +37,7 @@ beforeAll(async () => {
 afterAll(() => fixture?.close());
 
 describe('verified baseline lineage', () => {
-  it('accepts only explicit forward pairs among the nineteen reviewed releases', () => {
+  it('accepts only explicit forward pairs among the reviewed releases', () => {
     const ids = BASELINE_FIXTURE_IDS;
     for (const [from, to] of [
       ['B0', 'B1'],
@@ -211,6 +211,25 @@ describe('verified baseline lineage', () => {
       ['B15', 'B18'],
       ['B16', 'B18'],
       ['B17', 'B18'],
+      ['B0', 'B19'],
+      ['B1', 'B19'],
+      ['B2', 'B19'],
+      ['B3', 'B19'],
+      ['B4', 'B19'],
+      ['B5', 'B19'],
+      ['B6', 'B19'],
+      ['B7', 'B19'],
+      ['B8', 'B19'],
+      ['B9', 'B19'],
+      ['B10', 'B19'],
+      ['B11', 'B19'],
+      ['B12', 'B19'],
+      ['B13', 'B19'],
+      ['B14', 'B19'],
+      ['B15', 'B19'],
+      ['B16', 'B19'],
+      ['B17', 'B19'],
+      ['B18', 'B19'],
     ] as const) {
       expect(isApprovedBaselineLineagePair(ids[from], ids[to])).toBe(true);
       expect(() =>
@@ -235,22 +254,22 @@ describe('verified baseline lineage', () => {
     expect(isApprovedBaselineLineagePair('sha256:unknown', ids.B2)).toBe(false);
   });
 
-  it('preserves each original release under the B18 owner-binding Atlas and changes only its two mirrors', async () => {
-    const historicalManifest = new URL('./baselines/atlas-v1.22.checksums.sha256', import.meta.url);
+  it('preserves each original release under the B19 host-local lobby Atlas and changes only its two mirrors', async () => {
+    const historicalManifest = new URL('./baselines/atlas-v1.23.checksums.sha256', import.meta.url);
     const original = readFileSync(historicalManifest);
-    expect(original.equals(baselineFixtureManifest('B17'))).toBe(true);
+    expect(original.equals(baselineFixtureManifest('B18'))).toBe(true);
     const root = fileURLToPath(new URL('../../', import.meta.url));
     const delivered = readFileSync(join(root, 'artifacts/CHECKSUMS.sha256'));
-    expect(delivered.equals(baselineFixtureManifest('B18'))).toBe(true);
+    expect(delivered.equals(baselineFixtureManifest('B19'))).toBe(true);
     const lines = (bytes: Buffer) => bytes.toString('utf8').trimEnd().split('\n');
     const previous = lines(original);
     const next = lines(delivered);
     expect(next.map((line) => line.slice(66))).toEqual(previous.map((line) => line.slice(66)));
     expect(
       next.filter((line, index) => line !== previous[index]).map((line) => line.slice(66)),
-    ).toEqual(Object.keys(seals.localOwnerBindingAtlas));
+    ).toEqual(Object.keys(seals.hostLocalLobbyAtlas));
     const baseline = await loadLocalCharacterExportBaseline(root);
-    expect(baseline.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B18);
+    expect(baseline.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B19);
     for (const id of Object.values(BASELINE_FIXTURE_IDS)) {
       const stored = resolveStoredLocalCharacterExportBaseline(baseline, id);
       expect(stored.baselineVersion).toBe(id);

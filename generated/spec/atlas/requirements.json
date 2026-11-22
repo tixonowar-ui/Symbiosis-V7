@@ -1078,7 +1078,8 @@
           "Открыть «Отправка запроса устройства»",
           "Открыть «Отправка сохранённого персонажа»",
           "Открыть «Ожидание решения мастера»",
-          "Вернуться к «Выбор локального профиля и места»"
+          "Вернуться к «Выбор локального профиля и места»",
+          "Вернуть устройство мастеру"
         ],
         "workflowCommandIds": []
       },
@@ -1099,7 +1100,8 @@
         "primaryActions": [
           "Отменить pending request",
           "Повторить подключение после потери связи",
-          "Вернуться к выбору персонажей"
+          "Вернуться к выбору персонажей",
+          "Вернуть устройство мастеру"
         ],
         "workflowCommandIds": [
           "UI-CMD-DEVICE-REQUEST-CANCEL"
@@ -1112,7 +1114,8 @@
           "Вернуться к «Итог согласования персонажа»",
           "Start подтверждён мастером",
           "Готов",
-          "Отменить готовность"
+          "Отменить готовность",
+          "Передать устройство мастеру"
         ],
         "workflowCommandIds": [
           "UI-CMD-CAMPAIGN-READY-SET"
@@ -1210,7 +1213,8 @@
           "Принять заявку к рассмотрению",
           "Отклонить заявку с причиной",
           "Вернуться к созданной кампании",
-          "Начать рассмотрение кампанийных копий"
+          "Начать рассмотрение кампанийных копий",
+          "Передать устройство владельцу заявки"
         ],
         "workflowCommandIds": [
           "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
@@ -1452,7 +1456,8 @@
           "Принять заявку к рассмотрению",
           "Отклонить заявку с причиной",
           "Вернуться к созданной кампании",
-          "Начать рассмотрение кампанийных копий"
+          "Начать рассмотрение кампанийных копий",
+          "Передать устройство владельцу заявки"
         ],
         "workflowCommandIds": [
           "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
@@ -2009,10 +2014,39 @@
         "workflowCommandIds": [
           "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK"
         ]
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NET-006",
+        "primaryActions": [
+          "Вернуться к «Итог согласования персонажа»",
+          "Start подтверждён мастером",
+          "Готов",
+          "Отменить готовность",
+          "Передать устройство мастеру"
+        ],
+        "workflowCommandIds": [
+          "UI-CMD-CAMPAIGN-READY-SET"
+        ]
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NET-016",
+        "primaryActions": [
+          "Начать кампанию",
+          "Вернуться к панели кампании",
+          "Сохранить начальное время",
+          "Вернуться к исходному состоянию NPC",
+          "Передать устройство локальному игроку"
+        ],
+        "workflowCommandIds": [
+          "UI-CMD-CAMPAIGN-START",
+          "UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
+        ]
       }
     ],
     "coverageStatus": "COVERED",
-    "errorOfflinePath": "Для GM-001, PLY-001, CMB-012, CMB-020, PLY-027, PLY-028, PLY-029, PLY-030, CMB-050 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта.",
+    "errorOfflinePath": "Для GM-001, PLY-001, CMB-012, CMB-020, PLY-027, PLY-028, PLY-029, PLY-030, CMB-050 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. Проверить ноль мест, устаревший Ready, blocked-only и чужой controller.",
     "expectedStateDeltas": {
       "audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.",
       "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.",
@@ -2059,9 +2093,11 @@
       "PLY-028",
       "PLY-029",
       "PLY-030",
-      "CMB-050"
+      "CMB-050",
+      "NET-006",
+      "NET-016"
     ],
-    "happyPath": "Выполнить J-LOCAL-SEATS через формы GM-001, PLY-001, CMB-012, CMB-020, PLY-027, PLY-028, PLY-029, PLY-030, CMB-050; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary.",
+    "happyPath": "Выполнить J-LOCAL-SEATS через формы GM-001, PLY-001, CMB-012, CMB-020, PLY-027, PLY-028, PLY-029, PLY-030, CMB-050; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. На общем host пройти PRE_START в обе стороны, затем ACTIVE или подтверждённый POST_START_BLOCKED по J-LOCAL-SEATS.",
     "journeyIds": [
       "J-LOCAL-SEATS"
     ],
@@ -2191,7 +2227,8 @@
           "Открыть «Отправка запроса устройства»",
           "Открыть «Отправка сохранённого персонажа»",
           "Открыть «Ожидание решения мастера»",
-          "Вернуться к «Выбор локального профиля и места»"
+          "Вернуться к «Выбор локального профиля и места»",
+          "Вернуть устройство мастеру"
         ],
         "workflowCommandIds": []
       },
@@ -2219,7 +2256,8 @@
           "Принять заявку к рассмотрению",
           "Отклонить заявку с причиной",
           "Вернуться к созданной кампании",
-          "Начать рассмотрение кампанийных копий"
+          "Начать рассмотрение кампанийных копий",
+          "Передать устройство владельцу заявки"
         ],
         "workflowCommandIds": [
           "UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW",
@@ -2242,16 +2280,89 @@
           "Отменить передачу до привязки",
           "Создать профиль с указанной меткой",
           "Выбрать существующий профиль по идентификатору",
-          "Передать устройство для создания нового персонажа"
+          "Передать устройство для создания нового персонажа",
+          "Вернуть устройство мастеру"
         ],
         "workflowCommandIds": [
           "UI-CMD-LOCAL-OWNER-PROFILE-CREATE",
           "UI-CMD-LOCAL-OWNER-BIND-FINALS"
         ]
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NET-005",
+        "primaryActions": [
+          "Отменить pending request",
+          "Повторить подключение после потери связи",
+          "Вернуться к выбору персонажей",
+          "Вернуть устройство мастеру"
+        ],
+        "workflowCommandIds": [
+          "UI-CMD-DEVICE-REQUEST-CANCEL"
+        ]
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NET-006",
+        "primaryActions": [
+          "Вернуться к «Итог согласования персонажа»",
+          "Start подтверждён мастером",
+          "Готов",
+          "Отменить готовность",
+          "Передать устройство мастеру"
+        ],
+        "workflowCommandIds": [
+          "UI-CMD-CAMPAIGN-READY-SET"
+        ]
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NET-007",
+        "primaryActions": [
+          "Вернуться к «Итог согласования персонажа»",
+          "Выбрать персонажей заново",
+          "Вернуться в меню игрока",
+          "Вернуться через экран приватности",
+          "Вернуть устройство мастеру"
+        ],
+        "workflowCommandIds": []
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NET-021",
+        "primaryActions": [
+          "Принять весь AdmissionBatch атомарно",
+          "Отменить до commit"
+        ],
+        "workflowCommandIds": [
+          "UI-CMD-ADMISSION-GM-ACCEPT"
+        ]
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NET-022",
+        "primaryActions": [
+          "Отклонить весь AdmissionBatch с причиной",
+          "Отменить"
+        ],
+        "workflowCommandIds": [
+          "UI-CMD-ADMISSION-GM-REJECT"
+        ]
+      },
+      {
+        "executableOperationIds": [],
+        "formId": "NET-027",
+        "primaryActions": [
+          "Принять весь batch diff",
+          "Отказаться от всего batch"
+        ],
+        "workflowCommandIds": [
+          "UI-CMD-ADMISSION-PLAYER-DECIDE"
+        ]
       }
     ],
     "coverageStatus": "COVERED",
-    "errorOfflinePath": "Для CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. Одна транзакция повторно проверяет текущий подписанный контекст селектора, прежнюю квитанцию ACK, installationId/deviceId, точный профиль и метку, ревизии и весь набор из 1–3 разных неназначенных immutable FINAL по sourceUuid, finalSnapshotVersion, metadataRevision и candidateSnapshotChecksum (исходный descriptor.sourceChecksum). При успехе для всего набора сохраняются membership, grantId, bindingReceiptId и pendingContinuationId. UUID, байты FINAL и создания, исходные ревизии, device provenance и игровой журнал сохраняются. Конфликт любой строки, иной адресат, другая установка, устаревший контекст, четвертая или повторная строка дают zero write для всего набора. Undo/reassign отсутствуют.",
+    "errorOfflinePath": "Для CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. Одна транзакция повторно проверяет текущий подписанный контекст селектора, прежнюю квитанцию ACK, installationId/deviceId, точный профиль и метку, ревизии и весь набор из 1–3 разных неназначенных immutable FINAL по sourceUuid, finalSnapshotVersion, metadataRevision и candidateSnapshotChecksum (исходный descriptor.sourceChecksum). При успехе для всего набора сохраняются membership, grantId, bindingReceiptId и pendingContinuationId. UUID, байты FINAL и создания, исходные ревизии, device provenance и игровой журнал сохраняются. Конфликт любой строки, иной адресат, другая установка, устаревший контекст, четвертая или повторная строка дают zero write для всего набора. Undo/reassign отсутствуют. Проверить точную requestRevision, гонку PENDING/CANCEL и подтверждённую принадлежность исходной вкладке, неизвестный результат и reconnect.",
     "expectedStateDeltas": {
       "audit": "Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision.",
       "mutationBoundary": "Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.",
@@ -2293,9 +2404,16 @@
       "NET-003",
       "NET-004",
       "NET-017",
-      "APP-003"
+      "APP-003",
+      "PLY-029",
+      "NET-005",
+      "NET-006",
+      "NET-007",
+      "NET-021",
+      "NET-022",
+      "NET-027"
     ],
-    "happyPath": "Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017, APP-003; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT, UI-CMD-LOCAL-OWNER-PROFILE-CREATE, UI-CMD-LOCAL-OWNER-BIND-FINALS; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Владелец устройства выбирает точный профиль либо вводит метку и явно создаёт профиль. Обе адресные завесы показывают targetProfileLabel вместе с targetLocalOwnerId. На подтверждении рядом с этой парой перечислены выбранные листы; передача меняет будущий доступ к библиотеке. Экран GM и нейтральное продолжение показывают только служебные данные назначения. После ACK адресат видит только собственную библиотеку, в том числе точный предоставленный набор. В APP-003 выбирает свои конкретные листы и через NET-003/NET-004 проходит обычный #171/#172 с рассмотрением GM. Реальный ACCEPT receiptId связан с proposalChecksum и proposalRevision. В fullCampaignCopyDiffs запись sourceUuid → campaignCharacterIdOrNull связывает membership владельца с принятой copies[].campaignCharacterId, затем с controllerBindingOrNull.{deviceId,localControllerSeatId,inputLaneId}. Без квитанции, подтверждённой копии или привязки контроллера вкладка не создаётся; membership оригинала сохраняется. Общий максимум три допущенные PC-вкладки и один активный контекст GM или PC. Для другого профиля требуется отдельная передача. Пустой профиль сохраняет создание CHR-001 через обычную APP-004; GM_ONLY с нулём PC, обычный ПК и известный owner-safe batch сохраняют свои ветки.",
+    "happyPath": "Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017, APP-003; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT, UI-CMD-LOCAL-OWNER-PROFILE-CREATE, UI-CMD-LOCAL-OWNER-BIND-FINALS; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Владелец устройства выбирает точный профиль либо вводит метку и явно создаёт профиль. Обе адресные завесы показывают targetProfileLabel вместе с targetLocalOwnerId. На подтверждении рядом с этой парой перечислены выбранные листы; передача меняет будущий доступ к библиотеке. Экран GM и нейтральное продолжение показывают только служебные данные назначения. После ACK адресат видит только собственную библиотеку, в том числе точный предоставленный набор. В APP-003 выбирает свои конкретные листы и через NET-003/NET-004 проходит обычный #171/#172 с рассмотрением GM. Реальный ACCEPT receiptId связан с proposalChecksum и proposalRevision. В fullCampaignCopyDiffs запись sourceUuid → campaignCharacterIdOrNull связывает membership владельца с принятой copies[].campaignCharacterId, затем с controllerBindingOrNull.{deviceId,localControllerSeatId,inputLaneId}. Без квитанции, подтверждённой копии или привязки контроллера вкладка не создаётся; membership оригинала сохраняется. Общий максимум три допущенные PC-вкладки и один активный контекст GM или PC. Для другого профиля требуется отдельная передача. Пустой профиль сохраняет создание CHR-001 через обычную APP-004; GM_ONLY с нулём PC, обычный ПК и известный owner-safe batch сохраняют свои ветки. После fresh ACK пройти возврат до SUBMIT, возврат pending владельцу, адресную публикацию NET-027 и каждый разрешённый terminal path.",
     "journeyIds": [
       "J-LOCAL-SEATS"
     ],
@@ -2438,7 +2556,8 @@
           "Начать кампанию",
           "Вернуться к панели кампании",
           "Сохранить начальное время",
-          "Вернуться к исходному состоянию NPC"
+          "Вернуться к исходному состоянию NPC",
+          "Передать устройство локальному игроку"
         ],
         "workflowCommandIds": [
           "UI-CMD-CAMPAIGN-START",
@@ -2722,7 +2841,8 @@
           "Начать кампанию",
           "Вернуться к панели кампании",
           "Сохранить начальное время",
-          "Вернуться к исходному состоянию NPC"
+          "Вернуться к исходному состоянию NPC",
+          "Передать устройство локальному игроку"
         ],
         "workflowCommandIds": [
           "UI-CMD-CAMPAIGN-START",
@@ -5720,7 +5840,8 @@
         "primaryActions": [
           "Отменить pending request",
           "Повторить подключение после потери связи",
-          "Вернуться к выбору персонажей"
+          "Вернуться к выбору персонажей",
+          "Вернуть устройство мастеру"
         ],
         "workflowCommandIds": [
           "UI-CMD-DEVICE-REQUEST-CANCEL"
@@ -9304,7 +9425,8 @@
           "Отменить передачу до привязки",
           "Создать профиль с указанной меткой",
           "Выбрать существующий профиль по идентификатору",
-          "Передать устройство для создания нового персонажа"
+          "Передать устройство для создания нового персонажа",
+          "Вернуть устройство мастеру"
         ],
         "workflowCommandIds": []
       },
@@ -9700,7 +9822,8 @@
           "Начать кампанию",
           "Вернуться к панели кампании",
           "Сохранить начальное время",
-          "Вернуться к исходному состоянию NPC"
+          "Вернуться к исходному состоянию NPC",
+          "Передать устройство локальному игроку"
         ],
         "workflowCommandIds": [
           "UI-CMD-CAMPAIGN-START",

@@ -5,11 +5,26 @@
  * between releases must stop the import, not flow into `generated/` as
  * `undefined`. Every accessor here names the path it failed on.
  */
+import { createHash } from 'node:crypto';
 import { fail } from './fail.js';
 
 export type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
 export interface JsonObject {
   [key: string]: JsonValue | undefined;
+}
+
+/** Object key order is immaterial, but source array order is part of the contract. */
+export function jsonSha256(value: JsonValue): string {
+  const serialized = JSON.stringify(value, (_key, member: unknown): unknown => {
+    if (member === null || typeof member !== 'object' || Array.isArray(member)) return member;
+    const record = member as JsonObject;
+    return Object.fromEntries(
+      Object.keys(record)
+        .sort()
+        .map((key) => [key, record[key]]),
+    );
+  });
+  return createHash('sha256').update(serialized).digest('hex');
 }
 
 export function asObject(value: JsonValue | undefined, where: string, path: string): JsonObject {

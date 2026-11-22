@@ -24,37 +24,37 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'NET-003',
-    sha256: '152b78134a44ce40a990c581293402c014fb5effaa2a27b8c328df13725c745f',
+    sha256: 'c689349559084c5686e5eeb56a7a689fd7caf3ba3407fc8eb7b516a6a9f2f766',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'NET-005',
-    sha256: '25a84b55052fd17885fb99b25c2fd02daa5bcb2da8dbdb014689785aa774113c',
+    sha256: '9d1ee86ab26e523a8cefc94ea040994f6292aa8aad4ea23bf2d86513d95453fa',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'NET-006',
-    sha256: '3cda0d6a4e536f146eb65f182bba2b4541f4f5fbbc05f5db9ccea8c50f128208',
+    sha256: '4f06122b59cba4cea86c88b3e70b26b928a461ba665acfd507bae16e05d21341',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'NET-007',
-    sha256: '67a3ff95c8f4d4fa0cb37e9666cba71a98c9274bee10cc06ef5d10d033c2132c',
+    sha256: 'e0363006fdb514857ce73337fa0a4e7873d9df2559c540244cb3eb17fdb79f3d',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'NET-027',
-    sha256: '931da0f2e3b1d028f24ddcd97f5f8e7eb451898c2f136d83944ae32a89674a6d',
+    sha256: 'fbc687ac3f1f124450582d817d2a22c552db6af7194818810f1aa102a52e206e',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'NET-017',
-    sha256: 'b70e547cb4203cbb402daa3ffff2454a557f405d290fec987ad59b56ec2362a8',
+    sha256: 'f9e2d8ccad7e5e897554bef5491efa34357ce34cadd0263bddfbc8cc426fe2f8',
   },
   {
     target: 'forms',
@@ -78,13 +78,13 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'NET-021',
-    sha256: '6ac2b7a915e478cb4f8b33661f11e681e61aee77a276c1917a22ea98bfca742e',
+    sha256: '782851efbb4bc9488de6bb10be66f0ceadcbec51eaf82afa37173508900328c4',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'NET-022',
-    sha256: 'e34e0fd710b373122a7b35db8d1c90305e691f4da4e0ac9fc44c7704c5550603',
+    sha256: '807613a7879a8ed1cdad0b9ffbd9db638e94cd8945e349430c592fb53f15ac7b',
   },
   {
     target: 'forms',
@@ -96,7 +96,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'PLY-030',
-    sha256: 'd672645e2d901274d1e84716857868e784ea679a1faa488cc27b8792c27911a4',
+    sha256: '521b14cc875348b5d886def33b38333acb99f7e5bde72fed4982e202fa48d5fe',
   },
   {
     target: 'forms',
@@ -126,19 +126,19 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-005',
-    sha256: 'da6e8aa199d9bbd46c7bf82a95cc35984ee056e1095762fdb9601d7393274bef',
+    sha256: '1289bf5018d8641bac87ee49759a8e450f7c5ef1e4ac1b3cb314236449b75286',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-006',
-    sha256: '253fb042ddd15f43965016fc16393c5a9be92a5e2171acfa2c8f6e93508e74af',
+    sha256: 'bd33eac4d0763b23a9a15f32c93a275e633b47d9760e06db9cc1bca51e5c148e',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-010',
-    sha256: '31758668abea13b7a70a6f22e3041ffb4a75e3d96bd17f3c1ac55a3ea02298a1',
+    sha256: '8f653b72cb6b04f1e887ba46a027d458392854270e223583edf756047de81abb',
   },
   {
     target: 'coverageRequirements',
@@ -150,13 +150,13 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-NET-006',
-    sha256: 'ee0c9a9bab7fbddc766469825e6bd673c1f5c60b2c12dda91182cb17346fb102',
+    sha256: '4d21f8fcaa2efbc654e668a688783495d00182a679723f9b68add4cf1fde1f8f',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-NET-007',
-    sha256: '4e6b3d616bf051867955287298c75e91201d1ed1d8040a1e28e0e240af358d8e',
+    sha256: '8485439d96fcad2a6a5a1301abc93d82a561c3723dfe91734aed2f57e039b75a',
   },
   {
     target: 'qaScenarios',
@@ -168,7 +168,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-NET-017',
-    sha256: '5f547af70d3267c7ff58b6ab11bcb4db4b9c3e7df3f935e3612acab5dfc55be0',
+    sha256: 'e1c6ec58e865c6b02fb18d402a0b0e97bbf4ba402ed21440e2fcb28a959484ec',
   },
   {
     target: 'qaScenarios',
@@ -258,11 +258,11 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '112d9088e4909ed884f0df25e4657d8eb3643c788a7587d21827d4c7c7664978',
+    sha256: '36bac9871f785c8366caea799d813ed92b168e3617618b8548623a737512b7c0',
   },
   {
     key: 'transitions',
-    sha256: '30f85a6bbbebfeb833050b2c472b44e5872545ca1633e85f30fa4ce36d940248',
+    sha256: '1260e113940a92e550c40315b81501d010a1f97ca4332e052d58f07df01891a4',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -272,27 +272,27 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### NET-003 —',
-    sha256: '7d10455c77c4f3fd9e198685f8169469d8d5ad67b2ff000192edc89354f1d5a8',
+    sha256: '1c80d9d1c43774310909cda16d4f15458c9a19e2b43ff4ec69e3869db099f9eb',
   },
   {
     prefix: '### NET-005 —',
-    sha256: '38766a60d94ee321113cbed0749f8bbb9f941ad4d3fcd1084737251fefea45c6',
+    sha256: 'f425a4ac5c7e44487c92e645de93e600e82b1179b3eba681010353377c6308ee',
   },
   {
     prefix: '### NET-006 —',
-    sha256: '9a6451ee0457601034797f0225e61a526e0d0f0a5e4719002cfe4299e253cdd7',
+    sha256: '11f9614d3616cd7f3040ed956d879415b3423bf02ff0c237ce53e32d82b387d1',
   },
   {
     prefix: '### NET-007 —',
-    sha256: '609afb8173a70314c471b87792b07211cc61e1388010926bd2e777bd5d83eba2',
+    sha256: '80b108a7d30320a9c0c4c0144dfc1684ffc1ba5ba9c709cf641902c3827530b1',
   },
   {
     prefix: '### NET-027 —',
-    sha256: 'a2ccd32eaa50e32a05fc1cda18f139ed9a0961cd6387fd91621d56213494c3c9',
+    sha256: 'd3c7ad5575750aad97da5e9e4f162dea12644fd465925e0e14dd2d0cd1bbbb43',
   },
   {
     prefix: '### NET-017 —',
-    sha256: 'ca5e1d11051d6c8dee431255360d1f0ed3d643c8d39dd43312f2a0c66a129f9a',
+    sha256: 'ca83aebef1f8a5db3ab1a24d9441c37c961900cacdd24693aa20bfd1d40f5467',
   },
   {
     prefix: '### NET-018 —',
@@ -308,11 +308,11 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### NET-021 —',
-    sha256: '6e5eb3952b153e166dcc49ca4e8996fffd3f46dd718437059a4ad849565eb2f6',
+    sha256: 'd2dc41c3b57cbf38b5ca25fd116bfecf09e002e8eab472cada24d43970a9c812',
   },
   {
     prefix: '### NET-022 —',
-    sha256: '6f909dd5fcc8d8af3675c875b6a879a6a6dad3bd2e76e504bf95e2cdf779fc87',
+    sha256: 'ed94badc6b998b8766c57235ed5fa09f344d9b95a03de6e0ac647f36db5440cc',
   },
   {
     prefix: '### PLY-001 —',
@@ -320,7 +320,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### PLY-030 —',
-    sha256: '8c40db93fd643386f857190a0a284731c4a3e7c20165c85053139caaa95b5a5b',
+    sha256: '45a98eb07c7cbefc46d624e9b3e49ad2d19d7341604e30272ade38d11502d844',
   },
   {
     prefix: '### GM-019 —',
@@ -342,15 +342,15 @@ const MARKDOWN_SECTIONS = [
 const MARKDOWN_LINES = [
   {
     prefix: '| REQ-005 | GM review, campaign copy diff и атомарный AdmissionBatch |',
-    sha256: 'd8332dc70b6b92cc0470371b158a8f64178560a5700fab47e8f3e737c52d43e9',
+    sha256: '365006e6cb48a1c76b5d5c82ebc9ecb2fc3b33fddec27c8533c896d446650e81',
   },
   {
     prefix: '| REQ-006 | Master-import требует owner/device/seat link |',
-    sha256: 'c1a0114f7e02a130ad5db0b79553bc97f13803aae6717c9b075544196d803bac',
+    sha256: '303e3e60e1b7f583472943eb9e7ab88fd32a5ed7a82df423f26ba0d19a924acc',
   },
   {
     prefix: '| REQ-010 | Первоначальное заявление local player на host до player tab |',
-    sha256: '88ddfb4b86ff3198e00c02d14e8f8741460f24495b9b7c3f3bb9479c94dc6a1e',
+    sha256: '11d0e03142cb940a018ecb8bba2e22990c3337c0b6313d7d23546334ba6100d5',
   },
   {
     prefix: '| REQ-021 | GM inventory give/remove/edit/weapon/story/repair/consumables |',
@@ -358,11 +358,11 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-NET-006 | NET-006 |',
-    sha256: 'a8e522c66e36c114061118d058a78432970bbc8f5201944963f720002b878b1c',
+    sha256: '5de43e431a4163f23994ba73e23b1b23618d544789c2507252f9205c7d0ac695',
   },
   {
     prefix: '| QA-FORM-NET-007 | NET-007 |',
-    sha256: '7333a04434852b39ddf7de2a16137c2f90b599b2c20cc235db436492bda36a2e',
+    sha256: '9a115c1e4eaa4faf9075b3f21c30c017917c50f7638d12724ce5ac8d591f3dd9',
   },
   {
     prefix: '| QA-FORM-NET-027 | NET-027 |',
@@ -370,7 +370,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-NET-017 | NET-017 |',
-    sha256: '60153299e34cfa4148d03f1143166cf0f392590593edb854b76b18afa18b155e',
+    sha256: 'e24c9b01e8bd4a04dd01f6acd31ced0d6066f2a30baa1ae96678d4f28d28888d',
   },
   {
     prefix: '| QA-FORM-NET-018 | NET-018 |',

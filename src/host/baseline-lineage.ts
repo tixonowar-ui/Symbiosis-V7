@@ -49,6 +49,10 @@ const enemyVersionConfigurationManifestUrl = new URL(
   './baselines/atlas-v1.22.checksums.sha256',
   import.meta.url,
 );
+const localOwnerBindingManifestUrl = new URL(
+  './baselines/atlas-v1.23.checksums.sha256',
+  import.meta.url,
+);
 const atlasPaths = new Set(Object.keys(BASELINE_LINEAGE_SEALS.successorAtlas));
 
 /** Explicit forward pairs only; no semantic-version comparison or inferred transitivity. */
@@ -73,6 +77,7 @@ export function isApprovedBaselineLineagePair(stored: string, current: string): 
     initialSkillPlanBaselineVersion: b16,
     enemyVersionConfigurationBaselineVersion: b17,
     localOwnerBindingBaselineVersion: b18,
+    hostLocalLobbyBaselineVersion: b19,
   } = BASELINE_LINEAGE_SEALS;
   return (
     (stored === b0 &&
@@ -249,8 +254,9 @@ export function isApprovedBaselineLineagePair(stored: string, current: string): 
       stored === b15 ||
       stored === b16 ||
       stored === b17) &&
-      (current === b17 || current === b18)) ||
-    (stored === b18 && current === b18)
+      (current === b17 || current === b18 || current === b19)) ||
+    (stored === b18 && (current === b18 || current === b19)) ||
+    (stored === b19 && current === b19)
   );
 }
 
@@ -363,7 +369,10 @@ export function verifyHistoricalBaselineLineage(
                                       : storedBaselineVersion ===
                                           BASELINE_LINEAGE_SEALS.enemyVersionConfigurationBaselineVersion
                                         ? readFileSync(enemyVersionConfigurationManifestUrl)
-                                        : currentManifest;
+                                        : storedBaselineVersion ===
+                                            BASELINE_LINEAGE_SEALS.localOwnerBindingBaselineVersion
+                                          ? readFileSync(localOwnerBindingManifestUrl)
+                                          : currentManifest;
   if (`sha256:${sha256(historicalBytes)}` !== storedBaselineVersion)
     fail('historical manifest seal differs');
   const historical = entries(historicalBytes);
@@ -382,7 +391,8 @@ export function verifyHistoricalBaselineLineage(
       currentId === BASELINE_LINEAGE_SEALS.systemLibraryBaselineVersion ||
       currentId === BASELINE_LINEAGE_SEALS.initialSkillPlanBaselineVersion ||
       currentId === BASELINE_LINEAGE_SEALS.enemyVersionConfigurationBaselineVersion ||
-      currentId === BASELINE_LINEAGE_SEALS.localOwnerBindingBaselineVersion) &&
+      currentId === BASELINE_LINEAGE_SEALS.localOwnerBindingBaselineVersion ||
+      currentId === BASELINE_LINEAGE_SEALS.hostLocalLobbyBaselineVersion) &&
     storedBaselineVersion !== BASELINE_LINEAGE_SEALS.gmSourceBaselineVersion &&
     storedBaselineVersion !== BASELINE_LINEAGE_SEALS.queueSourceBaselineVersion &&
     storedBaselineVersion !== BASELINE_LINEAGE_SEALS.normalTransferBaselineVersion &&
@@ -396,7 +406,8 @@ export function verifyHistoricalBaselineLineage(
     storedBaselineVersion !== BASELINE_LINEAGE_SEALS.systemLibraryBaselineVersion &&
     storedBaselineVersion !== BASELINE_LINEAGE_SEALS.initialSkillPlanBaselineVersion &&
     storedBaselineVersion !== BASELINE_LINEAGE_SEALS.enemyVersionConfigurationBaselineVersion &&
-    storedBaselineVersion !== BASELINE_LINEAGE_SEALS.localOwnerBindingBaselineVersion
+    storedBaselineVersion !== BASELINE_LINEAGE_SEALS.localOwnerBindingBaselineVersion &&
+    storedBaselineVersion !== BASELINE_LINEAGE_SEALS.hostLocalLobbyBaselineVersion
       ? Object.keys(BASELINE_LINEAGE_SEALS.gmSourceAddedArtifacts)
       : [];
   const expectedPaths = new Set([...historical.keys(), ...additions]);
@@ -507,6 +518,13 @@ export function verifyHistoricalBaselineLineage(
     }))
       if (current.get(path) !== digest)
         fail('approved local owner binding source bytes differ: ' + path);
+  if (currentId === BASELINE_LINEAGE_SEALS.hostLocalLobbyBaselineVersion)
+    for (const [path, digest] of Object.entries({
+      ...BASELINE_LINEAGE_SEALS.hostLocalLobbyAtlas,
+      ...BASELINE_LINEAGE_SEALS.gmSourceAddedArtifacts,
+    }))
+      if (current.get(path) !== digest)
+        fail('approved host-local lobby source bytes differ: ' + path);
   const expected = BASELINE_LINEAGE_SEALS.replayCatalogDigests;
   if (
     Object.keys(catalogDigests).length !== Object.keys(expected).length ||

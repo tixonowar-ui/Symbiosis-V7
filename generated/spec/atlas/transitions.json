@@ -6763,14 +6763,14 @@
   },
   {
     "from": "PLY-028",
-    "guard": "isHostDevice=true; selected admitted target seat differs from active context; sourceSceneFormId and sceneContext signed; safeBoundary=true; no pending command/target/reaction/series/roll; prior projection erased before acknowledgement",
+    "guard": "isHostDevice=true; selected admitted target seat differs from active context; sourceSceneFormId and sceneContext signed; safeBoundary=true; no pending command/target/reaction/series/roll; prior projection erased before acknowledgement For a selected admitted blocked local PROPOSED copy excluded from the committed Start, require current signed peaceful GM-001, actual acceptance/controller and HOST_LOCAL_HANDOFF; dispatch POST_START_BLOCKED_PLAYER to NET-006. Existing ACTIVE scene routes retain their own guards.",
     "kind": "normative",
     "to": "PLY-030",
     "trigger": "Выбрать допущенную вкладку игрока"
   },
   {
     "from": "PLY-030",
-    "guard": "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=ACTIVATE_TARGET guards; handoff receipt committed before target-only projection opens",
+    "guard": "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=ACTIVATE_TARGET guards; handoff receipt committed before target-only projection opens For HOST_LOCAL_HANDOFF require a fresh explicit ACK at the neutral curtain, then revalidate the exact signed hostLocalHandoff.dispatch case and applicable address before commit.",
     "kind": "workflow-command",
     "to": "PLY-029",
     "trigger": "Готов открыть следующую проекцию"
@@ -12164,5 +12164,110 @@
     "kind": "normative",
     "to": "PLY-030",
     "trigger": "Отменить передачу до подтверждения"
+  },
+  {
+    "from": "APP-003",
+    "guard": "PLAYER, fresh target ACK current and targetLocalOwnerId matches this profile; own APP-004 or pre-submit NET-003 signed return to APP-003; SUBMIT has not committed; no in-flight command; preserve profile, checkpoints and FINAL. TARGET_OWNER_ADMISSION fresh branch only: zero to three (0..3) currently selected own FINAL, including the empty library; exact acknowledged profile and its current signed bootstrap return. The separate APP-003::CTA::009 still requires 1..3 distinct current own FINAL. No selector, grant-based admission, request or seat authority. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+    "kind": "normative",
+    "to": "PLY-030",
+    "trigger": "Вернуть устройство мастеру"
+  },
+  {
+    "from": "NET-003",
+    "guard": "PLAYER, own HOST_LOCAL_CANDIDATE request CANCELLED; original technicalSessionId, requestId, SUBMIT receipt and committed owner CANCEL receipt match; return to initiating GM only, including HOSTING; no selection/admission/seat. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+    "kind": "normative",
+    "to": "PLY-030",
+    "trigger": "Вернуть устройство мастеру"
+  },
+  {
+    "from": "NET-005",
+    "guard": "PLAYER, acknowledged original request owner, own PENDING or IN_REVIEW request or confirmed preliminary REJECTED by NET-017::CTA::008. Keep pending/review status unchanged; terminal return requires original SUBMIT and actual decision receipt/status. No unconfirmed owner command. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+    "kind": "normative",
+    "to": "PLY-030",
+    "trigger": "Вернуть устройство мастеру"
+  },
+  {
+    "from": "NET-006",
+    "guard": "PLAYER, actual ACCEPT receipt matches this campaign copy and controller. PRE_START: PAUSED, no Start receipt, Ready or Not ready → same campaign GM NET-016. POST_START: current confirmed PEACE, committed Start, this admitted blocked PROPOSED copy excluded from included ACTIVE IDs → current GM-001. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+    "kind": "normative",
+    "to": "PLY-030",
+    "trigger": "Передать устройство мастеру"
+  },
+  {
+    "from": "NET-007",
+    "guard": "PLAYER, own host-local DEVICE_REQUEST; final GM_REJECTED from NET-022::CTA::003 or PLAYER_DECLINED from NET-027::CTA::004 with corresponding confirmed receipt; signed return to original GM. MASTER_IMPORT keeps NET-007::CTA::004. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+    "kind": "normative",
+    "to": "PLY-030",
+    "trigger": "Вернуть устройство мастеру"
+  },
+  {
+    "from": "NET-016",
+    "guard": "GM, sole current authority for the same locally hosted PAUSED campaign, PRE_START, no Start receipt; explicitly selected actual local owner and controller from confirmed ACCEPT/copy/seat rows, Ready or Not ready. Zero seats has no target. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+    "kind": "normative",
+    "to": "PLY-030",
+    "trigger": "Передать устройство локальному игроку"
+  },
+  {
+    "from": "NET-017",
+    "guard": "GM, sole current authority, explicitly selected original local HOST_LOCAL_CANDIDATE request and exact targetLocalOwnerId. Verify original ACK, tab, network scope, technicalSessionId, requestId, SUBMIT receipt and current requestRevision. Deliver only PENDING/IN_REVIEW/preliminary REJECTED to NET-005, published own proposal to NET-027 or confirmed GM_REJECTED/PLAYER_DECLINED to NET-007. Derive selectable recipients from durable local SUBMIT and verified outcomes, including final decisions already removed from the live PENDING queue; retain addressed delivery after restart. GM sees only permitted profile label/profile ID and request ID, never the candidate’s private diff. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+    "kind": "normative",
+    "to": "PLY-030",
+    "trigger": "Передать устройство владельцу заявки"
+  },
+  {
+    "from": "PLY-029",
+    "guard": "handoffType=HOST_LOCAL_HANDOFF; decision=ACTIVATE_TARGET; current committed handoff receipt and signed destination; PRE_SUBMIT_RETURN: Fresh owner before SUBMIT, signed bootstrap initiator at CMP-009, original GM authority current; preserve profile, drafts and FINAL.",
+    "kind": "system-event",
+    "to": "CMP-009",
+    "trigger": "Dispatch acknowledged host-local handoff to CMP-009"
+  },
+  {
+    "from": "PLY-029",
+    "guard": "handoffType=HOST_LOCAL_HANDOFF; decision=ACTIVATE_TARGET; current committed handoff receipt and signed destination; REQUEST_PENDING: Current PENDING on original selected request and requestRevision; only its acknowledged provisional owner can cancel or return to GM leaving PENDING. No seat. REQUEST_IN_REVIEW: Same owner and current IN_REVIEW, no published final decision; waiting or signed GM return. Owner CANCEL is unavailable. PRELIMINARY_REJECTED: Confirmed preliminary REJECTED receipt/status of original SUBMIT at NET-017::CTA::008; no GM publication or seat required.",
+    "kind": "system-event",
+    "to": "NET-005",
+    "trigger": "Dispatch acknowledged host-local handoff to NET-005"
+  },
+  {
+    "from": "PLY-029",
+    "guard": "handoffType=HOST_LOCAL_HANDOFF; decision=ACTIVATE_TARGET; current committed handoff receipt and signed destination; GM_PROPOSAL: Current committed NET-021::CTA::005 publication for this exact admissionBatchId, proposalRevision and proposalChecksum on the original request tab. Own whole-batch diff only, before player ACCEPT.",
+    "kind": "system-event",
+    "to": "NET-027",
+    "trigger": "Dispatch acknowledged host-local handoff to NET-027"
+  },
+  {
+    "from": "PLY-029",
+    "guard": "handoffType=HOST_LOCAL_HANDOFF; decision=ACTIVATE_TARGET; current committed handoff receipt and signed destination; GM_REJECTED: Final GM rejection from NET-022::CTA::003 for this request and batch; own decision receipt and reason only. No admitted tab. PLAYER_DECLINED: Original owner declined the full batch in NET-027::CTA::004; verified exact player decision receipt and proposal. No admitted tab.",
+    "kind": "system-event",
+    "to": "NET-007",
+    "trigger": "Dispatch acknowledged host-local handoff to NET-007"
+  },
+  {
+    "from": "PLY-029",
+    "guard": "handoffType=HOST_LOCAL_HANDOFF; decision=ACTIVATE_TARGET; current committed handoff receipt and signed destination; CANCELLED_RETURN: Own successful CANCEL in NET-005::CTA::001 reached NET-003; restore signed initiating GM queue after GM ACK. Preserve CANCEL receipt; removed CANCELLED request never reappears as selected. REQUEST_OWNER_RETURN: From addressed NET-005 waiting/confirmed preliminary result or NET-007 terminal result, restore exact signed issuing GM queue after GM ACK. Preserve application status, receipt and owner.",
+    "kind": "system-event",
+    "to": "NET-017",
+    "trigger": "Dispatch acknowledged host-local handoff to NET-017"
+  },
+  {
+    "from": "PLY-029",
+    "guard": "handoffType=HOST_LOCAL_HANDOFF; decision=ACTIVATE_TARGET; current committed handoff receipt and signed destination; PRE_START_GM: Current PAUSED/PRE_START, no Start receipt, confirmed accepted local player source; sole current GM of the same campaign. Ready and Not ready both allow a safe handoff.",
+    "kind": "system-event",
+    "to": "NET-016",
+    "trigger": "Dispatch acknowledged host-local handoff to NET-016"
+  },
+  {
+    "from": "PLY-029",
+    "guard": "handoffType=HOST_LOCAL_HANDOFF; decision=ACTIVATE_TARGET; current committed handoff receipt and signed destination; PRE_START_PLAYER: Current PAUSED/PRE_START, no Start receipt, selected local profile with actual ACCEPT receipt/campaignCharacterId/controller. Own admitted lobby only; Ready may have changed. POST_START_BLOCKED_PLAYER: From actual GM-001 PEACE through PLY-027/PLY-028::CTA::003, selected admitted local blocked PROPOSED target excluded from confirmed Start included ACTIVE IDs; same campaign and controller. Own lobby only; never PLY-001.",
+    "kind": "system-event",
+    "to": "NET-006",
+    "trigger": "Dispatch acknowledged host-local handoff to NET-006"
+  },
+  {
+    "from": "PLY-029",
+    "guard": "handoffType=HOST_LOCAL_HANDOFF; decision=ACTIVATE_TARGET; current committed handoff receipt and signed destination; POST_START_BLOCKED_GM: Confirmed Start and current peaceful scene, accepted local blocked PROPOSED source excluded from Start included ACTIVE IDs; original current GM, exact signed GM-001.",
+    "kind": "system-event",
+    "to": "GM-001",
+    "trigger": "Dispatch acknowledged host-local handoff to GM-001"
   }
 ]

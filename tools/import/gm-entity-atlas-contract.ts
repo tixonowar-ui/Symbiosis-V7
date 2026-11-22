@@ -141,7 +141,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'GM-001',
-    sha256: '9cf3928e13c50554c6dde8df07230fb357ab5ecabc09696d350d571c36a6066e',
+    sha256: 'ed471b2a4d012676560ba374f0bc60943794dc5e959f19d8aa51f809e469e0ba',
   },
   {
     target: 'forms',
@@ -189,13 +189,13 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-011',
-    sha256: '5b272cfcc132fa52e8c9fe4e862b98e6738f9d730a9373d324f1b56044645c1d',
+    sha256: '9059f1aee10156f1125796ff3e5e526a722120da4c2e91a6540a0aeb7beae594',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-012',
-    sha256: 'a4dd2fe694307a11ff2357bd5d586e2cdecf102b98f450907ca132100ed48cab',
+    sha256: '2e6869b70c139ec0c143b2b845073c85aecc0c029c996d6e8e68a7fcb0fe848e',
   },
   {
     target: 'coverageRequirements',
@@ -519,19 +519,19 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'atlasVersion',
-    sha256: 'a46a2149e93b038a1bf4dceb6f47f335e0d84fc1cdb3169a933c44af78a1a7dc',
+    sha256: 'bf030c84a07ff2092b9120bc783bf5c706e898920c5f8ed8f185009a90e41df1',
   },
   {
     key: 'releaseDate',
-    sha256: 'a50c57015cc199eea6053392579c050bcd6d7200a4a7e18c1d32d3e8b61662ad',
+    sha256: '0974e9ca5d11e5ffc2478070456a4335d0899cf7f33cb7239a701e58659caf91',
   },
   {
     key: 'counts',
-    sha256: '112d9088e4909ed884f0df25e4657d8eb3643c788a7587d21827d4c7c7664978',
+    sha256: '36bac9871f785c8366caea799d813ed92b168e3617618b8548623a737512b7c0',
   },
   {
     key: 'transitions',
-    sha256: '30f85a6bbbebfeb833050b2c472b44e5872545ca1633e85f30fa4ce36d940248',
+    sha256: '1260e113940a92e550c40315b81501d010a1f97ca4332e052d58f07df01891a4',
   },
   {
     key: 'entityLifecycles',
@@ -539,7 +539,7 @@ const ROOT_SEALS = [
   },
   {
     key: 'registryCoverage',
-    sha256: 'e5f3b0aa4ee0c2d332bb9ece3be4997ee6172714a2347fedca1ccf45a04dd686',
+    sha256: 'ddc491e28d813ce488312307410bf863318ac92148d0ce027a4daf6ec01471da',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -625,7 +625,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### GM-001 —',
-    sha256: 'f880661a65bcc4cf682d963cdf3fba06d03c5411b5341b9f5805926b8d660833',
+    sha256: '8fc629e94fddecafd79dc89a2e5d9fa41b91ce100e11deed4c25c07e61041724',
   },
   {
     prefix: '### NPC-011 —',
@@ -667,11 +667,11 @@ const MARKDOWN_SECTIONS = [
 const MARKDOWN_LINES = [
   {
     prefix: '| REQ-011 | Полный NPC wizard без общего stat cap |',
-    sha256: 'c9ec7117688b3bc4b4debb4a573e5ca931c8550d2e8edd84027506619d8584e0',
+    sha256: 'fa3eec12110d3ab88d4a9f6415a71a9c2ef81e517ff38ed3b07acbe450473523',
   },
   {
     prefix: '| REQ-012 | NPC list/version/history/duplicate/archive/delete blockers |',
-    sha256: '8af775bf3fc80473a38e5a2e3dee4006c396d9cc5f38cced750841e810772a2f',
+    sha256: '0641540589b84c8e3cce2e690e3c2cba259c14839f8958d6b53315f0e7e84ddf',
   },
   {
     prefix: '| REQ-013 | Справочник системных и пользовательских врагов |',

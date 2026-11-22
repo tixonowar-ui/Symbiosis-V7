@@ -66,7 +66,7 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-055',
-    sha256: 'ac558316349496594e4fa933b980288cfacf259e3b3d0ba08037aa8135c52551',
+    sha256: '744ce4616caf774e119c2a44e45480bf59905b8e751784fe388639106e755810',
   },
   {
     target: 'qaScenarios',
@@ -132,11 +132,11 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '112d9088e4909ed884f0df25e4657d8eb3643c788a7587d21827d4c7c7664978',
+    sha256: '36bac9871f785c8366caea799d813ed92b168e3617618b8548623a737512b7c0',
   },
   {
     key: 'transitions',
-    sha256: '30f85a6bbbebfeb833050b2c472b44e5872545ca1633e85f30fa4ce36d940248',
+    sha256: '1260e113940a92e550c40315b81501d010a1f97ca4332e052d58f07df01891a4',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -177,7 +177,7 @@ const MARKDOWN_LINES = [
   {
     prefix:
       '| REQ-055 | Самостоятельная обязательная ветвь: Host/port/QR, capacity, permitted campaign settings и disconnect client |',
-    sha256: '846b8025a23789276d38d4595f075e302bbe33b8b3d0847ec200da9428d9b1df',
+    sha256: '8e038ed0dff631861f885341eccd9c4b2c41a95622d1d1e3a084487907420751',
   },
   {
     prefix: '| QA-FORM-NET-009 | NET-009 |',

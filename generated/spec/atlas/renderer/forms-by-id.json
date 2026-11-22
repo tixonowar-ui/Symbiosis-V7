@@ -794,6 +794,10 @@
         {
           "actionKey": "APP-003::CTA::013",
           "label": "Передать устройство для создания нового персонажа"
+        },
+        {
+          "actionKey": "APP-003::CTA::014",
+          "label": "Вернуть устройство мастеру"
         }
       ]
     },
@@ -821,7 +825,8 @@
       "QA-LOCAL-OWNER-ATOMICITY",
       "QA-LOCAL-OWNER-ADMISSION",
       "QA-WORKFLOW-UI-CMD-LOCAL-OWNER-PROFILE-CREATE",
-      "QA-WORKFLOW-UI-CMD-LOCAL-OWNER-BIND-FINALS"
+      "QA-WORKFLOW-UI-CMD-LOCAL-OWNER-BIND-FINALS",
+      "QA-HOST-LOCAL-HANDOFF-PRE-SUBMIT"
     ],
     "requiredFields": [
       "deviceId",
@@ -834,7 +839,8 @@
       "draftRevision",
       "NEUTRAL_PROFILE_SETUP input: installationId, deviceId, signedReturnContext. Existing profile selection needs its exact ID and label; create takes the entered targetProfileLabel and returns a new targetLocalOwnerId. Cancel needs neither.",
       "SELECTOR_BIND_CONFIRM input: binding.envelopeFields and selectedFinals[{sourceUuid,finalSnapshotVersion,metadataRevision,candidateSnapshotChecksum}]. Only on commit: bindingReceiptId, grantId, pendingContinuationId.",
-      "TARGET_OWNER_ADMISSION input: current target ACK and exact owned subset. Existing-membership and fresh paths use their own confirmed owner scope; no prior binding receipt is required."
+      "TARGET_OWNER_ADMISSION input: current target ACK and exact owned subset. Existing-membership and fresh paths use their own confirmed owner scope; no prior binding receipt is required. Before SUBMIT, the signed fresh-profile return accepts 0..3 selected own FINAL, including zero. Only the admission CTA requires 1..3.",
+      "HOST_LOCAL_HANDOFF pre-SUBMIT only: current fresh profile ACK, signed bootstrap GM return, no submitted request; request/admission/copy IDs do not exist yet."
     ],
     "roles": [
       "player",
@@ -847,7 +853,7 @@
       "NEUTRAL_PROFILE_SETUP": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions",
       "ORDINARY_1_TO_3_READY": "One to three candidates can continue to NET-003 without GM projection.",
       "SELECTOR_BIND_CONFIRM": "signed selector context and selectorHandoffReceiptId current; exact durable targetLocalOwnerId + targetProfileLabel; 1..3 distinct unassigned immutable FINAL from this installation and device; exact sourceUuid/finalSnapshotVersion/metadataRevision/candidateSnapshotChecksum and selectionRevision",
-      "TARGET_OWNER_ADMISSION": "isHostDevice=true; current HOST_LOCAL_CANDIDATE ACK identifies exact target owner; only that owner’s permitted sourceUuid subset, 1..3, current revisions, ordinary #171/#172 admission; no pre-admission seat",
+      "TARGET_OWNER_ADMISSION": "isHostDevice=true; current HOST_LOCAL_CANDIDATE ACK identifies exact target owner. APP-003::CTA::009 requires 1..3 distinct permitted own FINAL at the current revisions for ordinary #171/#172 admission. Only a fresh acknowledged profile with its current signed bootstrap GM return before SUBMIT may enter with 0..3 selected own FINAL to use APP-003::CTA::014. No in-flight command, pre-submit grant or seat. Selector and grant-based admission have no such return.",
       "ZERO_SEATS": "Valid empty local shell; no character authority or submit CTA.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
@@ -927,7 +933,8 @@
       "QA-CHANGE-APP-004",
       "QA-LOCAL-OWNER-PRIVACY",
       "QA-LOCAL-OWNER-ATOMICITY",
-      "QA-LOCAL-OWNER-ADMISSION"
+      "QA-LOCAL-OWNER-ADMISSION",
+      "QA-HOST-LOCAL-HANDOFF-PRE-SUBMIT"
     ],
     "requiredFields": [
       "localOwnerIdOrNull",
@@ -10093,7 +10100,8 @@
       "QA-CHANGE-CMP-009",
       "QA-LOCAL-OWNER-PRIVACY",
       "QA-LOCAL-OWNER-RESUME",
-      "QA-LOCAL-OWNER-ADMISSION"
+      "QA-LOCAL-OWNER-ADMISSION",
+      "QA-HOST-LOCAL-HANDOFF-PRE-SUBMIT"
     ],
     "requiredFields": [
       "contextId",
@@ -12439,7 +12447,8 @@
     "domain": "Мастерские операции",
     "id": "GM-001",
     "qaScenarioIds": [
-      "QA-FORM-GM-001"
+      "QA-FORM-GM-001",
+      "QA-HOST-LOCAL-HANDOFF-POST-START-BLOCKED"
     ],
     "requiredFields": [
       "contextId",
@@ -16508,6 +16517,10 @@
         {
           "actionKey": "NET-003::CTA::004",
           "label": "Вернуться к «Выбор локального профиля и места»"
+        },
+        {
+          "actionKey": "NET-003::CTA::005",
+          "label": "Вернуть устройство мастеру"
         }
       ]
     },
@@ -16526,7 +16539,9 @@
     "qaScenarioIds": [
       "QA-FORM-NET-003",
       "QA-CHANGE-NET-003",
-      "QA-NET-005-REJECTED-RETURN"
+      "QA-NET-005-REJECTED-RETURN",
+      "QA-HOST-LOCAL-HANDOFF-PENDING-CANCEL",
+      "QA-HOST-LOCAL-HANDOFF-PRE-SUBMIT"
     ],
     "requiredFields": [
       "contextId",
@@ -16536,7 +16551,8 @@
       "controllerSeat",
       "connectionState",
       "campaignId",
-      "campaignStatus"
+      "campaignStatus",
+      "HOST_LOCAL_HANDOFF after owner CANCEL only: original request, technical session and committed cancellation. Separate pre-SUBMIT path uses the existing return to APP-003."
     ],
     "roles": [
       "player"
@@ -16587,7 +16603,8 @@
     "id": "NET-004",
     "qaScenarioIds": [
       "QA-FORM-NET-004",
-      "QA-CHANGE-NET-004"
+      "QA-CHANGE-NET-004",
+      "QA-HOST-LOCAL-HANDOFF-PRE-SUBMIT"
     ],
     "requiredFields": [
       "requestId",
@@ -16633,6 +16650,10 @@
         {
           "actionKey": "NET-005::CTA::003",
           "label": "Вернуться к выбору персонажей"
+        },
+        {
+          "actionKey": "NET-005::CTA::004",
+          "label": "Вернуть устройство мастеру"
         }
       ]
     },
@@ -16654,7 +16675,10 @@
       "QA-FORM-NET-005",
       "QA-CHANGE-NET-005",
       "QA-DEVICE-REQUEST-REVIEW-CANCEL-RACE",
-      "QA-NET-005-REJECTED-RETURN"
+      "QA-NET-005-REJECTED-RETURN",
+      "QA-HOST-LOCAL-HANDOFF-REQUEST",
+      "QA-HOST-LOCAL-HANDOFF-PENDING-CANCEL",
+      "QA-HOST-LOCAL-HANDOFF-TERMINAL"
     ],
     "requiredFields": [
       "requestId",
@@ -16665,7 +16689,8 @@
       "connectionState",
       "requestRevision",
       "cancelReason(required)",
-      "commandId"
+      "commandId",
+      "HOST_LOCAL_HANDOFF request owner only: original request/session/SUBMIT receipt and current requestRevision; preliminary result additionally requires the confirmed rejection. No admission required."
     ],
     "roles": [
       "player"
@@ -16710,6 +16735,10 @@
         {
           "actionKey": "NET-006::CTA::004",
           "label": "Отменить готовность"
+        },
+        {
+          "actionKey": "NET-006::CTA::005",
+          "label": "Передать устройство мастеру"
         }
       ]
     },
@@ -16728,7 +16757,9 @@
     "qaScenarioIds": [
       "QA-FORM-NET-006",
       "QA-CHANGE-NET-006",
-      "QA-WORKFLOW-UI-CMD-CAMPAIGN-READY-SET"
+      "QA-WORKFLOW-UI-CMD-CAMPAIGN-READY-SET",
+      "QA-HOST-LOCAL-HANDOFF-PRE-START",
+      "QA-HOST-LOCAL-HANDOFF-POST-START-BLOCKED"
     ],
     "requiredFields": [
       "contextId",
@@ -16741,7 +16772,8 @@
       "readyStatus",
       "startStatus",
       "stateRevision",
-      "projectionRevision"
+      "projectionRevision",
+      "HOST_LOCAL_HANDOFF accepted copy/controller only: PRE_START with no scene, or confirmed current Start/PEACE and blocked PROPOSED copy outside included ACTIVE IDs."
     ],
     "roles": [
       "player"
@@ -16780,6 +16812,10 @@
         {
           "actionKey": "NET-007::CTA::004",
           "label": "Вернуться через экран приватности"
+        },
+        {
+          "actionKey": "NET-007::CTA::005",
+          "label": "Вернуть устройство мастеру"
         }
       ]
     },
@@ -16796,7 +16832,8 @@
     "domain": "Подключение и полномочия",
     "id": "NET-007",
     "qaScenarioIds": [
-      "QA-FORM-NET-007"
+      "QA-FORM-NET-007",
+      "QA-HOST-LOCAL-HANDOFF-TERMINAL"
     ],
     "requiredFields": [
       "contextId",
@@ -16811,7 +16848,8 @@
       "projectionRevision",
       "admissionOrigin=DEVICE_REQUEST|MASTER_IMPORT",
       "ownerProvenance",
-      "signedReturnContextOrNull"
+      "signedReturnContextOrNull",
+      "HOST_LOCAL_HANDOFF DEVICE_REQUEST terminal only: original request/SUBMIT and confirmed final rejection or player decline; proposal identity required only for an existing proposal."
     ],
     "roles": [
       "player"
@@ -17439,6 +17477,10 @@
         {
           "actionKey": "NET-016::CTA::005",
           "label": "Вернуться к исходному состоянию NPC"
+        },
+        {
+          "actionKey": "NET-016::CTA::006",
+          "label": "Передать устройство локальному игроку"
         }
       ]
     },
@@ -17450,7 +17492,8 @@
       "Start preflight",
       "Atomic Start CTA",
       "Поля начального времени: день, часы, минуты; отдельное сохранение и ошибки полей; подтверждённое значение показано отдельно от ввода.",
-      "Причина закрепления начальной минуты сохранённым NPC; явный read-only lock и ошибка изменения на другую минуту"
+      "Причина закрепления начальной минуты сохранённым NPC; явный read-only lock и ошибка изменения на другую минуту",
+      "Выбор допущенной локальной вкладки по профилю и действительной привязке controller к принятой копии. При нуле мест адресатов нет."
     ],
     "contexts": [
       "network"
@@ -17460,7 +17503,8 @@
     "qaScenarioIds": [
       "QA-FORM-NET-016",
       "QA-CHANGE-NET-016",
-      "QA-WORKFLOW-UI-CMD-CAMPAIGN-INITIAL-TIME-SET"
+      "QA-WORKFLOW-UI-CMD-CAMPAIGN-INITIAL-TIME-SET",
+      "QA-HOST-LOCAL-HANDOFF-PRE-START"
     ],
     "requiredFields": [
       "contextId",
@@ -17480,7 +17524,8 @@
       "startPreflightStatus",
       "commandId",
       "initialTimeLockOrNull=null|{campaignTimestamp,sourceNpcUuid,sourceVersion}",
-      "npcInitialTimeReturnContextOrNull=null|{campaignId,npcDraftId,attemptRevision,editMode,versionBindingOrNull,returnFormId=NPC-016}"
+      "npcInitialTimeReturnContextOrNull=null|{campaignId,npcDraftId,attemptRevision,editMode,versionBindingOrNull,returnFormId=NPC-016}",
+      "HOST_LOCAL_HANDOFF PRE_START only: selected admitted owner/profile, confirmed ACCEPT/copy/controller; first Start receipt absent; no scene required."
     ],
     "roles": [
       "gm"
@@ -17548,6 +17593,10 @@
         {
           "actionKey": "NET-017::CTA::010",
           "label": "Начать рассмотрение кампанийных копий"
+        },
+        {
+          "actionKey": "NET-017::CTA::011",
+          "label": "Передать устройство владельцу заявки"
         }
       ]
     },
@@ -17559,7 +17608,8 @@
       "Принять заявку к рассмотрению",
       "Причина и предварительное отклонение заявки",
       "Подтверждённая квитанция решения",
-      "Безопасный возврат в исходный контекст мастера"
+      "Безопасный возврат в исходный контекст мастера",
+      "Выбор адресной локальной заявки: разрешённая GM метка, идентификатор профиля и заявки. Одноимённые профили различаются по targetLocalOwnerId. Открытая заявка, подтверждённый исход или опубликованный batch сверяются с исходной сессией и квитанцией."
     ],
     "contexts": [
       "network"
@@ -17573,7 +17623,10 @@
       "QA-WORKFLOW-UI-CMD-DEVICE-REQUEST-REJECT",
       "QA-DEVICE-REQUEST-REVIEW-CANCEL-RACE",
       "QA-CMP-006-DEVICE-REQUEST-QUEUE",
-      "QA-WORKFLOW-UI-CMD-ADMISSION-REVIEW-OPEN"
+      "QA-WORKFLOW-UI-CMD-ADMISSION-REVIEW-OPEN",
+      "QA-HOST-LOCAL-HANDOFF-REQUEST",
+      "QA-HOST-LOCAL-HANDOFF-PENDING-CANCEL",
+      "QA-HOST-LOCAL-HANDOFF-TERMINAL"
     ],
     "requiredFields": [
       "contextId",
@@ -17587,7 +17640,8 @@
       "occupiedActivePcCount",
       "decisionReason(required-for-reject)",
       "commandId",
-      "returnContext"
+      "returnContext",
+      "HOST_LOCAL_HANDOFF request delivery only: selected host-local profile, original tab/session/request/SUBMIT; require current proposal evidence only for a published proposal; terminal outcome requires its verified receipt/status."
     ],
     "roles": [
       "gm"
@@ -17862,7 +17916,8 @@
     "id": "NET-021",
     "qaScenarioIds": [
       "QA-FORM-NET-021",
-      "QA-CHANGE-NET-021"
+      "QA-CHANGE-NET-021",
+      "QA-HOST-LOCAL-HANDOFF-REQUEST"
     ],
     "requiredFields": [
       "contextId",
@@ -17935,7 +17990,8 @@
     "id": "NET-022",
     "qaScenarioIds": [
       "QA-FORM-NET-022",
-      "QA-CHANGE-NET-022"
+      "QA-CHANGE-NET-022",
+      "QA-HOST-LOCAL-HANDOFF-TERMINAL"
     ],
     "requiredFields": [
       "contextId",
@@ -18332,7 +18388,10 @@
     "id": "NET-027",
     "qaScenarioIds": [
       "QA-FORM-NET-027",
-      "QA-CHANGE-NET-027"
+      "QA-CHANGE-NET-027",
+      "QA-HOST-LOCAL-HANDOFF-PRE-START",
+      "QA-HOST-LOCAL-HANDOFF-REQUEST",
+      "QA-HOST-LOCAL-HANDOFF-TERMINAL"
     ],
     "requiredFields": [
       "contextId",
@@ -21595,7 +21654,8 @@
     "id": "PLY-028",
     "qaScenarioIds": [
       "QA-FORM-PLY-028",
-      "QA-CHANGE-PLY-028"
+      "QA-CHANGE-PLY-028",
+      "QA-HOST-LOCAL-HANDOFF-POST-START-BLOCKED"
     ],
     "requiredFields": [
       "hostDeviceId",
@@ -21640,9 +21700,10 @@
     },
     "components": [
       "Заголовок и текущий контекст",
-      "Содержательная область: Показывает единственный активный GM context либо controllerSeat и состояния GM_ACTIVE, PLAYER_1..3_ACTIVE, WAITING_FOR_LOCAL_OWNER и RECONNECT_RESTORED; неактивные проекции отсутствуют из DOM.",
+      "Содержательная область: Показывает единственный активный GM context либо controllerSeat и состояния GM_ACTIVE, PLAYER_1..3_ACTIVE, WAITING_FOR_LOCAL_OWNER и RECONNECT_RESTORED; неактивные проекции отсутствуют из DOM. Для HOST_LOCAL_HANDOFF проверяет ровно один подтверждённый адрес GM, допущенного controller или исходного владельца заявки. Последнему выдаётся только собственная заявка, включая случай нуля мест.",
       "Observer/controller-safe projection",
-      "Состояние active/inactive"
+      "Состояние active/inactive",
+      "HOST_LOCAL_HANDOFF: сервер выбирает роль и экран по подписанной ветви и квитанции подтверждения. URL, история вкладки и кеш не служат основанием для выдачи."
     ],
     "contexts": [
       "ordinary-device-shell",
@@ -21655,24 +21716,33 @@
     "id": "PLY-029",
     "qaScenarioIds": [
       "QA-FORM-PLY-029",
-      "QA-CHANGE-PLY-029"
+      "QA-CHANGE-PLY-029",
+      "QA-HOST-LOCAL-HANDOFF-PRE-START",
+      "QA-HOST-LOCAL-HANDOFF-REQUEST",
+      "QA-HOST-LOCAL-HANDOFF-PENDING-CANCEL",
+      "QA-HOST-LOCAL-HANDOFF-TERMINAL",
+      "QA-HOST-LOCAL-HANDOFF-PRE-SUBMIT",
+      "QA-HOST-LOCAL-HANDOFF-POST-START-BLOCKED",
+      "QA-HOST-LOCAL-HANDOFF-REPLAY-PRIVACY"
     ],
     "requiredFields": [
       "deviceId",
       "isHostDevice",
       "activeContext=GM_ACTIVE|PLAYER_1_ACTIVE|PLAYER_2_ACTIVE|PLAYER_3_ACTIVE|WAITING_FOR_LOCAL_OWNER|RECONNECT_RESTORED",
-      "activeSeatOrGm",
+      "activeSeatOrGm (GM or admitted controller only; absent for signed provisional request owner)",
       "admittedPlayerSeatRoster[0..3]",
-      "activeController",
+      "activeController (GM or admitted controller only; absent for signed provisional request owner)",
       "handoffIdOrNull",
-      "handoffType=TAB_SWITCH|FORCED_INPUT|CONSENT|MASTER_PREDICATE|HOST_LOCAL_CANDIDATE|CONTROL_LEASE",
+      "handoffType=TAB_SWITCH|FORCED_INPUT|CONSENT|MASTER_PREDICATE|HOST_LOCAL_CANDIDATE|IMPORTED_OWNER_CLAIM|CONTROL_LEASE|HOST_LOCAL_HANDOFF",
       "handoffReceiptIdOrNull",
-      "sceneContext=PEACE|COMBAT|LOCAL_BOOTSTRAP",
-      "returnFormId(server-authoritative)=PLY-001|CMB-020|GM-001|CMB-012|APP-004|CMB-029|CMB-032|CMB-033|GM-029|SYS-028|PLY-026|PLY-031",
+      "sceneContext=PEACE|COMBAT|LOCAL_BOOTSTRAP|null",
+      "returnFormId(server-authoritative)=PLY-001|CMB-020|GM-001|CMB-012|APP-004|CMB-029|CMB-032|CMB-033|GM-029|SYS-028|PLY-026|PLY-031|CMP-009|NET-005|NET-006|NET-007|NET-016|NET-017|NET-027",
       "resumeFormIdOrNull(server-authoritative)",
       "resumeReceiptIdOrNull",
       "stateRevision",
-      "projectionRevision"
+      "projectionRevision",
+      "HOST_LOCAL_HANDOFF dispatch input: one committed fresh ACK, signed host destination and current branch-specific address from hostLocalHandoff.dispatch. A provisional request owner receives only their own request projection.",
+      "PRE_START uses sceneContext=null. POST_START_BLOCKED_GM and POST_START_BLOCKED_PLAYER require a confirmed Start and current PEACE. Request delivery needs the addressed request session, independent of an active campaign seat or scene."
     ],
     "roles": [
       "player",
@@ -21748,7 +21818,8 @@
       "Кооперативная завеса выбора неназначенных FINAL",
       "Адресная завеса профиля: постоянная метка и точный идентификатор",
       "Позже и подтверждение подписанного возврата мастеру",
-      "Нейтральное продолжение по метке и точному идентификатору"
+      "Нейтральное продолжение по метке и точному идентификатору",
+      "Для HOST_LOCAL_HANDOFF адресное подтверждение показывает только пару метка/ID либо обозначение мастера и непрозрачное подтверждение. На затронутых соединениях прежняя выдача заранее отозвана."
     ],
     "contexts": [
       "ordinary-device-shell",
@@ -21768,15 +21839,22 @@
       "QA-CHANGE-PLY-030",
       "QA-LOCAL-OWNER-TARGET",
       "QA-LOCAL-OWNER-PRIVACY",
-      "QA-LOCAL-OWNER-RESUME"
+      "QA-LOCAL-OWNER-RESUME",
+      "QA-HOST-LOCAL-HANDOFF-PRE-START",
+      "QA-HOST-LOCAL-HANDOFF-REQUEST",
+      "QA-HOST-LOCAL-HANDOFF-PENDING-CANCEL",
+      "QA-HOST-LOCAL-HANDOFF-TERMINAL",
+      "QA-HOST-LOCAL-HANDOFF-PRE-SUBMIT",
+      "QA-HOST-LOCAL-HANDOFF-POST-START-BLOCKED",
+      "QA-HOST-LOCAL-HANDOFF-REPLAY-PRIVACY"
     ],
     "requiredFields": [
       "handoffId",
-      "handoffType=TAB_SWITCH|FORCED_INPUT|CONSENT|MASTER_PREDICATE|HOST_LOCAL_CANDIDATE|IMPORTED_OWNER_CLAIM|CONTROL_LEASE|DEVICE_LIBRARY_SELECTOR",
-      "sourceSeatOrGm",
-      "targetSeatOrGm",
+      "handoffType=TAB_SWITCH|FORCED_INPUT|CONSENT|MASTER_PREDICATE|HOST_LOCAL_CANDIDATE|IMPORTED_OWNER_CLAIM|CONTROL_LEASE|DEVICE_LIBRARY_SELECTOR|HOST_LOCAL_HANDOFF",
+      "sourceSeatOrGm (only for GM/admitted side; HOST_LOCAL_HANDOFF uses a verified provisional profile/session address before admission)",
+      "targetSeatOrGm (only for GM/admitted side; HOST_LOCAL_HANDOFF uses a verified provisional profile/session address before admission)",
       "targetOwnerAcknowledged",
-      "nestedRequestId",
+      "nestedRequestId (only for a nested request; absent for HOST_LOCAL_HANDOFF)",
       "returnContext",
       "returnFormId(server-signed)",
       "priorProjectionErased=true",
@@ -21785,10 +21863,11 @@
       "stateRevision",
       "projectionRevision",
       "commandId",
-      "handoffReceiptId",
+      "handoffReceiptId (committed ACK output; absent before first ACK)",
       "SELECTOR_CURTAIN input: current signedReturnContext, exact targetLocalOwnerId + targetProfileLabel, priorProjectionErased and localOwnerIdOrNull=null. selectorHandoffReceiptId is returned only by explicit selector ACK.",
       "TARGET_CURTAIN input: current signed addressed profile after purge. Only a committed grant handoff has pendingContinuationId; fresh empty owner has none. Target ACK yields its own receipt; cancel before bind or Later before target ACK never yields a target receipt.",
-      "PENDING_NEUTRAL_RESUME input: retained pendingContinuationId plus target label/ID. SIGNED_GM_RETURN uses the current signed return only; ordinary tab switch, forced prompt and imported claim keep their original inputs."
+      "PENDING_NEUTRAL_RESUME input: retained pendingContinuationId plus target label/ID. SIGNED_GM_RETURN uses the current signed return only; ordinary tab switch, forced prompt and imported claim keep their original inputs.",
+      "HOST_LOCAL_HANDOFF input before ACK: current signed case, safe source, erased private context, exact address and actual conditional witnesses from hostLocalHandoff.address. The command creates handoffReceiptId only on commit. The curtain shows targetProfileLabel and targetLocalOwnerId, or GM designation and opaque addressed confirmation only."
     ],
     "roles": [
       "player",

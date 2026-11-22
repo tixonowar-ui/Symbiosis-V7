@@ -127,6 +127,7 @@
 | [0093](0093-sentient-attempt-generation-and-skill-plan-proof.md)     | Версия SENTIENT attempt, pending upgrade и owning proof плана/учёта         | техническая реализация #257                 |
 | [0094](0094-enemy-version-configuration-replacement.md)              | Явная полная конфигурация N+1 и own-card choices обоих kinds; Atlas1.22/B17 | принято владельцем, вариант A #288          |
 | [0095](0095-local-owner-binding-for-existing-finals.md)              | Первая привязка сохранённых FINAL к локальному профилю                      | принято владельцем, #249                    |
+| [0096](0096-host-local-admission-and-lobby-handoff.md)               | Передача общего компьютера при допуске и в лобби                            | принято владельцем, #297                    |
 
 ## Перенос решений аудита
 

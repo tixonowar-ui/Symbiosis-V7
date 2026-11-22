@@ -64,7 +64,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'GM-001',
-    sha256: '9cf3928e13c50554c6dde8df07230fb357ab5ecabc09696d350d571c36a6066e',
+    sha256: 'ed471b2a4d012676560ba374f0bc60943794dc5e959f19d8aa51f809e469e0ba',
   },
   {
     target: 'forms',
@@ -88,7 +88,7 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-031',
-    sha256: 'a680e1254f9f174566a2092b8fac21c3e1cdeef9c4924f701819b51f8c7d6d12',
+    sha256: 'f57dcba83779ea68261cbcb3b19891909d2857c538fb00f08105bb726ed1fb95',
   },
   {
     target: 'coverageRequirements',
@@ -220,17 +220,17 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '112d9088e4909ed884f0df25e4657d8eb3643c788a7587d21827d4c7c7664978',
+    sha256: '36bac9871f785c8366caea799d813ed92b168e3617618b8548623a737512b7c0',
   },
   {
     key: 'transitions',
-    sha256: '30f85a6bbbebfeb833050b2c472b44e5872545ca1633e85f30fa4ce36d940248',
+    sha256: '1260e113940a92e550c40315b81501d010a1f97ca4332e052d58f07df01891a4',
   },
   {
     // ADR 0092 / #284 changes only the intersecting SENTIENT PATCH witness.
     // ADR0094 / #288 changes only intersecting ENM017 PATCH/NEW-VERSION witnesses.
     key: 'registryCoverage',
-    sha256: 'e5f3b0aa4ee0c2d332bb9ece3be4997ee6172714a2347fedca1ccf45a04dd686',
+    sha256: 'ddc491e28d813ce488312307410bf863318ac92148d0ce027a4daf6ec01471da',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -268,7 +268,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### GM-001 —',
-    sha256: 'f880661a65bcc4cf682d963cdf3fba06d03c5411b5341b9f5805926b8d660833',
+    sha256: '8fc629e94fddecafd79dc89a2e5d9fa41b91ce100e11deed4c25c07e61041724',
   },
   {
     prefix: '### APP-011 —',
@@ -286,7 +286,7 @@ const MARKDOWN_SECTIONS = [
 const MARKDOWN_LINES = [
   {
     prefix: '| REQ-031 |',
-    sha256: 'fa00a07e9267c4791b21bdd6f1cf3654b5fa8b638a5729df858e05b69453b7c8',
+    sha256: '9ddc703b881384f51a7df3dc852c1524791cfe238d85e934ff95de8fe27510ee',
   },
   {
     prefix: '| REQ-050 |',

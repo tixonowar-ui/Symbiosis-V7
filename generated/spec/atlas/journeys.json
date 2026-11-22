@@ -879,7 +879,14 @@
       "PLY-029",
       "CMB-050",
       "SYS-028",
-      "GM-029"
+      "GM-029",
+      "NET-021",
+      "NET-022",
+      "NET-005",
+      "NET-027",
+      "NET-007",
+      "NET-006",
+      "NET-016"
     ],
     "id": "J-LOCAL-SEATS",
     "operationIds": [
@@ -1080,9 +1087,63 @@
           "NET-004",
           "NET-017"
         ],
-        "guards": "isHostDevice=true; current HOST_LOCAL_CANDIDATE ACK identifies exact target owner; only that owner’s permitted sourceUuid subset, 1..3, current revisions, ordinary #171/#172 admission; no pre-admission seat HOST_LOCAL_CANDIDATE: listing, direct open, NET-003 reselection and NET-004 submit each recheck the current acknowledged targetLocalOwnerId and durable membership for every exact sourceUuid before reading or writing. A foreign UUID or stale grant is rejected.",
+        "guards": "isHostDevice=true; current HOST_LOCAL_CANDIDATE ACK identifies exact target owner. APP-003::CTA::009 requires 1..3 distinct permitted own FINAL at the current revisions for ordinary #171/#172 admission. Only a fresh acknowledged profile with its current signed bootstrap GM return before SUBMIT may enter with 0..3 selected own FINAL to use APP-003::CTA::014. No in-flight command, pre-submit grant or seat. Selector and grant-based admission have no such return. HOST_LOCAL_CANDIDATE: listing, direct open, NET-003 reselection and NET-004 submit each recheck the current acknowledged targetLocalOwnerId and durable membership for every exact sourceUuid before reading or writing. A foreign UUID or stale grant is rejected.",
         "result": "После ACK адресат видит только собственную библиотеку, в том числе точный предоставленный набор. В APP-003 выбирает свои конкретные листы и через NET-003/NET-004 проходит обычный #171/#172 с рассмотрением GM. Реальный ACCEPT receiptId связан с proposalChecksum и proposalRevision. В fullCampaignCopyDiffs запись sourceUuid → campaignCharacterIdOrNull связывает membership владельца с принятой copies[].campaignCharacterId, затем с controllerBindingOrNull.{deviceId,localControllerSeatId,inputLaneId}. Без квитанции, подтверждённой копии или привязки контроллера вкладка не создаётся; membership оригинала сохраняется. Общий максимум три допущенные PC-вкладки и один активный контекст GM или PC. Для другого профиля требуется отдельная передача. Пустой профиль сохраняет создание CHR-001 через обычную APP-004; GM_ONLY с нулём PC, обычный ПК и известный owner-safe batch сохраняют свои ветки.",
         "state": "TARGET_OWNER_ADMISSION"
+      },
+      {
+        "formIds": [
+          "APP-004",
+          "NET-004",
+          "NET-003",
+          "APP-003",
+          "PLY-030",
+          "PLY-029",
+          "CMP-009"
+        ],
+        "guards": "hostLocalHandoff.dispatch: PRE_SUBMIT_RETURN. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+        "result": "Сохранены профиль, checkpoints и FINAL. Получатель — исходный GM.",
+        "state": "HOST_LOCAL_PRE_SUBMIT"
+      },
+      {
+        "formIds": [
+          "NET-017",
+          "NET-021",
+          "NET-022",
+          "PLY-030",
+          "PLY-029",
+          "NET-005",
+          "NET-027",
+          "NET-007",
+          "NET-003"
+        ],
+        "guards": "hostLocalHandoff.dispatch: REQUEST_PENDING, REQUEST_IN_REVIEW, PRELIMINARY_REJECTED, GM_PROPOSAL, GM_REJECTED, PLAYER_DECLINED, CANCELLED_RETURN, REQUEST_OWNER_RETURN. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+        "result": "Профиль получает только собственную заявку или результат. До реального ACCEPT мест и игровых полномочий нет.",
+        "state": "HOST_LOCAL_REQUEST"
+      },
+      {
+        "formIds": [
+          "NET-006",
+          "NET-016",
+          "PLY-030",
+          "PLY-029"
+        ],
+        "guards": "hostLocalHandoff.dispatch: PRE_START_GM, PRE_START_PLAYER. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+        "result": "В PAUSED до первой сцены обе стороны могут передать устройство при Ready и Not ready. Время, Ready и Start остаются отдельными операциями.",
+        "state": "HOST_LOCAL_LOBBY"
+      },
+      {
+        "formIds": [
+          "NET-006",
+          "GM-001",
+          "PLY-027",
+          "PLY-028",
+          "PLY-030",
+          "PLY-029"
+        ],
+        "guards": "hostLocalHandoff.dispatch: POST_START_BLOCKED_GM, POST_START_BLOCKED_PLAYER. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+        "result": "После Start заблокированный владелец получает только собственное лобби, мастер — подтверждённую мирную сцену.",
+        "state": "HOST_LOCAL_BLOCKED"
       }
     ],
     "title": "0–3 локальных игрока и игрок на компьютере мастера",
