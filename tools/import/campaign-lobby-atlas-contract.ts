@@ -18,13 +18,13 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'NET-006',
-    sha256: '3cda0d6a4e536f146eb65f182bba2b4541f4f5fbbc05f5db9ccea8c50f128208',
+    sha256: '4f06122b59cba4cea86c88b3e70b26b928a461ba665acfd507bae16e05d21341',
   },
   {
     target: 'forms',
     key: 'id',
     id: 'NET-016',
-    sha256: 'ef4090461c958c718888daf0a2be9b1b9af7a6927f773a0cab92955293f0d239',
+    sha256: '2b7c4d6da6b9008d9aa75f4c93f0cf9e3880901eef32ff9931291b073b4ec19e',
   },
   {
     target: 'forms',
@@ -54,7 +54,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'GM-001',
-    sha256: '9cf3928e13c50554c6dde8df07230fb357ab5ecabc09696d350d571c36a6066e',
+    sha256: 'ed471b2a4d012676560ba374f0bc60943794dc5e959f19d8aa51f809e469e0ba',
   },
   {
     target: 'journeys',
@@ -78,7 +78,7 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-004',
-    sha256: '5c7db3c10982159dbafcf89b576ac704f3f58acc6f3d96e988ba5b01505f82c1',
+    sha256: '10a3d4f050a5067a7d53c87af314a35c9ab9b41fae70ff8c037feaaa37f13b59',
   },
   {
     target: 'coverageRequirements',
@@ -90,25 +90,25 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-009',
-    sha256: 'c4553925c86d2a48705a5e8796bf3d63502499c483167ff3ba6c6cd05674778f',
+    sha256: '89085b7446e73c138cba5d43a5ebed63e5e5de2e82f4fb38ddc5601d7094fdff',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-055',
-    sha256: 'ac558316349496594e4fa933b980288cfacf259e3b3d0ba08037aa8135c52551',
+    sha256: '744ce4616caf774e119c2a44e45480bf59905b8e751784fe388639106e755810',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-NET-006',
-    sha256: 'ee0c9a9bab7fbddc766469825e6bd673c1f5c60b2c12dda91182cb17346fb102',
+    sha256: '4d21f8fcaa2efbc654e668a688783495d00182a679723f9b68add4cf1fde1f8f',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-NET-016',
-    sha256: '2f31c4b548bc2210b50cb950c68ec38d4e9d2849592d5c39297445b20a8902b8',
+    sha256: 'd3e2247159593b73e269b80d5275fc28eb6be001dc7aac9830e33f6607e03050',
   },
   {
     target: 'qaScenarios',
@@ -186,21 +186,21 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '112d9088e4909ed884f0df25e4657d8eb3643c788a7587d21827d4c7c7664978',
+    sha256: '36bac9871f785c8366caea799d813ed92b168e3617618b8548623a737512b7c0',
   },
   {
     key: 'transitions',
-    sha256: '30f85a6bbbebfeb833050b2c472b44e5872545ca1633e85f30fa4ce36d940248',
+    sha256: '1260e113940a92e550c40315b81501d010a1f97ca4332e052d58f07df01891a4',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
   {
     prefix: '### NET-006 —',
-    sha256: '9a6451ee0457601034797f0225e61a526e0d0f0a5e4719002cfe4299e253cdd7',
+    sha256: '11f9614d3616cd7f3040ed956d879415b3423bf02ff0c237ce53e32d82b387d1',
   },
   {
     prefix: '### NET-016 —',
-    sha256: '48a4d637301563b4d6fc4d64480420975eca0f3d3b8cebc89fcda2e38bfbb8f8',
+    sha256: 'b5b954a18473dc3e71217dd96c79a99b1aa6692a729587482c7d471046038e56',
   },
   {
     prefix: '### CMP-006 —',
@@ -220,7 +220,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### GM-001 —',
-    sha256: 'f880661a65bcc4cf682d963cdf3fba06d03c5411b5341b9f5805926b8d660833',
+    sha256: '8fc629e94fddecafd79dc89a2e5d9fa41b91ce100e11deed4c25c07e61041724',
   },
   {
     prefix: '### J-JOIN-REVIEW —',
@@ -238,7 +238,7 @@ const MARKDOWN_SECTIONS = [
 const MARKDOWN_LINES = [
   {
     prefix: '| REQ-004 | Подключение игрока к кампании |',
-    sha256: 'd3ec96be40d1c9a7b60a6a22f68ae53878cf6ffed303dd323bae6342864a5eae',
+    sha256: '55784b7f04eb16295cb4ae1c09384da8faf7696c78eb5de12578f71c994a486c',
   },
   {
     prefix: '| REQ-007 | Создание/host/preflight/start кампании без выбора правил |',
@@ -247,20 +247,20 @@ const MARKDOWN_LINES = [
   {
     prefix:
       '| REQ-009 | 0–3 local players, вход из активной мирной/боевой сцены и отдельная GM-tab только на host |',
-    sha256: 'fafe8a7f839bf2d0f3d1206777d0ee2e181e9a17f5e0788b11a80eb72260ba14',
+    sha256: '35d9a900652d5237b3ca2d9b2d105b4665b45b70a95aaf09b84a49103aee167e',
   },
   {
     prefix:
       '| REQ-055 | Самостоятельная обязательная ветвь: Host/port/QR, capacity, permitted campaign settings и disconnect client |',
-    sha256: '846b8025a23789276d38d4595f075e302bbe33b8b3d0847ec200da9428d9b1df',
+    sha256: '8e038ed0dff631861f885341eccd9c4b2c41a95622d1d1e3a084487907420751',
   },
   {
     prefix: '| QA-FORM-NET-006 | NET-006 |',
-    sha256: 'a8e522c66e36c114061118d058a78432970bbc8f5201944963f720002b878b1c',
+    sha256: '5de43e431a4163f23994ba73e23b1b23618d544789c2507252f9205c7d0ac695',
   },
   {
     prefix: '| QA-FORM-NET-016 | NET-016 |',
-    sha256: '505b9868d4d8daf52381876cf5cff4fd0d94fd232323fb072bc272d978fd4a65',
+    sha256: 'bac6ad0e82aaf436cb9b369f09c495baf185e0df52572af242d8b25f0e1b4e35',
   },
   {
     prefix: '| QA-FORM-CMP-007 | CMP-007 |',

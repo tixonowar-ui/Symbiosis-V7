@@ -500,7 +500,7 @@ for (const outcome of [
         await action(masterPage, 'CMP-008::CTA::008');
         await expect(
           masterPage.getByText('Сохранённый адрес следующего запуска:', { exact: false }),
-        ).toContainText('127.0.0.1:' + nextCampaignPort);
+        ).toContainText('127.0.0.1:' + nextCampaignPort, { timeout: gm.operationTimeoutMs });
         await expect(masterPage.getByText('Действующий адрес:', { exact: false })).toContainText(
           '127.0.0.1:' + new URL(gm.baseURL).port,
         );

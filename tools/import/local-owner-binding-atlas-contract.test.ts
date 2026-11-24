@@ -83,6 +83,18 @@ describe('ADR 0095 installation-local owner binding source', () => {
       ['APP-004::CTA::009', 'APP-004::CTA::010'],
       ['APP-004::CTA::001'],
     ],
+    [
+      'modeActions',
+      'TARGET_OWNER_ADMISSION',
+      ['APP-003::CTA::009', 'APP-003::CTA::014'],
+      ['APP-003::CTA::009'],
+    ],
+    [
+      'modeActions',
+      'TARGET_OWNER_ADMISSION',
+      ['APP-003::CTA::009', 'APP-003::CTA::014'],
+      ['APP-003::CTA::009', 'APP-003::CTA::014', 'APP-003::CTA::010'],
+    ],
     ['admission', 'maximumActiveContexts', 1, 2],
     [
       'modeActions',
@@ -238,6 +250,34 @@ describe('ADR 0095 installation-local owner binding source', () => {
       'local-owner transitions',
     );
   });
+
+  it.each([
+    [
+      /^\| modeActions \|.*$/m,
+      '"TARGET_OWNER_ADMISSION": ["APP-003::CTA::009", "APP-003::CTA::014"]',
+      '"TARGET_OWNER_ADMISSION": ["APP-003::CTA::009"]',
+      'B18',
+    ],
+    [
+      /^- TARGET_OWNER_ADMISSION input: .*$/m,
+      'accepts 0..3 selected own FINAL, including zero',
+      'requires a populated profile',
+      'APP-003',
+    ],
+    [
+      /^\| TARGET_OWNER_ADMISSION \| isHostDevice=.*$/m,
+      'requires 1..3 distinct permitted own FINAL',
+      'requires 0..3 selected FINAL',
+      'APP-003',
+    ],
+  ] as const)(
+    'rejects modifying a scoped Markdown owner-mode rule %s',
+    (row, original, replacement, scope) => {
+      const changed = markdown.replace(row, (current) => current.replace(original, replacement));
+      expect(changed).not.toBe(markdown);
+      expect(() => assertAdr0095LocalOwnerMarkdown(changed)).toThrow(scope);
+    },
+  );
 
   it.each([
     ['"explicitCooperativeAcknowledgement": true', '"explicitCooperativeAcknowledgement": false'],

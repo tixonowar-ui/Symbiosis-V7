@@ -27,6 +27,16 @@ describe('NET connection and CHR-027 literal source contracts', () => {
     expect(() => assertNetConnectScreenContracts(forms)).not.toThrow();
   });
 
+  it.each(['NET-003', 'NET-005'])('rejects %s without its host-local origin requirements', (id) => {
+    const form = forms[id] as SourceForm;
+    const requiredFields = form.requiredFields.filter(
+      (field) => !field.startsWith('HOST_LOCAL_HANDOFF'),
+    );
+    expect(() =>
+      assertNetConnectScreenContracts({ ...forms, [id]: { ...form, requiredFields } }),
+    ).toThrow(id);
+  });
+
   it.each(NET_CONNECT_FORM_CONTRACTS.map(({ formId }) => formId))(
     'rejects missing %s and drift of its complete form identity',
     (formId) => {

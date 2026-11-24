@@ -1,5 +1,7 @@
+import type { JsonObject } from '../import/lib/json.js';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { assertAdr0096HostLocalMarkdown } from '../import/host-local-handoff-atlas-contract.js';
 import { ARTIFACT } from '../import/lib/paths.js';
 import {
   ATLAS_MARKDOWN_ADR0049_LITERALS,
@@ -709,4 +711,76 @@ describe('ADR 0069 request review Markdown mirrors', () => {
         ).toBe(true);
       });
   }
+});
+
+describe('ADR 0096 host-local handoff in the supplied Markdown companion', () => {
+  const markdown = readFileSync(ARTIFACT.atlasMd, 'utf8');
+  const source = JSON.parse(readFileSync(ARTIFACT.atlasJson, 'utf8')) as JsonObject;
+  it('accepts the complete mirrored declaration, actions, dispatch edges, requirements and QA', () => {
+    expect(() => assertAdr0096HostLocalMarkdown(markdown, source)).not.toThrow();
+  });
+  it('rejects a Markdown-only loss of the owner return CTA from the form QA while JSON stays current', () => {
+    const changed = markdown.replace(/^\| QA-FORM-NET-005 \|.*$/m, (row) =>
+      row.replace(', Вернуть устройство мастеру.', '.'),
+    );
+    expect(changed).not.toBe(markdown);
+    expect(() => assertAdr0096HostLocalMarkdown(changed, source)).toThrow(
+      'QA-FORM-NET-005 Markdown row',
+    );
+  });
+
+  it('rejects moving an unchanged PLY-029 dispatch row to the unrelated PLY-026 outgoing table', () => {
+    const lines = markdown.split(/\r?\n/);
+    const from = lines.findIndex((line) =>
+      line.startsWith('| NET-006 | Dispatch acknowledged host-local handoff to NET-006 |'),
+    );
+    const foreign = lines.findIndex((line) => line.startsWith('### PLY-026 — '));
+    const table = lines.indexOf('| Выход в | Trigger | Guard |', foreign);
+    const stop = lines.findIndex((line) => line.startsWith('### PLY-027 — '));
+    expect(foreign).toBeGreaterThan(0);
+    expect(table).toBeGreaterThan(foreign);
+    expect(table).toBeLessThan(stop);
+    expect(from).toBeGreaterThan(stop);
+    const [dispatch] = lines.splice(from, 1);
+    if (dispatch === undefined) throw Error('missing PLY-029 dispatch row');
+    lines.splice(table + 2, 0, dispatch);
+    expect(() => assertAdr0096HostLocalMarkdown(lines.join('\n'), source)).toThrow(
+      'PLY-029 Markdown form section',
+    );
+  });
+
+  it.each([
+    ['PLY-029', 'IMPORTED_OWNER_CLAIM'],
+    ['PLY-029', 'CONTROL_LEASE'],
+    ['PLY-030', 'DEVICE_LIBRARY_SELECTOR'],
+  ])(
+    'rejects removing %s Markdown requiredFields member %s while JSON and the other form stay authoritative',
+    (id, member) => {
+      const start = markdown.indexOf('### ' + id + ' — ');
+      expect(start).toBeGreaterThan(0);
+      const field = markdown.slice(start).match(/^- handoffType=.*$/m)?.[0];
+      expect(field).toContain('|' + member);
+      if (field === undefined) throw Error('missing Markdown handoffType');
+      const changed =
+        markdown.slice(0, start) +
+        markdown.slice(start).replace(field, field.replace('|' + member, ''));
+      expect(() => assertAdr0096HostLocalMarkdown(changed, source)).toThrow(
+        id + ' Markdown requiredFields changed the handoffType enum',
+      );
+    },
+  );
+  it.each([
+    ['| source | ADR 0096 / #297 / B19 |', '| source | B18 |'],
+    ['| NET-007::CTA::005 |', '| NET-007::CTA::006 |'],
+    [
+      '| PLY-029 | Dispatch acknowledged host-local handoff to NET-027 |',
+      '| PLY-029 | Dispatch acknowledged host-local handoff to NET-018 |',
+    ],
+    ['| QA-HOST-LOCAL-HANDOFF-REPLAY-PRIVACY |', '| QA-HOST-LOCAL-HANDOFF-REMOVED |'],
+  ])('rejects drift in the companion row %s with the JSON untouched', (needle, replacement) => {
+    expect(markdown).toContain(needle);
+    expect(() =>
+      assertAdr0096HostLocalMarkdown(markdown.replace(needle, replacement), source),
+    ).toThrow('ADR 0096');
+  });
 });

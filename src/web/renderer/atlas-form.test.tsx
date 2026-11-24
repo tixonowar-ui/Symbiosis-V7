@@ -450,8 +450,8 @@ describe('atlas implemented-form renderer', () => {
     const actions = models.flatMap((model) => model.actions.items);
 
     // Atlas primary actions from requirements.json join transitions on (from, trigger).
-    expect(actions).toHaveLength(51);
-    expect(actions.filter((action) => action.transition !== null)).toHaveLength(41);
+    expect(actions).toHaveLength(52);
+    expect(actions.filter((action) => action.transition !== null)).toHaveLength(42);
     expect(actions.filter((action) => action.transition === null)).toHaveLength(10);
   });
 

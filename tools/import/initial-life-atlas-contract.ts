@@ -40,13 +40,13 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-011',
-    sha256: '5b272cfcc132fa52e8c9fe4e862b98e6738f9d730a9373d324f1b56044645c1d',
+    sha256: '9059f1aee10156f1125796ff3e5e526a722120da4c2e91a6540a0aeb7beae594',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-012',
-    sha256: 'a4dd2fe694307a11ff2357bd5d586e2cdecf102b98f450907ca132100ed48cab',
+    sha256: '2e6869b70c139ec0c143b2b845073c85aecc0c029c996d6e8e68a7fcb0fe848e',
   },
   {
     target: 'qaScenarios',
@@ -142,21 +142,21 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '112d9088e4909ed884f0df25e4657d8eb3643c788a7587d21827d4c7c7664978',
+    sha256: '36bac9871f785c8366caea799d813ed92b168e3617618b8548623a737512b7c0',
   },
   {
     key: 'transitions',
-    sha256: '30f85a6bbbebfeb833050b2c472b44e5872545ca1633e85f30fa4ce36d940248',
+    sha256: '1260e113940a92e550c40315b81501d010a1f97ca4332e052d58f07df01891a4',
   },
   {
     // ADR 0092 / #284 changes only the intersecting SENTIENT PATCH witness.
     // ADR0094 / #288 changes only intersecting ENM017 PATCH/NEW-VERSION witnesses.
     key: 'registryCoverage',
-    sha256: 'e5f3b0aa4ee0c2d332bb9ece3be4997ee6172714a2347fedca1ccf45a04dd686',
+    sha256: 'ddc491e28d813ce488312307410bf863318ac92148d0ce027a4daf6ec01471da',
   },
   {
     key: 'globalContracts',
-    sha256: '12b50ac23293b99c14b8df1ce1f05de8eece06d00e8e9f7391f2d5888b53d58b',
+    sha256: 'b947e98e4d85a5ba059a53c95b9851ddd6a04e5f7f93a1bb28e4f64982ae0fe7',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -188,11 +188,11 @@ const MARKDOWN_SECTIONS = [
 const MARKDOWN_LINES = [
   {
     prefix: '| REQ-011 |',
-    sha256: 'c9ec7117688b3bc4b4debb4a573e5ca931c8550d2e8edd84027506619d8584e0',
+    sha256: 'fa3eec12110d3ab88d4a9f6415a71a9c2ef81e517ff38ed3b07acbe450473523',
   },
   {
     prefix: '| REQ-012 |',
-    sha256: '8af775bf3fc80473a38e5a2e3dee4006c396d9cc5f38cced750841e810772a2f',
+    sha256: '0641540589b84c8e3cce2e690e3c2cba259c14839f8958d6b53315f0e7e84ddf',
   },
   {
     prefix: '| QA-FORM-NPC-003 |',

@@ -1690,6 +1690,7 @@ export function registerNpcLazyPreparation() {
         readNpcRecoveryClosure(reopened.db, h.scope.campaignId, reopened.readers).versions,
       ).toHaveLength(1);
     });
+    // The two real publications, seven transitions and replay took 52.8s in the bounded Windows run for #297.
     it('prepares N+1 against the actual current version and retains the immutable prefix', () => {
       const { h, attempt, boundary, integration, input } = setup();
       commitNpcVersionPrepared(h.db, boundary, attempt.npcDraftId, input, h.readers, integration);
@@ -1747,7 +1748,7 @@ export function registerNpcLazyPreparation() {
       ).toBe(true);
       expect(calls).toBe(1);
       expect(h.db.serialize().equals(bytes)).toBe(true);
-    });
+    }, 90_000);
     it.each([
       'FOREIGN_SCOPE',
       'STALE_ATTEMPT',
@@ -2606,6 +2607,7 @@ export function registerNpcItemReservation() {
         closure.children,
       );
     });
+    // The preview and full SQLite byte comparisons took 32.4s in the bounded Windows run for #297, apart from V1 setup.
     it('previews an empty confirmed N+1 inventory without changing the prior publication or SQLite', () => {
       const h = fixture({
           bytes: Buffer.from(weaponV1Seed.bytesBase64, 'base64'),
@@ -2656,7 +2658,7 @@ export function registerNpcItemReservation() {
       expect(loadCampaignCheckpoint(h.db, h.scope.campaignId)).toEqual(checkpoint);
       expect(h.db.serialize().equals(bytes)).toBe(true);
       expect(after.versions[0]).toEqual(v1);
-    });
+    }, 60_000);
 
     it('rejects an item collision atomically and missing historical preparation handler', () => {
       const { h, attempt } = stageFixture(),

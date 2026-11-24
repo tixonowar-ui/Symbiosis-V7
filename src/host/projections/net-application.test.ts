@@ -167,6 +167,25 @@ describe('own local network public projection boundary', () => {
     ]);
   });
 
+  it('omits host-local return actions from an ordinary pending or cancelled request', () => {
+    const pending = input('NET-005');
+    expect(keys(pending)).not.toContain('NET-005::CTA::004');
+
+    const selection = input('NET-003');
+    const request = {
+      ...pending.state.requestOrNull!,
+      requestRevision: 1,
+      closureOrNull: {
+        commandId: 'saved-cancel',
+        receiptId: 'saved-cancel-receipt',
+        reason: 'Отмена',
+      },
+    };
+    expect(
+      keys({ ...selection, state: { ...selection.state, requestOrNull: request } }),
+    ).not.toContain('NET-003::CTA::005');
+  });
+
   it.each(NETWORK_APPLICATION_FORM_IDS)(
     'publishes a strict %s payload without private evidence, keys or GM queue',
     (formId) => {

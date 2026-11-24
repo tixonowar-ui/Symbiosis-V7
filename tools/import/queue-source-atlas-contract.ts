@@ -18,7 +18,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'NET-016',
-    sha256: 'ef4090461c958c718888daf0a2be9b1b9af7a6927f773a0cab92955293f0d239',
+    sha256: '2b7c4d6da6b9008d9aa75f4c93f0cf9e3880901eef32ff9931291b073b4ec19e',
   },
   {
     target: 'forms',
@@ -36,7 +36,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'PLY-030',
-    sha256: 'd672645e2d901274d1e84716857868e784ea679a1faa488cc27b8792c27911a4',
+    sha256: '521b14cc875348b5d886def33b38333acb99f7e5bde72fed4982e202fa48d5fe',
   },
   {
     target: 'forms',
@@ -54,7 +54,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'GM-001',
-    sha256: '9cf3928e13c50554c6dde8df07230fb357ab5ecabc09696d350d571c36a6066e',
+    sha256: 'ed471b2a4d012676560ba374f0bc60943794dc5e959f19d8aa51f809e469e0ba',
   },
   {
     target: 'forms',
@@ -108,37 +108,37 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-006',
-    sha256: '253fb042ddd15f43965016fc16393c5a9be92a5e2171acfa2c8f6e93508e74af',
+    sha256: 'bd33eac4d0763b23a9a15f32c93a275e633b47d9760e06db9cc1bca51e5c148e',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-009',
-    sha256: 'c4553925c86d2a48705a5e8796bf3d63502499c483167ff3ba6c6cd05674778f',
+    sha256: '89085b7446e73c138cba5d43a5ebed63e5e5de2e82f4fb38ddc5601d7094fdff',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-011',
-    sha256: '5b272cfcc132fa52e8c9fe4e862b98e6738f9d730a9373d324f1b56044645c1d',
+    sha256: '9059f1aee10156f1125796ff3e5e526a722120da4c2e91a6540a0aeb7beae594',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-012',
-    sha256: 'a4dd2fe694307a11ff2357bd5d586e2cdecf102b98f450907ca132100ed48cab',
+    sha256: '2e6869b70c139ec0c143b2b845073c85aecc0c029c996d6e8e68a7fcb0fe848e',
   },
   {
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-055',
-    sha256: 'ac558316349496594e4fa933b980288cfacf259e3b3d0ba08037aa8135c52551',
+    sha256: '744ce4616caf774e119c2a44e45480bf59905b8e751784fe388639106e755810',
   },
   {
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-NET-016',
-    sha256: '2f31c4b548bc2210b50cb950c68ec38d4e9d2849592d5c39297445b20a8902b8',
+    sha256: 'd3e2247159593b73e269b80d5275fc28eb6be001dc7aac9830e33f6607e03050',
   },
   {
     target: 'qaScenarios',
@@ -162,7 +162,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-PLY-030',
-    sha256: '0c0db3e03bfc0194ddceab93aec0fb1745662277ddc09d657089448599190903',
+    sha256: '759bd9cfa1a57bf5f945efa63cbc7ff95079cc31f926e62528365d10c54267dc',
   },
   {
     target: 'qaScenarios',
@@ -240,7 +240,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-REQ-009',
-    sha256: '96324459365f6709f7b0d6c7ae90ef6bb14ea996a32cdbe23665ffbc7e06cea4',
+    sha256: '9c69cbb9068440f3c04b9fec3544bcf050d61bb0c36d9c715c18ea1d1308109a',
   },
   {
     target: 'qaScenarios',
@@ -282,7 +282,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-WORKFLOW-UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK',
-    sha256: 'ed2332c0e68e664fdfb27fe81c0237bfa3821cb188c8d3cb7f96f86388cfba5d',
+    sha256: 'a57485b83de4de24f1f5ba3d1e07db22d3bb3ed04a04b36421a40e6b26324536',
   },
   {
     target: 'qaScenarios',
@@ -312,7 +312,7 @@ const OBJECT_SEALS = [
     target: 'workflowCommands',
     key: 'commandId',
     id: 'UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK',
-    sha256: 'a807fd2e6621b6bd6d97c12091afeb8ce12ca763db35f5bca955e76bafdb55cb',
+    sha256: 'a269aa6c75a06344390a3389462b8d1ec0080390e249b95d17f85781d75d83d6',
   },
   {
     target: 'workflowCommands',
@@ -324,23 +324,23 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '112d9088e4909ed884f0df25e4657d8eb3643c788a7587d21827d4c7c7664978',
+    sha256: '36bac9871f785c8366caea799d813ed92b168e3617618b8548623a737512b7c0',
   },
   {
     key: 'transitions',
-    sha256: '30f85a6bbbebfeb833050b2c472b44e5872545ca1633e85f30fa4ce36d940248',
+    sha256: '1260e113940a92e550c40315b81501d010a1f97ca4332e052d58f07df01891a4',
   },
   {
     // ADR 0092 / #284 changes only the intersecting SENTIENT PATCH witness.
     // ADR0094 / #288 changes only intersecting ENM017 PATCH/NEW-VERSION witnesses.
     key: 'registryCoverage',
-    sha256: 'e5f3b0aa4ee0c2d332bb9ece3be4997ee6172714a2347fedca1ccf45a04dd686',
+    sha256: 'ddc491e28d813ce488312307410bf863318ac92148d0ce027a4daf6ec01471da',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
   {
     prefix: '### NET-016 —',
-    sha256: '48a4d637301563b4d6fc4d64480420975eca0f3d3b8cebc89fcda2e38bfbb8f8',
+    sha256: 'b5b954a18473dc3e71217dd96c79a99b1aa6692a729587482c7d471046038e56',
   },
   {
     prefix: '### NET-018 —',
@@ -352,7 +352,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### PLY-030 —',
-    sha256: '8c40db93fd643386f857190a0a284731c4a3e7c20165c85053139caaa95b5a5b',
+    sha256: '45a98eb07c7cbefc46d624e9b3e49ad2d19d7341604e30272ade38d11502d844',
   },
   {
     prefix: '### NPC-003 —',
@@ -364,7 +364,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### GM-001 —',
-    sha256: 'f880661a65bcc4cf682d963cdf3fba06d03c5411b5341b9f5805926b8d660833',
+    sha256: '8fc629e94fddecafd79dc89a2e5d9fa41b91ce100e11deed4c25c07e61041724',
   },
   {
     prefix: '### GM-002 —',
@@ -402,27 +402,27 @@ const MARKDOWN_SECTIONS = [
 const MARKDOWN_LINES = [
   {
     prefix: '| REQ-006 |',
-    sha256: 'c1a0114f7e02a130ad5db0b79553bc97f13803aae6717c9b075544196d803bac',
+    sha256: '303e3e60e1b7f583472943eb9e7ab88fd32a5ed7a82df423f26ba0d19a924acc',
   },
   {
     prefix: '| REQ-009 |',
-    sha256: 'fafe8a7f839bf2d0f3d1206777d0ee2e181e9a17f5e0788b11a80eb72260ba14',
+    sha256: '35d9a900652d5237b3ca2d9b2d105b4665b45b70a95aaf09b84a49103aee167e',
   },
   {
     prefix: '| REQ-011 |',
-    sha256: 'c9ec7117688b3bc4b4debb4a573e5ca931c8550d2e8edd84027506619d8584e0',
+    sha256: 'fa3eec12110d3ab88d4a9f6415a71a9c2ef81e517ff38ed3b07acbe450473523',
   },
   {
     prefix: '| REQ-012 |',
-    sha256: '8af775bf3fc80473a38e5a2e3dee4006c396d9cc5f38cced750841e810772a2f',
+    sha256: '0641540589b84c8e3cce2e690e3c2cba259c14839f8958d6b53315f0e7e84ddf',
   },
   {
     prefix: '| REQ-055 |',
-    sha256: '846b8025a23789276d38d4595f075e302bbe33b8b3d0847ec200da9428d9b1df',
+    sha256: '8e038ed0dff631861f885341eccd9c4b2c41a95622d1d1e3a084487907420751',
   },
   {
     prefix: '| QA-FORM-NET-016 |',
-    sha256: '505b9868d4d8daf52381876cf5cff4fd0d94fd232323fb072bc272d978fd4a65',
+    sha256: 'bac6ad0e82aaf436cb9b369f09c495baf185e0df52572af242d8b25f0e1b4e35',
   },
   {
     prefix: '| QA-CHANGE-NET-016 |',
@@ -438,7 +438,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-PLY-030 |',
-    sha256: '4959514d817c5357ee27bd493c7a9ce7f6ee8dc49c0c194c98d0d2e72d06486e',
+    sha256: '1aa88cc9471cc22db34a1a1bb9020250b9963bee7a898069928abda34b5f6ea2',
   },
   {
     prefix: '| QA-CHANGE-PLY-030 |',
@@ -490,7 +490,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-REQ-009 |',
-    sha256: '6bb2ef2b9185fe7c46f0c6e16e4e2537dfe601043be701c311b0f5213b069354',
+    sha256: '8f5d7a29ac56081c240b7cbc765faf2a529c930e9b3932545e617f1e70ed5918',
   },
   {
     prefix: '| QA-REQ-011 |',
@@ -518,7 +518,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK |',
-    sha256: 'cd1b27468e1e33c303192c1fd016498acd8e74fa13945d1e20556fdecc550dfb',
+    sha256: '0a59abb2aa106831d28b1cbe523bba6bb41ebda6eaeca0d76aa202af86f24992',
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-CAMPAIGN-INITIAL-TIME-SET |',
@@ -539,7 +539,7 @@ const MARKDOWN_LINES = [
   {
     prefix:
       '| UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK | Подтвердить локальную privacy-передачу активного контекста |',
-    sha256: 'ff3733826637a5a66141a08205773c532d1dc16ff9be5eec8db3d35f244a96f0',
+    sha256: '71bfdc9455eea1ee02c7bf12599eab85552d933b65bb7d03db438a3fccfa79f8',
   },
   {
     prefix: '| UI-CMD-CAMPAIGN-INITIAL-TIME-SET | Сохранить начальное виртуальное время кампании |',

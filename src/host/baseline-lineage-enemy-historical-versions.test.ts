@@ -68,7 +68,7 @@ it.each([
     tree: 'b1920a574092fa6d18852d36b6d0a4fbd8541da6',
   },
 ] as const)(
-  'physically preserves genuine old $kind V1, open attempt and original receipt under B18 without a configuration upgrade',
+  'physically preserves genuine old $kind V1, open attempt and original receipt under B19 without a configuration upgrade',
   async (fixture) => {
     const directory = mkdtempSync(join(tmpdir(), 'symbiosis-b16-b17-enemy-'));
     let db: ReturnType<typeof openPersistenceDatabase> | undefined;
@@ -137,7 +137,7 @@ it.each([
         return db;
       };
       const baseline = await loadLocalCharacterExportBaseline(process.cwd());
-      expect(baseline.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B18);
+      expect(baseline.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B19);
       const common = await loadNpcAuthoringSourceCatalog(process.cwd());
       const catalog = loadEnemyAuthoringSourceCatalog(process.cwd(), common),
         library = loadEnemySourceCatalog(process.cwd(), baseline);

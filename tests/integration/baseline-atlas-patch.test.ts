@@ -52,6 +52,7 @@ const patchNames = [
   '284',
   '288',
   '249',
+  '297',
 ] as const;
 // The B0 seal is recorded in the frozen atlas-v1.5.checksums.sha256 manifest.
 const releaseSeals = [
@@ -77,6 +78,7 @@ const releaseSeals = [
   BASELINE_LINEAGE_SEALS.initialSkillPlanAtlas,
   BASELINE_LINEAGE_SEALS.enemyVersionConfigurationAtlas,
   BASELINE_LINEAGE_SEALS.localOwnerBindingAtlas,
+  BASELINE_LINEAGE_SEALS.hostLocalLobbyAtlas,
 ] as const;
 const digest = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
 const digests = (bytes: FixtureAtlasBytes): Record<string, string> =>
@@ -149,7 +151,7 @@ describe('strict fixture Atlas byte patches', () => {
       direction: reverse ? 'reverse' : 'forward',
     })),
   );
-  // Full clean01 Git rows took 44.193/31.545s at 30s; finite 90s covers the same 34 direction rows.
+  // Full clean01 Git rows took 44.193/31.545s at 30s; each patch direction retains its 90s budget.
   it.each(edges)(
     'matches real Git for patch $name $direction with both full release seals',
     ({ edge, reverse }) => {
