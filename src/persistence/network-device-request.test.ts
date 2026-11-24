@@ -61,6 +61,7 @@ import {
   readGmDeviceRequestQueue,
   readGmRequestReviewSource,
   readGmRequestReviewSourceWith,
+  readGmRequestReviewEventsInTransaction,
   readGmRequestReviewView,
   commitGmRequestReviewNavigation,
   commitGmRequestReviewDraft,
@@ -866,6 +867,10 @@ describe('synchronous GM source composition', () => {
       expect(state.events.length).toBeGreaterThan(0);
       expect(state.viewOrNull).toEqual(source.viewOrNull);
       expect(state.viewOrNull).not.toBe(source.viewOrNull);
+      expect(readGmRequestReviewEventsInTransaction(p.db, source)).toBe(state.events);
+      const independent = readGmRequestReviewEventsInTransaction(p.db, { ...source });
+      expect(independent).toEqual(state.events);
+      expect(independent).not.toBe(state.events);
       expect(Object.isFrozen(state.events[0]!.view)).toBe(true);
       expect(Reflect.set(state.events[0]!.view, 'projectionRevision', 99)).toBe(false);
       return state;
@@ -875,6 +880,9 @@ describe('synchronous GM source composition', () => {
     expect(second.observed).not.toBe(first.observed);
     expect(p.db.serialize().equals(before)).toBe(true);
     p.db.prepare('UPDATE gm_request_queue_view SET record_sha256=?').run('0'.repeat(64));
+    expect(() =>
+      p.db.transaction(() => readGmRequestReviewEventsInTransaction(p.db, first.source)).deferred(),
+    ).toThrow('CORRUPT_STORAGE');
     const corrupt = p.db.serialize(),
       observe = vi.fn(() => null);
     expect(() => readGmRequestReviewSourceWith(p.db, scope, allow, observe)).toThrow(
@@ -882,6 +890,25 @@ describe('synchronous GM source composition', () => {
     );
     expect(observe).not.toHaveBeenCalled();
     expect(p.db.serialize().equals(corrupt)).toBe(true);
+  });
+  it('refuses changed scope and invalidates the verified events immediately on a write', () => {
+    const p = setup(),
+      scope = gmScope(p);
+    enterQueue(p);
+    const before = p.db.serialize();
+    expect(() =>
+      readGmRequestReviewSourceWith(p.db, scope, allow, (source) => {
+        Reflect.set(source.scope, 'campaignId', randomUUID());
+        return readGmRequestReviewEventsInTransaction(p.db, source);
+      }),
+    ).toThrow('FOREIGN_OWNER');
+    expect(() =>
+      readGmRequestReviewSourceWith(p.db, scope, allow, (source) => {
+        p.db.exec('UPDATE gm_request_queue_view SET record_sha256=record_sha256');
+        return readGmRequestReviewEventsInTransaction(p.db, source);
+      }),
+    ).toThrow('SOURCE_CHANGED');
+    expect(p.db.serialize().equals(before)).toBe(true);
   });
   it.each(['DML', 'DDL', 'PRAGMA', 'PROMISE'] as const)(
     'refuses and rolls back a %s observer',

@@ -1134,9 +1134,10 @@ export function readCampaignAdmissionAvailability(
       version !== 26
     )
       return s.fail();
-    const source = readGmRequestReviewSource(db, scope, validate),
-      history = verifyCampaignHistory(db, source, rules);
-    return readAvailabilityFromHistory(db, scope, source, rules, history);
+    return readGmRequestReviewSourceWith(db, scope, validate, (source) => {
+      const history = verifyCampaignHistory(db, source, rules);
+      return readAvailabilityFromHistory(db, scope, source, rules, history);
+    }).observed;
   });
 }
 

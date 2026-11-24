@@ -93,6 +93,7 @@ export async function createStartingMoneyProfileSetup(options: {
   readonly databasePath?: string;
   readonly characterDraftId?: string;
   readonly massKg?: number;
+  readonly onIdentityBirth?: Parameters<typeof createManualWizardSetup>[6];
 }) {
   const { prefix } = options;
   const race = options.raceChoice ?? 'FREE';
@@ -109,6 +110,7 @@ export async function createStartingMoneyProfileSetup(options: {
     options.databasePath ?? ':memory:',
     options.characterDraftId,
     options.massKg,
+    options.onIdentityBirth,
   );
   try {
     let current: DurableCreationWizardCheckpoint;

@@ -72,6 +72,7 @@ import { isCampaignLobbyGmForm, type CampaignLobbyGmForm } from '@shared/campaig
 
 export function projectOwnerAdmission(i: {
   admission: LocalAdmissionRead;
+  retiredHostForm?: 'NET-007' | 'NET-027';
   application: LocalNetworkApplication;
   contextId: string;
   networkScopeId: string;
@@ -84,8 +85,17 @@ export function projectOwnerAdmission(i: {
   const state = i.admission,
     publication = state.record.publication,
     notice = publication.gmDecision;
+  const retired = i.retiredHostForm !== undefined;
   if (
-    state.returnedOrNull !== null ||
+    (retired ? state.returnedOrNull?.mode !== 'HOST_GM' : state.returnedOrNull !== null) ||
+    (retired &&
+      (state.pendingDecisionOrNull !== null ||
+        i.connected ||
+        i.capacity !== null ||
+        i.controllerSeat !== state.record.originalTabId ||
+        i.networkScopeId !== state.record.scope.networkScopeId ||
+        (state.receiptOrNull?.decision !== 'DECLINE' &&
+          (notice.decision !== 'REJECT' || i.retiredHostForm !== 'NET-007')))) ||
     i.application.ownerDeviceId !== notice.requestOwnerDeviceId ||
     i.application.networkScopeId !== state.record.scope.networkScopeId ||
     (i.controllerSeat !== state.record.originalTabId &&
@@ -96,7 +106,7 @@ export function projectOwnerAdmission(i: {
     throw new Error('owner admission scope mismatch');
   const proposal = publication.proposalOrNull,
     receipt = state.receiptOrNull,
-    formId = localAdmissionForm(state);
+    formId = i.retiredHostForm ?? localAdmissionForm(state);
   const capacity =
     i.capacity === null || proposal === null
       ? null

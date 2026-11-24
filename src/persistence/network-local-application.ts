@@ -221,7 +221,7 @@ export type LocalNetworkMutation =
       readonly requestId: string;
       readonly returnEventId: string;
       readonly returnEventSha256: string;
-      readonly mode: 'RESELECT' | 'MENU';
+      readonly mode: 'RESELECT' | 'MENU' | 'HOST_GM';
     }
   | { readonly kind: 'LANE_BIND_INTENT'; readonly outbox: LocalRequestLaneBindingOutbox }
   | {
@@ -1517,7 +1517,8 @@ function mutation(value: unknown, tabId: string): LocalNetworkMutation {
       };
     case 'ADMISSION_RETURN':
       object(row, ['kind', 'requestId', 'returnEventId', 'returnEventSha256', 'mode']);
-      if (row['mode'] !== 'RESELECT' && row['mode'] !== 'MENU') return fail();
+      if (row['mode'] !== 'RESELECT' && row['mode'] !== 'MENU' && row['mode'] !== 'HOST_GM')
+        return fail();
       return {
         kind: 'ADMISSION_RETURN',
         requestId: text(row['requestId']),

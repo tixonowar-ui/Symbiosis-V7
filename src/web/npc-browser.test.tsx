@@ -10,6 +10,13 @@ import {
 } from './ws-client.js';
 import { GM_CONTEXT_STORAGE_KEY } from './forms/cmp/campaign-create.js';
 import {
+  HOST_OWNER_PROFILE_CREATE,
+  HOST_SEAT_ACK,
+  hostSeatControlValue,
+} from '@shared/host-seat.js';
+import { reconnectFingerprint } from '@shared/reconnect-fingerprint.js';
+import { writeHostDelivery } from './forms/ply/host-seat-client.js';
+import {
   NpcBrowserSession,
   decodeNpcProjection,
   npcAvailableActions,
@@ -621,14 +628,14 @@ function snapshot(p = identity(), correlation = 'unused', reason = 'RECONNECT') 
     },
   };
 }
-function resume(socket: Socket, p = identity()) {
+function resume(socket: Socket, p = identity(), supported: readonly string[] = caps) {
   socket.open();
   const r = JSON.parse(socket.sent[0]!) as { reconnectRequestId: string };
   socket.message({
     messageType: 'session.reconnect.capabilities',
     protocolVersion: 2,
     reconnectRequestId: r.reconnectRequestId,
-    executableWorkflowCommandIds: caps,
+    executableWorkflowCommandIds: supported,
     revisions: {
       stateRevision: p.stateRevision,
       projectionRevision: p.projectionRevision,
@@ -714,6 +721,141 @@ describe('actual projection connection NPC branch', () => {
     resume(next);
     expect(next.sent.at(-1)).toBe(original);
   });
+  it.each(['standalone GM', 'scoped GM', 'reassigned curtain', 'regressed GM'] as const)(
+    'evicts the NPC screen and only retries the acknowledged GM operation (%s)',
+    async (mode) => {
+      const scoped = mode !== 'standalone GM',
+        revision = 7,
+        target = { kind: 'GM' } as const;
+      const ownedCaps = [...caps, HOST_SEAT_ACK, HOST_OWNER_PROFILE_CREATE];
+      const checkedResume = (s: Socket, afterLoss = false) => {
+        if (!scoped) {
+          resume(s, identity(), ownedCaps);
+          return;
+        }
+        s.open();
+        const m = hostSeatControlValue(JSON.parse(s.sent[0]!));
+        if (m.operation !== 'RESUME') throw new Error('missing GM key');
+        const base = snapshot(identity(), m.requestId),
+          isCurtain = afterLoss && mode === 'reassigned curtain';
+        const vector = isCurtain
+          ? { stateRevision: 8, actorVisibilityRevision: 8, projectionRevision: 8 }
+          : base.revisions;
+        s.message({
+          messageType: 'session.reconnect.capabilities',
+          protocolVersion: 2,
+          reconnectRequestId: m.requestId,
+          executableWorkflowCommandIds: isCurtain ? [HOST_SEAT_ACK] : ownedCaps,
+          revisions: vector,
+        });
+        if (isCurtain)
+          s.message({
+            ...base,
+            projectionRole: 'player',
+            revisions: vector,
+            presentation: {
+              assignment: base.presentation.assignment,
+              base: {
+                formId: 'APP-003',
+                formType: 'screen',
+                routeTemplate: '/local/app-003',
+                routeBindings: [],
+                availableActionKeys: [],
+                roleFilteredPayload: { hostSeatView: 'WAITING', revision: 8 },
+              },
+              layers: [
+                {
+                  formId: 'PLY-030',
+                  formType: 'component',
+                  routeTemplate: '@component/ply-030',
+                  routeBindings: [],
+                  availableActionKeys: ['PLY-030::CTA::004'],
+                  roleFilteredPayload: {
+                    hostSeatView: 'CURTAIN',
+                    revision: 8,
+                    handoffId: id(56),
+                    decision: 'ACTIVATE_TARGET',
+                    signedReturnContext: 'signed candidate',
+                    target: {
+                      kind: 'CANDIDATE',
+                      targetLocalOwnerId: id(57),
+                      targetProfileLabel: 'Новый профиль',
+                    },
+                  },
+                },
+              ],
+            },
+          });
+        else
+          s.message({
+            ...base,
+            presentation: {
+              ...base.presentation,
+              base:
+                afterLoss && mode === 'regressed GM'
+                  ? {
+                      ...base.presentation.base,
+                      roleFilteredPayload: {
+                        ...base.presentation.base.roleFilteredPayload,
+                        content: {
+                          ...base.presentation.base.roleFilteredPayload.content,
+                          input: editedInput(),
+                        },
+                      },
+                    }
+                  : base.presentation.base,
+              layers: [
+                {
+                  formId: 'PLY-029',
+                  formType: 'component',
+                  routeTemplate: '@component/ply-029',
+                  routeBindings: [],
+                  availableActionKeys: [],
+                  roleFilteredPayload: {
+                    hostSeatView: 'ACTIVE',
+                    revision,
+                    target,
+                    contextId: scope.contextId,
+                    receiptId: id(55),
+                    networkScopeIdOrNull: null,
+                  },
+                },
+              ],
+            },
+          });
+      };
+      if (scoped)
+        writeHostDelivery({
+          kind: 'ACTIVE',
+          key: 'a'.repeat(64),
+          receiptId: id(55),
+          targetFingerprint: reconnectFingerprint(target),
+          revision,
+        });
+      const { c, socket, states, controls } = await client((s) => checkedResume(s));
+      expect(c.replaceNpcStage({ formId: 'NPC-002', values: editedInput() }).ok).toBe(true);
+      const original = socket.sent.at(-1)!;
+      socket.lost();
+      expect(states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+      expect(controls.at(-1)).toBeNull();
+      expect(c.reconnect().ok).toBe(true);
+      const next = Socket.all.at(-1)!;
+      checkedResume(next, true);
+      if (mode === 'reassigned curtain') {
+        expect(states.at(-1)).toMatchObject({
+          kind: 'ready',
+          snapshot: { hostSeat: { hostSeatView: 'CURTAIN' } },
+        });
+        expect(next.sent).not.toContain(original);
+      } else if (mode === 'regressed GM') {
+        expect(states.at(-1)).toMatchObject({ kind: 'protocol-error', snapshot: null });
+        expect(next.sent).not.toContain(original);
+      } else {
+        expect(states.at(-1)?.kind).toBe('ready');
+        expect(next.sent.at(-1)).toBe(original);
+      }
+    },
+  );
   it('does not replay a pending edit into a foreign campaign after reconnect', async () => {
     const { c, socket, states } = await client();
     c.replaceNpcStage({ formId: 'NPC-002', values: editedInput() });

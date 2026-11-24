@@ -25,6 +25,26 @@ describe('host protocol vocabulary implemented presentation support', () => {
     vocabulary = await loadProtocolVocabulary(PROJECT_ROOT);
   });
 
+  it('publishes local seat management on its inherited campaign and the seat chooser as a component', () => {
+    const route = '/master/campaigns/:campaignId/campaign/cmp-009';
+    const binding = {
+      parameterIndex: 0,
+      source: 'inherited' as const,
+      value: '00000000-0000-4000-8000-000000000001',
+    };
+    expect(vocabulary.isPresentedForm('CMP-009', 'screen', route, [binding])).toBe(true);
+    expect(vocabulary.isPresentedForm('CMP-009', 'screen', route, [])).toBe(false);
+    expect(
+      vocabulary.isPresentedForm('CMP-009', 'screen', route, [
+        { ...binding, source: 'client-selected' },
+      ]),
+    ).toBe(false);
+    expect(vocabulary.isPresentedForm('PLY-028', 'component', '@component/ply-028', [])).toBe(true);
+    expect(
+      vocabulary.isPresentedForm('PLY-028', 'component', '@component/ply-028', [binding]),
+    ).toBe(false);
+  });
+
   it('publishes exact ENM017 and monster child campaign routes with inherited bindings and source actions', () => {
     const campaignId = '00000000-0000-4000-8000-000000000001';
     const route = '/master/campaigns/:campaignId/enemy-catalog/enm-017';

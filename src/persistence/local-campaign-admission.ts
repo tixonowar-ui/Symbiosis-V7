@@ -10,6 +10,7 @@ import {
   type CampaignLobbyOwnerObservation,
 } from '@shared/campaign-lobby-presentation.js';
 import type Database from 'better-sqlite3';
+import { readHostLocalScopeOwner, readHostLocalSeatHandoff } from './host-local-seat.js';
 import {
   admissionControllerPreparationValue,
   admissionOwnerPublicationValue,
@@ -91,7 +92,7 @@ export interface LocalAdmissionView {
 }
 export interface LocalAdmissionReturn {
   readonly kind: 'RETURN';
-  readonly mode: 'RESELECT' | 'MENU';
+  readonly mode: 'RESELECT' | 'MENU' | 'HOST_GM';
   readonly sourceRevisions: RevisionTriple;
   readonly sourceDraftRevision: number;
   readonly clientRequestJson: string;
@@ -125,6 +126,12 @@ export function validateAdmissionOwnerPublication(value: unknown): AdmissionOwne
     if (digest(proposalBody) !== proposalChecksum) return s.fail('INVALID_INPUT');
   }
   return publication;
+}
+/** A loopback delivery persists both halves of the same command in one identity namespace. */
+function playerIntentId(record: LocalAdmissionPublicationRecord, commandId: string): string {
+  return record.hostIdentity.ownerDeviceId === record.scope.ownerDeviceId
+    ? `host-local-player-intent:${commandId}`
+    : commandId;
 }
 function source(
   db: Database.Database,
@@ -352,7 +359,7 @@ function returnValue(value: unknown): LocalAdmissionReturn {
   ]);
   if (
     row['kind'] !== 'RETURN' ||
-    (row['mode'] !== 'RESELECT' && row['mode'] !== 'MENU') ||
+    (row['mode'] !== 'RESELECT' && row['mode'] !== 'MENU' && row['mode'] !== 'HOST_GM') ||
     !Array.isArray(row['additionalClosures'])
   )
     return s.fail();
@@ -381,7 +388,14 @@ function returnNavigation(value: LocalAdmissionReturn): string {
     nav['messageType'] !== 'navigation.form-action' ||
     nav['protocolVersion'] !== 2 ||
     nav['sourceFormId'] !== 'NET-007' ||
-    nav['actionKey'] !== (value.mode === 'RESELECT' ? 'NET-007::CTA::002' : 'NET-007::CTA::003') ||
+    nav['actionKey'] !==
+      (
+        {
+          RESELECT: 'NET-007::CTA::002',
+          MENU: 'NET-007::CTA::003',
+          HOST_GM: 'NET-007::CTA::005',
+        } as const
+      )[value.mode] ||
     nav['expectedProjectionRevision'] !== value.sourceRevisions.projectionRevision
   )
     return s.fail();
@@ -442,7 +456,7 @@ function reduce(current: LocalAdmissionRead, event: LocalAdmissionEvent): LocalA
       request = payload.request;
     if (
       pending !== null ||
-      event.eventId !== request.commandId ||
+      event.eventId !== playerIntentId(current.record, request.commandId) ||
       request.campaignId !== proposal.campaignId ||
       request.admissionBatchId !== proposal.admissionBatchId ||
       request.proposalRevision !== proposal.proposalRevision ||
@@ -832,6 +846,23 @@ export function readLocalAdmission(
 ): LocalAdmissionRead | null {
   return s.read(db, scope.ownerDeviceId, () => readInTransaction(db, scope, s.text(requestId)));
 }
+/** A closed host result and its network projection must come from the same verified replay. */
+export function readLocalAdmissionTerminal(
+  db: Database.Database,
+  scope: LocalNetworkScope,
+  requestId: string,
+) {
+  return s.read(db, scope.ownerDeviceId, () => {
+    const loaded = readWithSource(db, scope, s.text(requestId));
+    if (
+      loaded?.current.returnedOrNull?.mode !== 'HOST_GM' ||
+      (loaded.current.record.publication.gmDecision.decision !== 'REJECT' &&
+        loaded.current.receiptOrNull?.decision !== 'DECLINE')
+    )
+      return s.fail();
+    return { admission: loaded.current, application: loaded.source.history.current };
+  });
+}
 /** Resolve a prepared tab only through its original owner's complete, authenticated journal. */
 export function readLocalAdmissionPresentation(db: Database.Database, scope: LocalNetworkScope) {
   return readPresentation(db, scope);
@@ -899,8 +930,27 @@ export function readLocalAdmissionByEvent(
 ): LocalAdmissionRead | null {
   if (readAppliedMigrationVersion(db) < 12) return null;
   return s.read(db, scope.ownerDeviceId, () => {
-    const row = s.at(db, 'local_admission_event', 'event_id', s.text(eventId));
+    const id = s.text(eventId);
+    const direct = s.at(db, 'local_admission_event', 'event_id', id);
+    const row =
+      direct ?? s.at(db, 'local_admission_event', 'event_id', `host-local-player-intent:${id}`);
     if (row === undefined) return null;
+    const check = (state: LocalAdmissionRead | null) => {
+      if (
+        direct === undefined &&
+        (!state ||
+          !readHostLocalScopeOwner(db, scope.ownerDeviceId, state.record.scope.networkScopeId) ||
+          state.record.hostIdentity.ownerDeviceId !== scope.ownerDeviceId ||
+          !state.events.some(
+            (e) =>
+              e.eventId === row['event_id'] &&
+              (e.payload.kind === 'INTENT' || e.payload.kind === 'READY_INTENT') &&
+              e.payload.request.commandId === id,
+          ))
+      )
+        return s.fail('FOREIGN_OWNER');
+      return state;
+    };
     const tab = readOwnedLocalNetworkTabAnchor(db, scope.ownerDeviceId, scope.networkScopeId);
     if (tab !== null) {
       const entry = tabs.entryAnchor(db, scope.ownerDeviceId, tab.entryCommandId);
@@ -909,10 +959,10 @@ export function readLocalAdmissionByEvent(
         const presentation = readLocalAdmissionPresentation(db, scope) ?? s.fail();
         if (presentation.admission.record.publication.gmDecision.requestId !== row['request_id'])
           return s.fail('FOREIGN_OWNER');
-        return presentation.admission;
+        return check(presentation.admission);
       }
     }
-    return readInTransaction(db, scope, s.text(row['request_id']));
+    return check(readInTransaction(db, scope, s.text(row['request_id'])));
   });
 }
 /** A completed MENU return is replayable only while it remains the owned root's current exit. */
@@ -1108,6 +1158,47 @@ function append(
     );
   if (update.changes !== 1) return s.fail('SOURCE_CHANGED');
 }
+function decisionPointer(
+  db: Database.Database,
+  loaded: NonNullable<ReturnType<typeof readWithSource>>,
+) {
+  const { record } = loaded.current,
+    { original, snapshot } = loaded.source;
+  const { scope, publication } = record,
+    pointer = tabs.activeAnchor(db, scope.ownerDeviceId);
+  if (s.same(pointer, original)) return pointer;
+  if (record.hostIdentity.ownerDeviceId !== scope.ownerDeviceId) return s.fail('UNAVAILABLE');
+  const owner = readHostLocalScopeOwner(db, scope.ownerDeviceId, scope.networkScopeId);
+  const state = readHostLocalSeatHandoff(db, scope.ownerDeviceId),
+    candidate = state.active;
+  const proposal = publication.proposalOrNull,
+    request = snapshot.current.requestOrNull;
+  if (
+    !owner ||
+    candidate?.kind !== 'CANDIDATE' ||
+    !state.activeReceiptIdOrNull ||
+    !state.candidateAckReceiptIdOrNull ||
+    candidate.profile.targetLocalOwnerId !== owner ||
+    candidate.networkScopeIdOrNull !== scope.networkScopeId ||
+    candidate.origin.campaignId !== publication.gmDecision.campaignId ||
+    !candidate.requestOrNull ||
+    candidate.requestOrNull.requestId !== publication.gmDecision.requestId ||
+    candidate.requestOrNull.technicalSessionId !== record.technicalSessionId ||
+    !request ||
+    candidate.requestOrNull.submitReceiptId !== request.submitReceiptId ||
+    candidate.requestOrNull.requestRevision !== snapshot.requestCurrentOrNull?.requestRevision ||
+    !s.same(
+      candidate.requestOrNull.proposalOrNull,
+      proposal && {
+        admissionBatchId: proposal.admissionBatchId,
+        proposalChecksum: proposal.proposalChecksum,
+        proposalRevision: proposal.proposalRevision,
+      },
+    )
+  )
+    return s.fail('FOREIGN_OWNER');
+  return pointer;
+}
 export function prepareLocalAdmissionDecision(
   db: Database.Database,
   scope: LocalNetworkScope,
@@ -1169,8 +1260,7 @@ export function prepareLocalAdmissionDecision(
           readOwnedLocalNetworkTabAnchor(db, scope.ownerDeviceId, scope.networkScopeId) ??
           s.fail('UNAVAILABLE');
         if (original.tabId !== current.record.originalTabId) return s.fail('SOURCE_CHANGED');
-        if (!s.same(tabs.activeAnchor(db, scope.ownerDeviceId), original))
-          return s.fail('UNAVAILABLE');
+        const pointer = decisionPointer(db, loaded);
         s.guarded(db, guard, current, 'APPLY');
         s.assertUnused(db, commandId);
         let preparation = current.preparationOrNull;
@@ -1197,6 +1287,7 @@ export function prepareLocalAdmissionDecision(
             scope.ownerDeviceId,
             proposal.fullCampaignCopyDiffs.length - 1,
             original,
+            pointer,
           );
           const preparationId = allocate();
           const bindings = proposal.fullCampaignCopyDiffs.map((copy, i) => {
@@ -1252,16 +1343,22 @@ export function prepareLocalAdmissionDecision(
         const base = loaded.source.history.current;
         const before = s.changes(db);
         for (const entry of additional) tabs.createInactive(db, entry);
-        append(db, current, commandId, {
+        const intentId = playerIntentId(current.record, commandId);
+        if (
+          intentId !== commandId &&
+          !readHostLocalScopeOwner(db, scope.ownerDeviceId, scope.networkScopeId)
+        )
+          return s.fail('FOREIGN_OWNER');
+        append(db, current, intentId, {
           kind: 'INTENT',
           request,
           additionalTabs: additional,
           clientRequestJsonOrNull: browserJson,
         });
         if (s.changes(db) !== before + 2 + additional.length * 2) return s.fail('SOURCE_CHANGED');
-        mirror(db, readJournal(db, scope, requestId) ?? s.fail(), commandId, base);
+        mirror(db, readJournal(db, scope, requestId) ?? s.fail(), intentId, base);
         const saved = readInTransaction(db, scope, requestId) ?? s.fail();
-        if (tabs.activeAnchor(db, scope.ownerDeviceId)?.tabId !== original.tabId)
+        if (tabs.activeAnchor(db, scope.ownerDeviceId)?.tabId !== pointer?.tabId)
           return s.fail('SOURCE_CHANGED');
         s.guarded(db, guard, saved, 'APPLY');
         return saved;
@@ -1381,20 +1478,46 @@ export function validateLocalAdmissionReleasedTab(
 }
 
 /** A terminal result releases presentation only; the original actual tab/session survives. */
+type AdmissionReturnInput = {
+  readonly requestId: string;
+  readonly expectedRevisions: RevisionTriple;
+  readonly expectedDraftRevision: number;
+  readonly clientRequestJson: string;
+};
 export function returnFromLocalAdmission(
   db: Database.Database,
   scope: LocalNetworkScope,
-  value: {
-    readonly requestId: string;
-    readonly expectedRevisions: RevisionTriple;
-    readonly expectedDraftRevision: number;
-    readonly clientRequestJson: string;
-    readonly mode: 'RESELECT' | 'MENU';
-  },
+  value: AdmissionReturnInput & { readonly mode: 'RESELECT' | 'MENU' },
   allocateId: () => string,
   guard: NetworkStoreGuard<LocalAdmissionRead>,
 ): LocalAdmissionRead {
-  if (db.inTransaction) return s.fail('INVALID_INPUT');
+  if (db.inTransaction || (value.mode !== 'RESELECT' && value.mode !== 'MENU'))
+    return s.fail('INVALID_INPUT');
+  return writeAdmissionReturn(db, scope, value, allocateId, guard);
+}
+/** The signed handoff owns this transaction and closes the original tab after the terminal mirror. */
+export function returnHostLocalTerminalAdmission(
+  db: Database.Database,
+  scope: LocalNetworkScope,
+  input: AdmissionReturnInput,
+  allocateId: () => string,
+): LocalAdmissionRead {
+  if (!db.inTransaction) return s.fail('INVALID_INPUT');
+  return writeAdmissionReturn(
+    db,
+    scope,
+    { ...input, mode: 'HOST_GM' },
+    allocateId,
+    () => undefined,
+  );
+}
+function writeAdmissionReturn(
+  db: Database.Database,
+  scope: LocalNetworkScope,
+  value: AdmissionReturnInput & { readonly mode: LocalAdmissionReturn['mode'] },
+  allocateId: () => string,
+  guard: NetworkStoreGuard<LocalAdmissionRead>,
+): LocalAdmissionRead {
   const input = s.input(() => {
     const row = s.object(JSON.parse(s.canonical(value)) as unknown, [
       'requestId',
@@ -1441,8 +1564,7 @@ export function returnFromLocalAdmission(
         )
           return s.fail('UNAVAILABLE');
         const { original, snapshot } = loaded.source;
-        if (!s.same(tabs.activeAnchor(db, scope.ownerDeviceId), original))
-          return s.fail('UNAVAILABLE');
+        const pointer = decisionPointer(db, loaded);
         if (
           !s.same(input.payload.sourceRevisions, s.vectorOf(original)) ||
           input.payload.sourceDraftRevision !== snapshot.current.draftRevision
@@ -1483,7 +1605,7 @@ export function returnFromLocalAdmission(
         // The matching network transition is appended below in the same outer transaction.
         mirror(db, readJournal(db, scope, input.requestId) ?? s.fail(), eventId, snapshot.current);
         const saved = readInTransaction(db, scope, input.requestId) ?? s.fail();
-        if (tabs.activeAnchor(db, scope.ownerDeviceId)?.tabId !== original.tabId)
+        if (tabs.activeAnchor(db, scope.ownerDeviceId)?.tabId !== pointer?.tabId)
           return s.fail('SOURCE_CHANGED');
         s.guarded(db, guard, saved, 'APPLY');
         return saved;
@@ -1737,7 +1859,7 @@ function reduceLocalLobby(
       v.campaignStarted ||
       v.includedCampaignCharacterIds.length === 0 ||
       v.ready === payload.request.ready ||
-      payload.request.commandId !== event.eventId ||
+      playerIntentId(current.record, payload.request.commandId) !== event.eventId ||
       payload.request.campaignId !== receipt.campaignId ||
       payload.request.expectedLobbySnapshotRevision !== v.lobbySnapshotRevision
     )
@@ -1815,7 +1937,16 @@ export function commitLocalLobbyEvent(
             presentation.tab.tabId
         )
           return s.fail('FOREIGN_OWNER');
-        const known = current.events.find((event) => event.eventId === eventId);
+        const id =
+          payload.kind === 'READY_INTENT'
+            ? playerIntentId(current.record, s.text(eventId))
+            : s.text(eventId);
+        if (
+          id !== eventId &&
+          !readHostLocalScopeOwner(db, scope.ownerDeviceId, scope.networkScopeId)
+        )
+          return s.fail('FOREIGN_OWNER');
+        const known = current.events.find((event) => event.eventId === id);
         if (known !== undefined) {
           if (!s.same(known.payload, payload)) return s.fail('IDEMPOTENCY_CONFLICT');
           s.guarded(db, guard, current, 'REPLAY');
@@ -1835,14 +1966,9 @@ export function commitLocalLobbyEvent(
           return s.fail('STALE_REVISION');
         s.guarded(db, guard, current, 'APPLY');
         const changes = s.changes(db);
-        append(db, current, s.text(eventId), payload);
+        append(db, current, id, payload);
         if (s.changes(db) !== changes + 2) return s.fail('SOURCE_CHANGED');
-        mirror(
-          db,
-          readJournal(db, scope, requestId) ?? s.fail(),
-          eventId,
-          presentation.application,
-        );
+        mirror(db, readJournal(db, scope, requestId) ?? s.fail(), id, presentation.application);
         const saved = readInTransaction(db, scope, requestId) ?? s.fail();
         s.guarded(db, guard, saved, 'APPLY');
         return saved;

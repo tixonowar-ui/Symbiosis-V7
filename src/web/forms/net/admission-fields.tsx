@@ -5,6 +5,7 @@ import {
 import { initialCampaignTimeValue, type InitialCampaignTimeInput } from '@shared/campaign-lobby.js';
 import { campaignLobbyGmProjectionValue } from '@shared/campaign-lobby-presentation.js';
 import { useEffect, useState, type ReactElement } from 'react';
+import { readHostDelivery } from '../ply/host-seat-client.js';
 import type { JsonObject } from '@shared/wire-protocol.js';
 import type {
   AdmissionMechanicalSheetV1,
@@ -1727,13 +1728,70 @@ function ProfileEditor({
   );
 }
 
+function CampaignArtwork({
+  path,
+  receiptId,
+  setupGm,
+}: {
+  path: string;
+  receiptId: string | null;
+  setupGm: boolean;
+}): ReactElement | null {
+  const [blob, setBlob] = useState<string | null>(null);
+  useEffect(() => {
+    if (receiptId === null && !setupGm) return;
+    const url = new URL(path, window.location.href);
+    const delivery = readHostDelivery();
+    if (
+      url.origin !== window.location.origin ||
+      !url.pathname.startsWith('/campaign-art/') ||
+      !(
+        (delivery?.kind === 'ACTIVE' && delivery.receiptId === receiptId) ||
+        (delivery?.kind === 'SETUP' && setupGm)
+      )
+    )
+      return;
+    const controller = new AbortController();
+    let href: string | null = null;
+    void fetch(url, {
+      cache: 'no-store',
+      redirect: 'error',
+      credentials: 'same-origin',
+      signal: controller.signal,
+      headers: { Authorization: 'Bearer ' + delivery.key },
+    })
+      .then(async (response) => {
+        if (!response.ok) return;
+        const image = await response.blob();
+        if (controller.signal.aborted) return;
+        href = URL.createObjectURL(image);
+        setBlob(href);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setBlob(null);
+      });
+    return () => {
+      controller.abort();
+      if (href !== null) URL.revokeObjectURL(href);
+    };
+  }, [receiptId, path, setupGm]);
+  const source = receiptId === null && !setupGm ? path : blob;
+  return source === null ? null : (
+    <img alt="Арт кампании" src={source} style={{ maxWidth: '100%', maxHeight: 360 }} />
+  );
+}
+
 export function CampaignLobbyFields({
   formId,
   projection,
   onTimeChange,
+  managedReceiptId = null,
+  setupGm = false,
 }: {
   readonly formId: string;
   readonly projection: JsonObject;
+  readonly managedReceiptId?: string | null;
+  readonly setupGm?: boolean;
   readonly onTimeChange: (value: InitialCampaignTimeInput | null) => void;
 }): ReactElement {
   const p = campaignLobbyGmProjectionValue(projection);
@@ -1764,10 +1822,13 @@ export function CampaignLobbyFields({
       {p.campaignArtChecksumOrNull === null ? (
         <p>Арт кампании отсутствует.</p>
       ) : (
-        <img
-          alt="Арт кампании"
-          src={'/campaign-art/' + p.contextId + '/' + p.campaignArtChecksumOrNull}
-          style={{ maxWidth: '100%', maxHeight: 360 }}
+        <CampaignArtwork
+          key={
+            p.contextId + p.campaignArtChecksumOrNull + String(managedReceiptId) + String(setupGm)
+          }
+          path={'/campaign-art/' + p.contextId + '/' + p.campaignArtChecksumOrNull}
+          receiptId={managedReceiptId}
+          setupGm={setupGm}
         />
       )}
       <p>

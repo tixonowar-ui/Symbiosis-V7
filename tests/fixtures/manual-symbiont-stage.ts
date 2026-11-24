@@ -114,6 +114,11 @@ export function createManualWizardSetup(
   databasePath = ':memory:',
   characterDraftId = `${prefix}-character`,
   massKg = 75,
+  onIdentityBirth?: (
+    db: ReturnType<typeof openPersistenceDatabase>,
+    id: string,
+    checkpointId: string,
+  ) => undefined,
 ): ManualWizardSetup {
   const database = openPersistenceDatabase(databasePath);
   const deviceId = bootstrapDeviceIdentity(database);
@@ -142,7 +147,15 @@ export function createManualWizardSetup(
       workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
     },
     `${prefix}-identity-receipt`,
-    { bindOwnerToDeviceId: deviceId },
+    {
+      bindOwnerToDeviceId: deviceId,
+      ...(onIdentityBirth
+        ? {
+            recordHostLocalBirth: () =>
+              onIdentityBirth(database, characterDraftId, wizardCheckpointId),
+          }
+        : {}),
+    },
   );
   let current = loadCreationWizardCheckpoint(
     database,

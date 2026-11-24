@@ -66,6 +66,7 @@ const TEST_IMPLEMENTED_FORM_IDS = [
   'NET-023',
   'PLY-001',
   'PLY-027',
+  'PLY-028',
   'PLY-029',
   'PLY-030',
   'NET-027',
@@ -131,6 +132,7 @@ const TEST_IMPLEMENTED_FORM_IDS = [
   'CMP-004',
   'CMP-005',
   'CMP-006',
+  'CMP-009',
   'NET-001',
   'NET-002',
   'NET-003',
@@ -294,9 +296,9 @@ describe('atlas implemented-form renderer', () => {
     // #258 adds ENM-011..016; ENM-020 was already counted by #256.
     // #259 adds the delivered ENM-017 version editor screen; no dialog is added.
     // #260 adds the delivered ENM-018/019 screens; no dialog is added.
-    expect(screens).toBe(103);
+    expect(screens).toBe(104);
     expect(dialogs).toBe(10);
-    expect(components).toBe(3);
+    expect(components).toBe(4);
   });
 
   it('renders APP-001 actions once and emits only its exact atlas transition', () => {

@@ -318,12 +318,43 @@ export async function verifyNeutralSurface(
   frames: readonly string[],
   forbidden: readonly string[],
 ) {
+  const cached = await page.evaluate(async () => {
+    // The fixture is compiled for Node, but this callback runs in Chrome.
+    const { caches } = globalThis as typeof globalThis & {
+      caches: {
+        keys(): Promise<string[]>;
+        open(name: string): Promise<{
+          keys(): Promise<Request[]>;
+          match(request: Request): Promise<Response | undefined>;
+        }>;
+      };
+    };
+    const entries: { url: string; document?: string }[] = [];
+    for (const name of await caches.keys()) {
+      const cache = await caches.open(name);
+      for (const request of await cache.keys()) {
+        const response = await cache.match(request);
+        const type = response?.headers.get('Content-Type') ?? '';
+        entries.push({
+          url: request.url,
+          ...(response && /^(?:application\/json|text\/html)(?:;|$)/iu.test(type)
+            ? { document: await response.text() }
+            : {}),
+        });
+      }
+    }
+    return entries;
+  });
+  expect(
+    cached.filter((entry) => new URL(entry.url).pathname.startsWith('/campaign-art/')),
+  ).toEqual([]);
   const values = {
     transport: frames.join('\n'),
     dom: await page.content(),
     accessibility: await page.locator('body').ariaSnapshot(),
     persistentBrowserState: JSON.stringify(await page.context().storageState({ indexedDB: true })),
     sessionStorage: await page.evaluate(() => JSON.stringify(sessionStorage)),
+    cachedResponses: JSON.stringify(cached),
   };
   for (const [surface, content] of Object.entries(values)) {
     for (const value of forbidden)

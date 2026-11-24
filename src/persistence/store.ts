@@ -591,6 +591,21 @@ const isPromiseLike = (value: unknown): value is PromiseLike<unknown> =>
   'then' in value &&
   typeof value.then === 'function';
 
+const recordingHostBirth = new WeakMap<Database.Database, LocalCharacterCheckpoint>();
+/** Only a freshly inserted checkpoint can acquire its host-local profile, in the creating transaction. */
+export function isRecordingHostLocalBirth(
+  database: Database.Database,
+  localCharacterId: string,
+  checkpointId: string,
+): boolean {
+  const fresh = recordingHostBirth.get(database);
+  return (
+    database.inTransaction &&
+    fresh?.checkpointId === checkpointId &&
+    fresh.localCharacterId === localCharacterId
+  );
+}
+
 export const commitNewLocalCharacterCheckpoint = <T>(
   database: Database.Database,
   localCharacterId: string,
@@ -598,7 +613,10 @@ export const commitNewLocalCharacterCheckpoint = <T>(
   write: (
     create: LocalCharacterCheckpointCreator,
   ) => T & (T extends PromiseLike<unknown> ? never : unknown),
-  options?: { readonly bindOwnerToDeviceId: string },
+  options?: {
+    readonly bindOwnerToDeviceId: string;
+    readonly recordHostLocalBirth?: (checkpoint: LocalCharacterCheckpoint) => undefined;
+  },
 ): { result: T; checkpoint: LocalCharacterCheckpoint } => {
   if (database.inTransaction) {
     throw new Error('localCharacter checkpoint requires a top-level transaction');
@@ -717,10 +735,17 @@ export const commitNewLocalCharacterCheckpoint = <T>(
         }
         const storedCurrent = buildDraftSnapshot(database, localCharacterId);
         validateDraftCheckpointCreation(created, storedCurrent);
-        return {
-          result,
-          checkpoint: validateStoredDraftCheckpoint(stored, storedCurrent),
-        };
+        const verified = validateStoredDraftCheckpoint(stored, storedCurrent);
+        if (options?.recordHostLocalBirth) {
+          recordingHostBirth.set(database, verified);
+          try {
+            if (options.recordHostLocalBirth(verified) !== undefined)
+              throw new TypeError('host local birth callback must complete synchronously');
+          } finally {
+            recordingHostBirth.delete(database);
+          }
+        }
+        return { result, checkpoint: verified };
       } finally {
         creatorActive = false;
       }

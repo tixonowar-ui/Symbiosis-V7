@@ -25,11 +25,21 @@ export const atlasControl = (page: Page, key: string) =>
 export const networkForm = (page: Page, id: string) => page.locator(`[data-atlas-form-id="${id}"]`);
 const action = (page: Page, key: string) => atlasControl(page, key).click();
 
-export async function createNetworkCampaign(page: Page, baseURL: string) {
+export async function createNetworkCampaign(page: Page, baseURL: string, artwork?: Buffer) {
   await page.goto(baseURL);
   await action(page, 'APP-001::CTA::002');
   await action(page, 'APP-011::CTA::006');
   await page.getByLabel('Название кампании', { exact: true }).fill('Два независимых устройства');
+  if (artwork) {
+    await page.getByLabel('Изображение кампании PNG или JPEG', { exact: true }).setInputFiles({
+      name: 'campaign.png',
+      mimeType: 'image/png',
+      buffer: artwork,
+    });
+    await expect(
+      page.getByRole('img', { name: 'Изображение кампании', exact: true }),
+    ).toBeVisible();
+  }
   await action(page, 'CMP-001::CTA::001');
   await page.getByLabel('Вместимость активных персонажей', { exact: true }).fill('3');
   const loopback = page
@@ -232,7 +242,13 @@ export function watchAdmissionWire(page: Page): GmReviewMonitor {
         text.includes('"protocolVersion":2')
       ) {
         const response = JSON.parse(text) as ProjectionSnapshotV2Message;
-        const active = response.presentation.layers.at(-1) ?? response.presentation.base;
+        // PLY-029 identifies the acknowledged owner. Native review navigation still
+        // targets the underlying screen or modal (for example NET-019 or GM-019).
+        const active =
+          response.presentation.layers.findLast(
+            (layer) =>
+              layer.formId !== 'PLY-029' || layer.roleFilteredPayload['hostSeatView'] !== 'ACTIVE',
+          ) ?? response.presentation.base;
         const body = active.roleFilteredPayload;
         const lobby = body['lobby'] as JsonObject | undefined;
         const proposal =

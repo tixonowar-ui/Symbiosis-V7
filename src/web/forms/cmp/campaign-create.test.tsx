@@ -18,6 +18,7 @@ import type {
 import { ADMISSION_GM_WORKFLOW_IDS } from '@shared/campaign-admission-presentation.js';
 import { CAMPAIGN_LIFECYCLE_WORKFLOW_IDS } from '@shared/campaign-lifecycle.js';
 import { NPC_WORKFLOW_COMMAND_IDS } from '@shared/npc-command.js';
+import { HOST_OWNER_PROFILE_CREATE, HOST_SEAT_ACK } from '@shared/host-seat.js';
 import { App } from '../../app.js';
 import {
   connectProjection,
@@ -52,6 +53,7 @@ const CAPABILITIES = [
   'UI-CMD-DEVICE-REQUEST-REJECT',
   ...ADMISSION_GM_WORKFLOW_IDS,
 ] as const;
+const HOST_GM_CAPABILITIES = [...CAPABILITIES, HOST_SEAT_ACK, HOST_OWNER_PROFILE_CREATE];
 const common = { gmLocalContextId: CONTEXT, hostDeviceId: DEVICE, masterAuthorityRevision: 0 };
 const draft = {
   ...common,
@@ -319,6 +321,7 @@ async function harness(
   p = formId === 'APP-001' ? shell : projections[formId],
   revisions = ZERO,
   configureStorage?: () => void,
+  capabilities?: readonly string[],
 ) {
   stubTransport(formId !== 'APP-001');
   configureStorage?.();
@@ -344,7 +347,7 @@ async function harness(
   connections.push(connection);
   await new Promise((r) => setTimeout(r, 0));
   const socket = Socket.instances.at(-1)!;
-  reconnect(socket, formId, p, revisions);
+  reconnect(socket, formId, p, revisions, capabilities);
   return { connection, socket, states, drafts };
 }
 
@@ -692,37 +695,42 @@ describe('campaign draft transport', () => {
     expect(lastFrame<{ messageType: string }>(h.socket).messageType).toBe('navigation.form-action');
     expect(h.drafts.at(-1)?.dirty).toBe(false);
   });
-  it('replays an unacknowledged nonsecret update exactly after fresh GM resume without lowering its current view', async () => {
-    const h = await harness('CMP-001');
-    vi.useFakeTimers();
-    h.connection.replaceCampaignDraft({
-      variant: 'METADATA',
-      values: { ...metadata, title: 'Новый заголовок' },
-    });
-    await vi.advanceTimersByTimeAsync(250);
-    const original = h.socket.sent.at(-1)!;
-    h.socket.serverClose();
-    expect(h.connection.reconnect()).toEqual({ ok: true });
-    const resumed = Socket.instances.at(-1)!;
-    reconnect(
-      resumed,
-      'CMP-001',
-      { ...projections['CMP-001'], title: 'Поздний заголовок', draftRevision: 4 },
-      { ...ZERO, stateRevision: 4, projectionRevision: 6 },
-    );
-    expect(resumed.sent.at(-1)).toBe(original);
-    const request = JSON.parse(original) as CampaignDraftReplaceV3Message;
-    const p = { ...projections['CMP-001'], title: 'Поздний заголовок', draftRevision: 4 };
-    resumed.message({
-      ...draftResult(request, p),
-      draftRevision: 4,
-      revisions: { ...ZERO, stateRevision: 4, projectionRevision: 6 },
-    });
-    expect(h.states.at(-1)).toMatchObject({
-      kind: 'ready',
-      snapshot: { projection: { title: 'Поздний заголовок' } },
-    });
-  });
+  it.each([false, true])(
+    'replays an unacknowledged nonsecret update exactly after fresh GM resume without lowering its current view (host handoff %s)',
+    async (hostHandoff) => {
+      const capabilities = hostHandoff ? HOST_GM_CAPABILITIES : CAPABILITIES;
+      const h = await harness('CMP-001', projections['CMP-001'], ZERO, undefined, capabilities);
+      vi.useFakeTimers();
+      h.connection.replaceCampaignDraft({
+        variant: 'METADATA',
+        values: { ...metadata, title: 'Новый заголовок' },
+      });
+      await vi.advanceTimersByTimeAsync(250);
+      const original = h.socket.sent.at(-1)!;
+      h.socket.serverClose();
+      expect(h.connection.reconnect()).toEqual({ ok: true });
+      const resumed = Socket.instances.at(-1)!;
+      reconnect(
+        resumed,
+        'CMP-001',
+        { ...projections['CMP-001'], title: 'Поздний заголовок', draftRevision: 4 },
+        { ...ZERO, stateRevision: 4, projectionRevision: 6 },
+        capabilities,
+      );
+      expect(resumed.sent.at(-1)).toBe(original);
+      const request = JSON.parse(original) as CampaignDraftReplaceV3Message;
+      const p = { ...projections['CMP-001'], title: 'Поздний заголовок', draftRevision: 4 };
+      resumed.message({
+        ...draftResult(request, p),
+        draftRevision: 4,
+        revisions: { ...ZERO, stateRevision: 4, projectionRevision: 6 },
+      });
+      expect(h.states.at(-1)).toMatchObject({
+        kind: 'ready',
+        snapshot: { projection: { title: 'Поздний заголовок' } },
+      });
+    },
+  );
   it('checks exact owner, draft namespace, role and actions on resumed projections', async () => {
     for (const mutation of [
       (s: ReturnType<typeof snapshot>) => {
@@ -827,6 +835,36 @@ describe('campaign draft transport', () => {
     h.connection.reconnect();
     const resumed = Socket.instances.at(-1)!;
     reconnect(resumed, 'CMP-003', projections['CMP-003']);
+    expect(resumed.sent).toHaveLength(1);
+    expect(resumed.sent.join('')).not.toContain(secret);
+  });
+  it('withdraws the secret from a host-capable GM and never resends it after the same GM resumes', async () => {
+    const h = await harness(
+      'CMP-003',
+      projections['CMP-003'],
+      ZERO,
+      undefined,
+      HOST_GM_CAPABILITIES,
+    );
+    vi.useFakeTimers();
+    const secret = 'private-master-secret';
+    h.connection.replaceCampaignDraft({
+      variant: 'SECRET',
+      values: { masterTransferPassword: secret, masterTransferPasswordConfirmation: secret },
+    });
+    await vi.advanceTimersByTimeAsync(250);
+    expect(lastFrame<CampaignDraftReplaceV3Message>(h.socket)).toMatchObject({
+      messageType: 'campaign.draft.replace',
+      variant: 'SECRET',
+      values: { masterTransferPassword: secret },
+    });
+    h.socket.serverClose();
+    expect(h.states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+    expect(h.connection.reconnect()).toEqual({ ok: true });
+    const resumed = Socket.instances.at(-1)!;
+    reconnect(resumed, 'CMP-003', projections['CMP-003'], ZERO, HOST_GM_CAPABILITIES);
+    expect(h.states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId: 'CMP-003' } });
+    expect(h.drafts.at(-1)).toMatchObject({ pending: false, dirty: false });
     expect(resumed.sent).toHaveLength(1);
     expect(resumed.sent.join('')).not.toContain(secret);
   });

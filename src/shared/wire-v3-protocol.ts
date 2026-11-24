@@ -1,4 +1,5 @@
 import type { OrdinarySeatControlV3Message } from './ordinary-seat.js';
+import type { HostSeatControlV3Message } from './host-seat.js';
 import type {
   EnemyLibrarySelectionRequest,
   EnemyLibrarySelectionResponse,
@@ -148,6 +149,7 @@ export interface IdentityDraftRefusalV3Message extends WireV3Envelope<'character
 
 export type ClientToHostV3Message =
   | OrdinarySeatControlV3Message
+  | HostSeatControlV3Message
   | EnemyLibrarySelectionRequest
   | NpcArtReadRequest
   | NpcTechnicalRequest

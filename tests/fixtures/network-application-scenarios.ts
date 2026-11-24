@@ -192,7 +192,8 @@ type NetworkFixtureOwner =
   | 'network-application-lifecycle'
   | 'network-application-admission-accepted'
   | 'network-application-admission-other'
-  | 'network-application-peace';
+  | 'network-application-peace'
+  | 'host-local-application-returns';
 export function setupNetworkFixture(owner: NetworkFixtureOwner) {
   phaseDiagnostics = createTestPhaseDiagnostics(owner);
   const modulePhase = phaseDiagnostics.begin('module.registered-to-cleanup');
@@ -521,8 +522,8 @@ function client(twoSources = false, transportClosed?: () => boolean) {
               throw error;
             }
           },
-          async recover(scope, out) {
-            const value = await peer.recover(scope, out);
+          async recover(...args) {
+            const value = await peer.recover(...args);
             responses.push(value);
             return value;
           },
@@ -2565,6 +2566,8 @@ function lifecycleProjection(view: {
   return p;
 }
 function gmClient(h: Awaited<ReturnType<typeof host>>) {
+  type ManagedGm = NonNullable<Parameters<typeof createGmNetworkRuntime>[0]['managesHostLocalGm']>;
+  let managesHostLocalGm: ManagedGm | undefined;
   const c: CampaignConnection = {
     gmLocalContextId: h.gmLocalContextId,
     executableCreate: true,
@@ -2599,6 +2602,7 @@ function gmClient(h: Awaited<ReturnType<typeof host>>) {
   });
   const runtime = createGmNetworkRuntime({
     gmScheduler,
+    managesHostLocalGm: (scope) => managesHostLocalGm?.(scope) ?? false,
     config,
     database: h.db,
     baseline,
@@ -2688,12 +2692,33 @@ function gmClient(h: Awaited<ReturnType<typeof host>>) {
       ),
     ).toBe(true);
   };
-  return { c, runtime, campaign, sent, scope, view, send, nav, select, resume, gmScheduler };
+  return {
+    c,
+    runtime,
+    campaign,
+    sent,
+    scope,
+    view,
+    send,
+    nav,
+    select,
+    resume,
+    gmScheduler,
+    observeHostLocalGm: (read: ManagedGm) => {
+      managesHostLocalGm = read;
+    },
+  };
 }
 
 type AdmissionScenario =
   'ACCEPT' | 'ACCEPT_WITH_BLOCKERS' | 'DECLINE' | 'REJECT' | 'MIXED' | 'TWO_ACTIVE';
-function createAdmissionScenario(scenario: AdmissionScenario) {
+type SubmittedSite = {
+  h: Awaited<ReturnType<typeof host>>;
+  p: Awaited<ReturnType<typeof client>>;
+  requestId: string;
+  resumeGmQueue?: () => Promise<ReturnType<typeof gmClient>>;
+};
+function createAdmissionScenario(scenario: AdmissionScenario, existing?: () => SubmittedSite) {
   let h: Awaited<ReturnType<typeof host>>,
     p: Awaited<ReturnType<typeof client>>,
     gm: Awaited<ReturnType<typeof gmClient>>,
@@ -2759,12 +2784,17 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
     });
   };
   beforeEach(async () => {
-    h = await host();
+    h = existing ? existing().h : await host();
   });
   beforeEach(async () => {
-    p = await connectedPlayer(h, twoSources);
+    p = existing ? existing().p : await connectedPlayer(h, twoSources);
   });
   beforeEach(async () => {
+    if (existing) {
+      requestId = existing().requestId;
+      sourceRows = p.db.prepare('SELECT * FROM local_character').all();
+      return;
+    }
     const submitted = await submitConnectedPlayer(
       p,
       h,
@@ -2777,6 +2807,11 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
     sourceRows = p.db.prepare('SELECT * FROM local_character').all();
   });
   beforeEach(async () => {
+    const resumeGmQueue = existing?.().resumeGmQueue;
+    if (resumeGmQueue) {
+      gm = await resumeGmQueue();
+      return;
+    }
     gm = gmClient(h);
     gm.c.executableReview = [
       ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
@@ -3046,7 +3081,7 @@ function createAdmissionScenario(scenario: AdmissionScenario) {
     // This composite SQLite/peer restoration previously ran inside a 30s scenario.
     // Moving initial setup to a hook must not impose the implicit 10s hook deadline.
     // Later recovery/fault assertions retain their separate 30s scenario budget.
-    await p.restart();
+    if (!existing) await p.restart();
   }, 30000);
   const preparedTabs = (firstTargetViewAtAck = false) => {
     const suiteName = firstTargetViewAtAck
@@ -5217,6 +5252,65 @@ export function registerOtherAdmissionResults() {
     suite.results();
   });
 }
+async function stageDeviceRequest(h: Awaited<ReturnType<typeof host>>) {
+  const { p, batch, submit } = await submittedPlayer(h);
+  p.disconnect();
+  const peer = createLocalNetworkPeer({ database: p.db, baseline, config });
+  try {
+    await peer.reconnect(p.scope(), p.state().addressOrQrPayload, h.campaignId);
+    expect(
+      await peer.call(p.scope(), {
+        schemaVersion: 1,
+        operation: 'DEVICE_REQUEST_RECOVER',
+        requestId: batch.requestId,
+        technicalSessionId: batch.technicalSessionId,
+        submitCommandId: submit.commandId,
+      }),
+    ).toMatchObject({ outcome: 'ACK' });
+    const body = canonicalPostSaveJson(batch);
+    expect(
+      await peer.call(p.scope(), {
+        schemaVersion: 1,
+        operation: 'DEVICE_REQUEST_BEGIN',
+        commandId: randomUUID(),
+        requestId: batch.requestId,
+        technicalSessionId: batch.technicalSessionId,
+        connectionRevision: batch.connectionRevision,
+        campaignCheckpointSha256: batch.campaignProof.checkpointSha256,
+        candidates: batch.candidates.map((candidate) => ({
+          descriptor: candidate.descriptor,
+          witnessSha256: candidate.witnessSha256,
+          witnessByteLength: candidate.byteLength,
+        })),
+        submitBodySha256: postSaveSha256(body),
+        submitBodyByteLength: Buffer.byteLength(body),
+      }),
+    ).toMatchObject({ outcome: 'TRANSFER_READY' });
+    expect(h.runtime.operationCounts(h.campaignId).stagedTransferCount).toBe(1);
+    return { p, peer };
+  } catch (error) {
+    peer.close();
+    throw error;
+  }
+}
+export const hostLocalNetworkFixture = {
+  stageDeviceRequest,
+  async measure<T>(phase: string, run: () => T | Promise<T>): Promise<T> {
+    const span = phaseDiagnostics.begin(phase);
+    try {
+      return await run();
+    } finally {
+      phaseDiagnostics.end(span);
+    }
+  },
+  client,
+  host,
+  gmClient,
+  gmDecision,
+  reviewSubmitted: (mode: 'MIXED' | 'REJECT' | 'ACCEPT', get: () => SubmittedSite) => {
+    createAdmissionScenario(mode, get);
+  },
+};
 export function registerStartedPeace() {
   registerAdmissionScenarios(['ACCEPT'], (suite) => suite.peace());
 }
@@ -6103,39 +6197,8 @@ const gmLifecycleCases = () => {
     }
   });
   it('keeps read-only navigation usable while a real staged transfer blocks lifecycle writes', async () => {
-    const { p, batch, submit } = await submittedPlayer(h);
-    p.disconnect();
-    const peer = createLocalNetworkPeer({ database: p.db, baseline, config });
+    const { p, peer } = await stageDeviceRequest(h);
     try {
-      await peer.reconnect(p.scope(), p.state().addressOrQrPayload, h.campaignId);
-      expect(
-        await peer.call(p.scope(), {
-          schemaVersion: 1,
-          operation: 'DEVICE_REQUEST_RECOVER',
-          requestId: batch.requestId,
-          technicalSessionId: batch.technicalSessionId,
-          submitCommandId: submit.commandId,
-        }),
-      ).toMatchObject({ outcome: 'ACK' });
-      const body = canonicalPostSaveJson(batch);
-      const begun = await peer.call(p.scope(), {
-        schemaVersion: 1,
-        operation: 'DEVICE_REQUEST_BEGIN',
-        commandId: randomUUID(),
-        requestId: batch.requestId,
-        technicalSessionId: batch.technicalSessionId,
-        connectionRevision: batch.connectionRevision,
-        campaignCheckpointSha256: batch.campaignProof.checkpointSha256,
-        candidates: batch.candidates.map((c) => ({
-          descriptor: c.descriptor,
-          witnessSha256: c.witnessSha256,
-          witnessByteLength: c.byteLength,
-        })),
-        submitBodySha256: postSaveSha256(body),
-        submitBodyByteLength: Buffer.byteLength(body),
-      });
-      expect(begun).toMatchObject({ outcome: 'TRANSFER_READY' });
-      expect(h.runtime.operationCounts(h.campaignId).stagedTransferCount).toBe(1);
       await nav('CMP-008', 'CMP-008::CTA::005');
       const busy = await current();
       expect(busy).toMatchObject({ safeBoundary: false, pendingOperationCount: 1 });

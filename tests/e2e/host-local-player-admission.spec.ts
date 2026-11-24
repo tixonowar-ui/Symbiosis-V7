@@ -1,0 +1,321 @@
+import { createHash } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { expect, test, type Page, type Response as BrowserResponse } from '@playwright/test';
+import type { ProjectionSnapshotV2Message } from '../../src/shared/wire-v2-protocol.js';
+import {
+  createNetworkBrowserProcess,
+  disposeNetworkResources,
+} from '../fixtures/network-application-e2e.js';
+import {
+  atlasControl,
+  createNetworkCampaign,
+  networkForm,
+  reviewNetworkAdmissionCopies,
+  watchAdmissionWire,
+} from '../fixtures/network-admission-browser.js';
+import { verifyNeutralSurface } from '../fixtures/local-seat-browser.js';
+import { createFreshBrowserFinal } from '../fixtures/fresh-character-browser.js';
+
+test.use({ channel: 'chrome' });
+
+function receivedFrames(page: Page) {
+  const frames: string[] = [];
+  page.on('websocket', (socket) => {
+    if (new URL(socket.url()).pathname === '/state')
+      socket.on('framereceived', (event) => frames.push(String(event.payload)));
+  });
+  return frames;
+}
+
+const click = (page: Page, key: string) => atlasControl(page, key).click();
+
+test('a fresh host-local profile creates its own FINAL, completes admission and hands the lobby back to the GM', async ({
+  browser,
+}, testInfo) => {
+  test.setTimeout(900_000);
+  const host = await createNetworkBrowserProcess(2);
+  const gmContext = await browser.newContext();
+  const playerContext = await browser.newContext();
+  const master = await gmContext.newPage();
+  const player = await playerContext.newPage();
+  master.setDefaultTimeout(host.operationTimeoutMs);
+  player.setDefaultTimeout(host.operationTimeoutMs);
+  const gmWire = watchAdmissionWire(master);
+  const playerFrames = receivedFrames(player);
+  const masterFrames = receivedFrames(master);
+  const profile = 'Игрок у окна';
+  const name = 'Лада Соколова';
+  const foreign = [
+    ...host.sourceIds,
+    'network-source-0',
+    'network-source-1',
+    'Два независимых устройства',
+  ];
+  const reply = { timeout: host.operationTimeoutMs };
+  let failure: unknown;
+  try {
+    const artwork = await readFile(
+      new URL('../../generated/media/items/itm-wpn-016.png', import.meta.url),
+    );
+    const artChecksum = createHash('sha256').update(artwork).digest('hex');
+    await createNetworkCampaign(master, host.baseURL, artwork);
+    const campaign = host.inspect().campaigns[0]!;
+    await click(master, 'CMP-006::CTA::001');
+    await click(master, 'CMP-007::CTA::003');
+    await click(master, 'CMP-008::CTA::001');
+    await expect(networkForm(master, 'CMP-009')).toBeVisible();
+    await expect(master.getByText('На этом компьютере нет допущенных игроков.')).toBeVisible();
+    expect(host.inspect().tabs).toHaveLength(0);
+    expect(host.inspectOrdinarySeats().controllers).toHaveLength(0);
+    await click(master, 'CMP-009::CTA::002');
+    await master.getByLabel('Метка нового профиля').fill(profile);
+    await click(master, 'APP-003::CTA::011');
+    await expect(master.getByText('Выбран профиль:', { exact: false })).toContainText(profile);
+    await click(master, 'APP-003::CTA::013');
+    await expect(networkForm(master, 'PLY-030')).toBeVisible(reply);
+    const beforeAck = host.inspectOrdinarySeats().events;
+    expect(beforeAck.at(-1)).toMatchObject({ kind: 'BEGIN' });
+    const gmAfterCurtain = masterFrames.length;
+    await host.restart();
+    await player.goto(host.baseURL);
+    await expect(networkForm(player, 'PLY-030')).toBeVisible(reply);
+    expect(host.inspectOrdinarySeats().events).toEqual(beforeAck);
+    await verifyNeutralSurface(player, playerFrames, foreign);
+    await click(player, 'PLY-030::CTA::004');
+    await expect(networkForm(player, 'APP-004')).toBeVisible(reply);
+    await expect(player.getByRole('checkbox')).toHaveCount(0);
+    await expect(atlasControl(player, 'APP-004::CTA::007')).toHaveCount(0);
+    expect(host.inspect().sources).toHaveLength(2);
+    await verifyNeutralSurface(player, playerFrames, foreign);
+    await createFreshBrowserFinal(player, name);
+    await expect(atlasControl(player, 'CHR-040::CTA::002')).toHaveCount(0);
+    const original = host
+      .inspect()
+      .sources.filter((s) => !host.sourceIds.includes(String(s['local_character_id'])));
+    expect(original).toHaveLength(1);
+    expect(original[0]).toMatchObject({ lifecycle_state: 'FINAL' });
+    const characterId = String(original[0]!['local_character_id']);
+    await click(player, 'CHR-040::CTA::003');
+    const choice = player.getByRole('checkbox', { name, exact: true });
+    await choice.check();
+    await click(player, 'APP-004::CTA::002');
+    await click(player, 'APP-003::CTA::009');
+    await expect(networkForm(player, 'NET-003')).toBeVisible(reply);
+    expect(host.inspect().copies).toHaveLength(0);
+    expect(host.inspectOrdinarySeats().controllers).toHaveLength(0);
+    await click(player, 'NET-003::CTA::001');
+    await click(player, 'NET-004::CTA::002');
+    await expect(networkForm(master, 'PLY-030')).toBeVisible(reply);
+    await verifyNeutralSurface(master, masterFrames.slice(gmAfterCurtain), [
+      name,
+      characterId,
+      ...host.sourceIds,
+    ]);
+    await click(master, 'PLY-030::CTA::001');
+    await expect(networkForm(master, 'NET-017')).toBeVisible(reply);
+    const requests = host.inspect().requests;
+    expect(requests).toHaveLength(1);
+    const requestId = requests[0]!['request_id'];
+    if (typeof requestId !== 'string') throw new Error('Submitted request has no ID');
+    expect(host.inspect().sessions).toHaveLength(1);
+    expect(host.inspectOrdinarySeats().controllers).toHaveLength(0);
+    await master
+      .getByRole('combobox', { name: 'Локальная заявка для передачи', exact: true })
+      .selectOption(requestId);
+    await click(master, 'NET-017::CTA::011');
+    await click(player, 'PLY-030::CTA::001');
+    await expect(networkForm(player, 'NET-005')).toBeVisible(reply);
+    await click(player, 'NET-005::CTA::004');
+    await click(master, 'PLY-030::CTA::001');
+    await expect(networkForm(master, 'NET-017')).toBeVisible(reply);
+    await master.getByRole('radio').check();
+    await click(master, 'NET-017::CTA::007');
+    await click(master, 'NET-017::CTA::010');
+    await reviewNetworkAdmissionCopies(
+      master,
+      true,
+      ['Дом у маяка'],
+      host.operationTimeoutMs,
+      gmWire,
+    );
+    await click(master, 'NET-018::CTA::004');
+    await click(master, 'NET-021::CTA::005');
+    await expect
+      .poll(() => host.inspect().copies, reply)
+      .toMatchObject([{ lifecycle_state: 'PROPOSED' }]);
+    await click(master, 'NET-021::CTA::001');
+    await master
+      .getByRole('combobox', { name: 'Локальная заявка для передачи', exact: true })
+      .selectOption(requestId);
+    await click(master, 'NET-017::CTA::011');
+    await expect(networkForm(player, 'PLY-030')).toBeVisible(reply);
+    await click(player, 'PLY-030::CTA::001');
+    await expect(networkForm(player, 'NET-027')).toBeVisible(reply);
+    const publication = host.inspectAdmissionPublication();
+    expect(publication.gmDecisions).toHaveLength(1);
+    await host.restart();
+    await player.reload();
+    await expect(networkForm(player, 'NET-027')).toBeVisible(reply);
+    expect(host.inspectAdmissionPublication()).toEqual(publication);
+    await click(player, 'NET-027::CTA::003');
+    await expect(networkForm(player, 'NET-006')).toBeVisible(reply);
+    const controllers = host.inspectOrdinarySeats().controllers;
+    expect(controllers).toHaveLength(1);
+    expect(controllers[0]).toMatchObject({
+      owner_device_id: host.deviceId,
+      campaign_id: campaign['campaign_id'],
+    });
+    await click(player, 'NET-006::CTA::005');
+    await expect(networkForm(master, 'PLY-030')).toBeVisible(reply);
+    const [firstGmArt] = await Promise.all([
+      master.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          url.origin === new URL(host.baseURL).origin &&
+          url.pathname.startsWith('/campaign-art/') &&
+          url.pathname.endsWith('/' + artChecksum)
+        );
+      }, reply),
+      click(master, 'PLY-030::CTA::001'),
+    ]);
+    await expect(networkForm(master, 'NET-016')).toBeVisible(reply);
+    const events = host.inspectOrdinarySeats().events;
+    const lobby = masterFrames
+      .map((raw) => JSON.parse(raw) as ProjectionSnapshotV2Message)
+      .findLast(
+        (m) =>
+          m.messageType === 'projection.snapshot' &&
+          m.protocolVersion === 2 &&
+          m.projectionRole === 'gm' &&
+          m.presentation.base.formId === 'NET-016',
+      )?.presentation.base.roleFilteredPayload;
+    expect(lobby?.['campaignId']).toBe(campaign['campaign_id']);
+    expect(lobby?.['campaignArtChecksumOrNull']).toBe(artChecksum);
+    const gmContextId = lobby?.['contextId'];
+    if (typeof gmContextId !== 'string') throw new Error('The GM lobby has no context ID');
+    const artUrl = new URL('/campaign-art/' + gmContextId + '/' + artChecksum, host.baseURL);
+    expect(firstGmArt.url()).toBe(artUrl.href);
+    const waitForGmArt = () =>
+      master.waitForResponse((response) => response.url() === artUrl.href, reply);
+    const checkedGmBearer = async (response: BrowserResponse) => {
+      expect(response.status()).toBe(200);
+      expect(await response.headerValue('cache-control')).toBe('no-store');
+      expect(await response.headerValue('content-type')).toBe('image/png');
+      expect((await response.body()).equals(artwork)).toBe(true);
+      const bearer = await response.request().headerValue('authorization');
+      if (!bearer || !/^Bearer [0-9a-f]{64}$/u.test(bearer))
+        throw Error('Missing scoped GM authorization on the actual artwork request');
+      return bearer;
+    };
+    const expectRevokedArt = async (url: URL, authorization: string) => {
+      const response = await fetch(url, { headers: { authorization, origin: artUrl.origin } });
+      expect(response.status).toBe(403);
+      expect(response.headers.get('cache-control')).toBe('no-store');
+      expect(await response.json()).toEqual({ error: 'LOCAL_GM_ONLY' });
+    };
+    const previousGmBearer = await checkedGmBearer(firstGmArt);
+    await host.restart();
+    await master.reload();
+    await expect(networkForm(master, 'NET-016')).toBeVisible(reply);
+    expect(host.inspectOrdinarySeats()).toMatchObject({ controllers, events });
+    const seatId = controllers[0]!.local_controller_seat_id;
+    const handToPlayer = async (source: 'NET-016' | 'PLY-028') => {
+      await master
+        .getByRole('combobox', { name: 'Место для передачи', exact: true })
+        .selectOption(seatId);
+      await click(master, source === 'NET-016' ? 'NET-016::CTA::006' : 'PLY-028::CTA::003');
+      await expect(networkForm(player, 'PLY-030')).toBeVisible(reply);
+      await click(player, 'PLY-030::CTA::001');
+    };
+    const returnFromLobby = async () => {
+      await click(player, 'NET-006::CTA::005');
+      await expect(networkForm(master, 'PLY-030')).toBeVisible(reply);
+      await click(master, 'PLY-030::CTA::001');
+      await expect(networkForm(master, 'NET-016')).toBeVisible(reply);
+    };
+    await handToPlayer('NET-016');
+    await expect(networkForm(player, 'NET-006')).toBeVisible(reply);
+    await expectRevokedArt(artUrl, previousGmBearer);
+    // An unavailable checksum must get the same authority denial before its bytes are looked up.
+    await expectRevokedArt(new URL('0'.repeat(64), artUrl), previousGmBearer);
+    await click(player, 'NET-006::CTA::003');
+    await expect(player.getByText('Ваше устройство готово.', { exact: true })).toBeVisible(reply);
+    const [newGmArt] = await Promise.all([waitForGmArt(), returnFromLobby()]);
+    expect((await checkedGmBearer(newGmArt)) === previousGmBearer).toBe(false);
+    await expectRevokedArt(artUrl, previousGmBearer);
+    await master.getByLabel('День календаря', { exact: true }).fill('2');
+    await master.getByLabel('Час', { exact: true }).fill('21');
+    await master.getByLabel('Минута', { exact: true }).fill('7');
+    await click(master, 'NET-016::CTA::004');
+    await expect(
+      master
+        .getByRole('region', { name: 'Кампания и лобби' })
+        .getByText(`Устройство ${host.deviceId}: не готово.`, { exact: false }),
+    ).toBeVisible(reply);
+    await handToPlayer('NET-016');
+    await expect(player.getByText('Ваше устройство не готово.', { exact: true })).toBeVisible(
+      reply,
+    );
+    await click(player, 'NET-006::CTA::003');
+    await expect(player.getByText('Ваше устройство готово.', { exact: true })).toBeVisible(reply);
+    await returnFromLobby();
+    await click(master, 'NET-016::CTA::002');
+    await expect(networkForm(master, 'GM-001')).toBeVisible(reply);
+    await click(master, 'GM-001::CTA::012');
+    await click(master, 'PLY-027::CTA::004');
+    await handToPlayer('PLY-028');
+    await expect(networkForm(player, 'PLY-001')).toBeVisible(reply);
+    await expect(player.getByRole('region', { name: 'Мирная сцена персонажа' })).toContainText(
+      'День 2, 21:07',
+    );
+    await click(player, 'PLY-001::CTA::015');
+    await click(player, 'PLY-027::CTA::004');
+    await click(player, 'PLY-028::CTA::002');
+    await expect(networkForm(master, 'PLY-030')).toBeVisible(reply);
+    await click(master, 'PLY-030::CTA::001');
+    await expect(networkForm(master, 'GM-001')).toBeVisible(reply);
+    expect(host.inspectOrdinarySeats().controllers).toEqual(controllers);
+    expect(host.inspect().sources).toContainEqual(original[0]);
+  } catch (error) {
+    failure = error;
+    // Keep the actual wire sequence available without copying passwords, delivery keys or sheets.
+    const summarize = (frames: readonly string[]) =>
+      frames.map((raw) => {
+        const frame = JSON.parse(raw) as {
+          messageType?: string;
+          projectionRole?: string;
+          refusal?: { code?: unknown; path?: unknown };
+          presentation?: {
+            base?: { formId?: string; availableActionKeys?: string[] };
+            layers?: { formId?: string }[];
+            assignment?: { reason?: string };
+          };
+          revisions?: { projectionRevision?: number };
+        };
+        return {
+          type: frame.messageType,
+          role: frame.projectionRole,
+          form: frame.presentation?.base?.formId,
+          actions: frame.presentation?.base?.availableActionKeys,
+          layers: frame.presentation?.layers?.map((layer) => layer.formId),
+          reason: frame.presentation?.assignment?.reason,
+          revision: frame.revisions?.projectionRevision,
+          refusal: frame.refusal?.code,
+          path: frame.refusal?.path,
+        };
+      });
+    await testInfo.attach('host-seat-wire-sequence', {
+      body: JSON.stringify(
+        { master: summarize(masterFrames), player: summarize(playerFrames) },
+        null,
+        2,
+      ),
+      contentType: 'application/json',
+    });
+  } finally {
+    await disposeNetworkResources(
+      [() => playerContext.close(), () => gmContext.close(), () => host.close()],
+      failure,
+    );
+  }
+});

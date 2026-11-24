@@ -2,6 +2,7 @@ import { isEnemyAuthoringForm } from '../shared/enemy-authoring.js';
 import { NPC_CONTROL_FORM_IDS } from '@shared/npc-presentation.js';
 import { isEnemyLibraryForm } from '@shared/enemy-library.js';
 import { isCampaignLifecycleForm } from '@shared/campaign-lifecycle.js';
+import { HOST_OWNER_PROFILE_CREATE, HOST_SEAT_ACK } from '@shared/host-seat.js';
 import type { CampaignGmScheduler } from './campaign-network-executor.js';
 import { readOwnedCurrentPausedCampaign } from '../persistence/current-paused-campaign.js';
 import { isCampaignLobbyGmForm } from '@shared/campaign-lobby.js';
@@ -18,6 +19,7 @@ import type {
   HostToClientV2Message,
   HostToClientV3Message,
   PresentedBaseForm,
+  ProjectionSnapshotV2Message,
   PresentedLayerForm,
   RevisionVector,
   JsonObject,
@@ -542,11 +544,42 @@ export function createCampaignCreationRuntime(d: Dependencies) {
       revisions: cursor.revisions,
     };
   }
+  const negotiate = (c: CampaignConnection, supported: readonly WorkflowCommandCapabilityId[]) => {
+    c.executableCreate = supported.includes(CAMPAIGN_CREATE_COMMAND_ID);
+    c.executableReview =
+      d.requestReview === undefined
+        ? []
+        : supported.filter(
+            (id) =>
+              (d.requestReview?.enemyAuthoringEnabled === true &&
+                (id === 'UI-CMD-ENEMY-DRAFT-PATCH' ||
+                  id === 'UI-CMD-ENEMY-COMMIT-V1' ||
+                  id === 'UI-CMD-ENEMY-NEW-VERSION' ||
+                  id === 'UI-CMD-MONSTER-STATS-ROLL-ONCE')) ||
+              (d.requestReview?.npcEnabled === true &&
+                (id === 'UI-CMD-NPC-COMMIT-V1' || id === 'UI-CMD-NPC-NEW-VERSION')) ||
+              id === 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW' ||
+              id === HOST_OWNER_PROFILE_CREATE ||
+              id === HOST_SEAT_ACK ||
+              id === 'UI-CMD-DEVICE-REQUEST-REJECT' ||
+              id === 'UI-CMD-ADMISSION-REVIEW-OPEN' ||
+              id === 'UI-CMD-ADMISSION-GM-ACCEPT' ||
+              id === 'UI-CMD-ADMISSION-GM-REJECT' ||
+              id === 'UI-CMD-GM-WEAPON-REQUEST-RESOLVE' ||
+              id === 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET' ||
+              id === 'UI-CMD-CAMPAIGN-START' ||
+              id === 'UI-CMD-CAMPAIGN-SETTINGS-SET' ||
+              id === 'UI-CMD-CAMPAIGN-CAPACITY-SET' ||
+              id === 'UI-CMD-MASTER-PASSWORD-CHANGE' ||
+              id === 'UI-CMD-CAMPAIGN-PAUSE-SET' ||
+              id === 'UI-CMD-CLIENT-DISCONNECT',
+          );
+  };
   const snapshot = async (
     c: CampaignConnection,
     id: string,
-    reason: 'FORM_ACTION' | 'RECONNECT' | 'COMMAND_DESTINATION',
-  ): Promise<HostToClientV2Message> => {
+    reason: ProjectionSnapshotV2Message['presentation']['assignment']['reason'],
+  ): Promise<ProjectionSnapshotV2Message> => {
     const raw = await project(c);
     const view =
       typeof raw.base.roleFilteredPayload['campaignId'] === 'string' &&
@@ -1064,35 +1097,7 @@ export function createCampaignCreationRuntime(d: Dependencies) {
           if (resumed.ownerDeviceId !== loadDeviceId(db)) unavailable();
           c.gmLocalContextId = message.gmLocalContextId;
           context(c);
-          c.executableCreate = message.supportedWorkflowCommandIds.includes(
-            CAMPAIGN_CREATE_COMMAND_ID,
-          );
-          c.executableReview =
-            d.requestReview === undefined
-              ? []
-              : message.supportedWorkflowCommandIds.filter(
-                  (id) =>
-                    (d.requestReview?.enemyAuthoringEnabled === true &&
-                      (id === 'UI-CMD-ENEMY-DRAFT-PATCH' ||
-                        id === 'UI-CMD-ENEMY-COMMIT-V1' ||
-                        id === 'UI-CMD-ENEMY-NEW-VERSION' ||
-                        id === 'UI-CMD-MONSTER-STATS-ROLL-ONCE')) ||
-                    (d.requestReview?.npcEnabled === true &&
-                      (id === 'UI-CMD-NPC-COMMIT-V1' || id === 'UI-CMD-NPC-NEW-VERSION')) ||
-                    id === 'UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW' ||
-                    id === 'UI-CMD-DEVICE-REQUEST-REJECT' ||
-                    id === 'UI-CMD-ADMISSION-REVIEW-OPEN' ||
-                    id === 'UI-CMD-ADMISSION-GM-ACCEPT' ||
-                    id === 'UI-CMD-ADMISSION-GM-REJECT' ||
-                    id === 'UI-CMD-GM-WEAPON-REQUEST-RESOLVE' ||
-                    id === 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET' ||
-                    id === 'UI-CMD-CAMPAIGN-START' ||
-                    id === 'UI-CMD-CAMPAIGN-SETTINGS-SET' ||
-                    id === 'UI-CMD-CAMPAIGN-CAPACITY-SET' ||
-                    id === 'UI-CMD-MASTER-PASSWORD-CHANGE' ||
-                    id === 'UI-CMD-CAMPAIGN-PAUSE-SET' ||
-                    id === 'UI-CMD-CLIENT-DISCONNECT',
-                );
+          negotiate(c, message.supportedWorkflowCommandIds);
           shell.enter();
           if (
             ['QUEUE', 'ADMISSION'].includes(
@@ -1215,6 +1220,11 @@ export function createCampaignCreationRuntime(d: Dependencies) {
   };
   let frames = Promise.resolve();
   return {
+    negotiate,
+    snapshot,
+    receipt(c: CampaignConnection, id: string) {
+      return commandAt(context(c), id)?.receipt ?? null;
+    },
     currentVector,
     readCampaignArt: runtime.readCampaignArt,
     project,

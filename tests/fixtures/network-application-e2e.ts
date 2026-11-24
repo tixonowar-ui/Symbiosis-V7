@@ -241,13 +241,14 @@ export async function createNetworkBrowserProcess(finalCount: number) {
               .prepare<
                 [],
                 {
+                  campaign_id: string;
                   campaign_character_id: string;
                   local_controller_seat_id: string;
                   owner_device_id: string;
                   input_lane_id: string;
                 }
               >(
-                'SELECT campaign_character_id,local_controller_seat_id,owner_device_id,input_lane_id FROM campaign_admission_controller ORDER BY rowid',
+                'SELECT campaign_id,campaign_character_id,local_controller_seat_id,owner_device_id,input_lane_id FROM campaign_admission_controller ORDER BY rowid',
               )
               .all(),
             events: db

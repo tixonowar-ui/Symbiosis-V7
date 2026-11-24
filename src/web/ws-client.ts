@@ -1,4 +1,21 @@
 import {
+  HOST_OWNER_PROFILE_CREATE,
+  HOST_SEAT_ACK,
+  hostSeatControlValue,
+} from '@shared/host-seat.js';
+import type { HostSeatControlV3Message, HostSeatView } from '@shared/host-seat.js';
+import {
+  checkedHostView,
+  hostAckDelivery,
+  hostAckReceipt,
+  matchesHostRecipient,
+  newHostDeliveryKey,
+  readHostDelivery,
+  writeHostDelivery,
+} from './forms/ply/host-seat-client.js';
+import type { ActiveHostSeat, HostDelivery, HostSeatInput } from './forms/ply/host-seat-client.js';
+
+import {
   ENEMY_AUTHORING_NAV_TARGETS,
   ENEMY_AUTHORING_WORKFLOWS,
   ENEMY_STAGE_FORMS,
@@ -642,7 +659,7 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
         DEVICE_ID_PATTERN.test(binding.value)
       );
     }
-    if (isCampaignLifecycleForm(formId)) {
+    if (isCampaignLifecycleForm(formId) || formId === 'CMP-009') {
       if (formType === 'dialog') return bindings.length === 0;
       return (
         bindings.length === 1 &&
@@ -722,6 +739,7 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
   },
   isWorkflowCommandId: (value): value is WorkflowCommandId =>
     value === ORDINARY_SEAT_ACK ||
+    value === HOST_OWNER_PROFILE_CREATE ||
     ENEMY_AUTHORING_WORKFLOWS.some((id) => id === value) ||
     NPC_WORKFLOW_COMMAND_IDS.some((id) => id === value) ||
     isCampaignLifecycleWorkflow(value) ||
@@ -926,7 +944,7 @@ export interface App001Projection extends JsonObject {
   readonly integrityStatus: IntegrityStatus;
 }
 
-export interface App004Projection extends JsonObject {
+export type App004Projection = JsonObject & {
   readonly libraryEntries: readonly {
     readonly localCharacterId: string;
     readonly lifecycleState: 'DRAFT' | 'FINAL' | 'VARIANT';
@@ -936,15 +954,25 @@ export interface App004Projection extends JsonObject {
   readonly campaignAuthority: false;
   readonly draftCharacterIds: readonly string[];
   readonly finalCharacterIds: readonly string[];
-  readonly handoffIdOrNull: null;
-  readonly handoffReceiptIdOrNull: null;
-  readonly launchContext: 'PLAYER_MENU';
   readonly localCharacterLibraryRevision: number;
-  readonly localOwnerIdOrNull: null;
   readonly projectionRevision: number;
-  readonly returnContext: 'PLAYER_MENU';
   readonly stateRevision: number;
-}
+} & (
+    | {
+        readonly launchContext: 'PLAYER_MENU';
+        readonly returnContext: 'PLAYER_MENU';
+        readonly handoffIdOrNull: null;
+        readonly handoffReceiptIdOrNull: null;
+        readonly localOwnerIdOrNull: null;
+      }
+    | {
+        readonly launchContext: 'HOST_LOCAL_CANDIDATE';
+        readonly returnContext: 'HOST_LOCAL_CANDIDATE';
+        readonly handoffIdOrNull: string;
+        readonly handoffReceiptIdOrNull: string;
+        readonly localOwnerIdOrNull: string;
+      }
+  );
 
 export interface Chr010Projection extends JsonObject {
   readonly ancientOptionSerialized: false;
@@ -1643,18 +1671,23 @@ interface SkillSelectionCheckpointInput extends JsonObject {
   readonly targetBonus: number;
 }
 
-interface SkillSelectionCheckpointPayload extends JsonObject {
+interface SkillCheckpointCommon extends JsonObject {
   readonly characterDraftId: string;
   readonly draftRevision: number;
-  readonly selectedSkills: readonly SkillSelectionCheckpointInput[];
-  readonly sourceFormId: 'CHR-014' | 'CHR-015';
   readonly stage: 'SKILLS';
   readonly wizardCheckpointId: string;
+}
+interface SkillEligibilityCheckpointPayload extends SkillCheckpointCommon {
+  readonly sourceFormId: 'CHR-012';
+}
+interface SkillSelectionCheckpointPayload extends SkillCheckpointCommon {
+  readonly selectedSkills: readonly SkillSelectionCheckpointInput[];
+  readonly sourceFormId: 'CHR-014' | 'CHR-015';
 }
 
 type SkillSelectionCheckpointRequest = WorkflowCommandRequestMessage<
   typeof IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
-  SkillSelectionCheckpointPayload
+  SkillEligibilityCheckpointPayload | SkillSelectionCheckpointPayload
 >;
 type CheckpointRequest =
   | IdentityCheckpointRequest
@@ -1699,6 +1732,26 @@ interface DurableLearnedSkillResult extends JsonObject {
   readonly source: 'CLASS_MANDATORY' | 'RACE_GRANTED' | 'SELECTED';
 }
 
+interface SkillEligibilityCheckpointResult extends JsonObject {
+  readonly stage: 'SKILLS';
+  readonly sourceFormId: 'CHR-012';
+  readonly nextFormId: 'CHR-013';
+  readonly characterDraftId: string;
+  readonly checkpointOwnerId: string;
+  readonly checkpointId: string;
+  readonly checkpointRevision: number;
+  readonly draftRevision: number;
+  readonly branchCacheHash: typeof EMPTY_BRANCH_CACHE_HASH;
+  readonly branchUuid: string;
+  readonly raceCode: 'FREE' | 'PURE' | 'UNITED';
+  readonly classCodeOrNull: PureClass | null;
+  readonly mandatoryClassSkillOrNull: MandatoryClassSkillProjection | null;
+  readonly racialFreeSkills: readonly MandatoryClassSkillProjection[];
+  readonly skillStageStats: StatMap<number>;
+  readonly requiredSlotCount: number;
+  readonly eligibleSkillIds: readonly string[];
+}
+
 interface SkillSelectionCheckpointResult extends JsonObject {
   readonly branchCacheHash: typeof EMPTY_BRANCH_CACHE_HASH;
   readonly branchUuid: string;
@@ -1717,6 +1770,7 @@ interface SkillSelectionCheckpointResult extends JsonObject {
 }
 
 type CheckpointResult =
+  | SkillEligibilityCheckpointResult
   | IdentityCheckpointResult
   | ManualAdvisorSkillResult
   | ManualCompositionResult
@@ -1970,7 +2024,7 @@ interface SetRollCommitResult extends RollCommitResultCommon {
   readonly diceInputModeSnapshot: 'AUTO' | 'MANUAL';
   readonly faces: readonly number[];
   readonly naturalCriticalQueue: readonly NaturalCriticalQueueItem[];
-  readonly nextFormId: 'CHR-003' | 'CHR-004';
+  readonly nextFormId: CreationSetDecisionFormId | 'CHR-004';
   readonly setRollReceiptId: string;
   readonly setRollRequestId: string;
   readonly shownResultLocked: true;
@@ -1983,7 +2037,7 @@ interface ConfirmationRollCommitResult extends RollCommitResultCommon {
   readonly confirmationRollRequestId: string;
   readonly criticalQueueIndex: number;
   readonly nextConfirmationRollRequestIdOrNull: string | null;
-  readonly nextFormId: 'CHR-004';
+  readonly nextFormId: CreationSetDecisionFormId | 'CHR-004';
   readonly originFace: 1 | 20;
   readonly outcomeOrNull: JsonObject | null;
   readonly returnDecisionFormId: 'CHR-005' | 'CHR-006' | 'CHR-007' | 'CHR-008';
@@ -2045,6 +2099,11 @@ export type ConfirmedProjectionSnapshot = (
   /** An acknowledged ART-only edit leaves the user's other unsubmitted fields intact. */
   readonly enemyEditorRevision?: number;
   readonly canResumeOrdinarySeat?: boolean;
+  readonly hostSeat?: HostSeatView;
+  readonly hostActive?: ActiveHostSeat;
+  readonly hostSetupGm?: true;
+  /** The native decoder removes PLY-029. Keep its complete addressed lobby envelope comparable. */
+  readonly hostLobbyPresentationFingerprint?: string;
 };
 
 interface ConfirmedAbandonmentLayer {
@@ -2071,6 +2130,7 @@ export type ConfirmedPresentationLayer =
         | 'CMP-015'
         | 'NET-023'
         | 'PLY-027'
+        | 'PLY-028'
         | 'PLY-029'
         | 'PLY-030';
       readonly path: string;
@@ -2116,6 +2176,7 @@ export type FormActionRequestResult =
   { readonly ok: false; readonly detail: string } | { readonly ok: true };
 
 export interface ProjectionConnection {
+  submitHostSeatInput(input: HostSeatInput): FormActionRequestResult;
   selectOrdinarySeat(targetSeatId: string): FormActionRequestResult;
   resumeOrdinarySeat(): FormActionRequestResult;
   returnOrdinaryLibrary(selectedSourceUuids: readonly string[]): FormActionRequestResult;
@@ -2507,7 +2568,9 @@ function decodeApp004Projection(
   value: JsonObject,
   path: string,
   revisions: RevisionVector,
+  activeHost?: ActiveHostSeat,
 ): DecodeResult<JsonObject> {
+  const owned = activeHost !== undefined && activeHost.target.kind !== 'GM';
   const result = decodeProjection(value, path, {
     campaignAuthority: (field) => field === false,
     libraryEntries: (field) =>
@@ -2530,14 +2593,17 @@ function decodeApp004Projection(
       ),
     draftCharacterIds: isCanonicalCharacterIdList,
     finalCharacterIds: isCanonicalCharacterIdList,
-    handoffIdOrNull: (field) => field === null,
-    handoffReceiptIdOrNull: (field) => field === null,
-    launchContext: (field) => field === 'PLAYER_MENU',
+    handoffIdOrNull: (field) =>
+      owned ? typeof field === 'string' && UUID_PATTERN.test(field) : field === null,
+    handoffReceiptIdOrNull: (field) => field === (owned ? activeHost.receiptId : null),
+    launchContext: (field) => field === (owned ? 'HOST_LOCAL_CANDIDATE' : 'PLAYER_MENU'),
     localCharacterLibraryRevision: (field) =>
       typeof field === 'number' && Number.isSafeInteger(field) && field >= 0,
-    localOwnerIdOrNull: (field) => field === null,
+    localOwnerIdOrNull: (field) =>
+      field ===
+      (activeHost && activeHost.target.kind !== 'GM' ? activeHost.target.targetLocalOwnerId : null),
     projectionRevision: (field) => field === revisions.projectionRevision,
-    returnContext: (field) => field === 'PLAYER_MENU',
+    returnContext: (field) => field === (owned ? 'HOST_LOCAL_CANDIDATE' : 'PLAYER_MENU'),
     stateRevision: (field) => field === revisions.stateRevision,
   });
   if (!result.ok) return result;
@@ -4540,8 +4606,247 @@ function decodePresentationLayers(
 const markerAsJson = (value: CampaignLifecycleGmAnchor): JsonObject =>
   value as unknown as JsonObject;
 function decodeConfirmedSnapshot(
+  message: ProjectionSnapshotV2Message,
+  caps: readonly WorkflowCommandId[],
+): DecodeResult<ConfirmedProjectionSnapshot> {
+  const { base, layers } = message.presentation;
+  const hostLayers = layers.filter((l) => Object.hasOwn(l.roleFilteredPayload, 'hostSeatView'));
+  const baseManaged = Object.hasOwn(base.roleFilteredPayload, 'hostSeatView');
+  const entry =
+    (base.formId === 'CMP-008' && base.availableActionKeys.includes('CMP-008::CTA::001')) ||
+    (base.formId === 'NET-017' && base.availableActionKeys.includes('NET-017::CTA::006'));
+  if (!baseManaged && hostLayers.length === 0 && !entry) return decodeNativeSnapshot(message, caps);
+  try {
+    if (!caps.includes(HOST_SEAT_ACK) || hostLayers.length > 1)
+      throw new Error('Invalid host context');
+    const layer = hostLayers[0];
+    const view = layer
+      ? checkedHostView(layer.roleFilteredPayload, layer.formId, layer.availableActionKeys, caps)
+      : undefined;
+    const confirmedLayer =
+      layer === undefined
+        ? []
+        : [
+            {
+              formId: layer.formId as 'PLY-027' | 'PLY-028' | 'PLY-029' | 'PLY-030',
+              path: layer.routeTemplate,
+              availableActionKeys: layer.availableActionKeys,
+              projection: layer.roleFilteredPayload,
+            },
+          ];
+    if (baseManaged) {
+      const screen = checkedHostView(
+        base.roleFilteredPayload,
+        base.formId,
+        base.availableActionKeys,
+        caps,
+      );
+      const managingActive =
+        screen.hostSeatView === 'MANAGE' &&
+        view?.hostSeatView === 'ACTIVE' &&
+        view.target.kind === 'GM' &&
+        view.contextId === screen.gmContextId &&
+        view.revision === screen.revision;
+      if (
+        (base.formId !== 'APP-003' && base.formId !== 'CMP-009') ||
+        layers.length !== hostLayers.length ||
+        (layer &&
+          !managingActive &&
+          (screen.hostSeatView !== 'WAITING' ||
+            (view?.hostSeatView !== 'ROSTER' &&
+              view?.hostSeatView !== 'SWITCH' &&
+              view?.hostSeatView !== 'CURTAIN' &&
+              view?.hostSeatView !== 'GM_ONLY') ||
+            view.revision !== screen.revision)) ||
+        (screen.hostSeatView === 'MANAGE'
+          ? base.routeBindings[0]?.value !== screen.campaignId
+          : base.routeBindings.length !== 0) ||
+        message.projectionRole !==
+          (screen.hostSeatView === 'SETUP' || screen.hostSeatView === 'MANAGE' ? 'gm' : 'player') ||
+        Object.values(message.revisions).some((n) => n !== screen.revision)
+      )
+        throw new Error('Invalid host handoff screen');
+      const path =
+        screen.hostSeatView === 'MANAGE'
+          ? base.routeTemplate.replace(':campaignId', screen.campaignId)
+          : base.routeTemplate;
+      return {
+        ok: true,
+        value: {
+          formId: base.formId,
+          path,
+          availableActionKeys: base.availableActionKeys,
+          executableWorkflowCommandIds: caps,
+          revisions: message.revisions,
+          layers: confirmedLayer,
+          projection: screen,
+          hostSeat: managingActive ? screen : (view ?? screen),
+          ...(view?.hostSeatView === 'ACTIVE' ? { hostActive: view } : {}),
+        },
+      };
+    }
+    if (
+      view &&
+      (view.hostSeatView !== 'ACTIVE' ||
+        message.projectionRole !== (view.target.kind === 'GM' ? 'gm' : 'player'))
+    )
+      throw new Error('Invalid private recipient');
+    if (entry && (message.projectionRole !== 'gm' || layers.some((l) => l !== layer)))
+      throw new Error('Invalid management entry');
+    const active = view?.hostSeatView === 'ACTIVE' ? view : undefined;
+    const p = base.roleFilteredPayload;
+    if (active?.terminalResultReadOnly) {
+      const result = p['result'];
+      if (
+        !(
+          base.formId === 'NET-007' &&
+          (result === 'GM_REJECTED' || result === 'PLAYER_DECLINED')
+        ) &&
+        !(base.formId === 'NET-027' && result === 'PLAYER_DECLINED')
+      )
+        throw new Error('Unexpected form for a closed application');
+      if (
+        caps.length !== 1 ||
+        caps[0] !== HOST_SEAT_ACK ||
+        p['technicalSessionAvailable'] !== false ||
+        p['pendingCommandIdOrNull'] !== null ||
+        p['capacityRecheck'] !== null
+      )
+        throw new Error('A closed application cannot issue a live command');
+    }
+    if (
+      active?.seats !== undefined &&
+      (active.target.kind !== 'GM' ||
+        base.formId !== 'NET-016' ||
+        !base.availableActionKeys.includes('NET-016::CTA::006') ||
+        !active.seats.length)
+    )
+      throw new Error('Unexpected local seat list');
+    if (
+      active?.applicants !== undefined &&
+      (active.target.kind !== 'GM' ||
+        base.formId !== 'NET-017' ||
+        !base.availableActionKeys.includes('NET-017::CTA::011') ||
+        !active.applicants.length)
+    )
+      throw new Error('Unexpected local applicant selection');
+    if (
+      base.availableActionKeys.includes('NET-016::CTA::006') &&
+      (!active?.seats?.length ||
+        p['campaignStatus'] !== 'PAUSED' ||
+        p['panelVariant'] !== 'PRE_START')
+    )
+      throw new Error('No admitted player target');
+    if (
+      active &&
+      ((typeof p['contextId'] === 'string' && p['contextId'] !== active.contextId) ||
+        (isJsonObject(p['identityDraftScope']) &&
+          p['identityDraftScope']['contextId'] !== active.contextId) ||
+        (typeof p['networkScopeId'] === 'string' &&
+          p['networkScopeId'] !== active.networkScopeIdOrNull) ||
+        (active.target.kind === 'PLAYER' &&
+          typeof p['controllerSeat'] === 'string' &&
+          p['controllerSeat'] !== active.target.localControllerSeatId))
+    )
+      throw new Error('Invalid active scope');
+    if (
+      active?.target.kind === 'CANDIDATE' &&
+      (caps.includes('UI-CMD-CHAR-VARIANT-CREATE') ||
+        base.availableActionKeys.includes('CHR-040::CTA::002'))
+    )
+      throw new Error('Unexpected fresh-owner creation authority');
+    if (base.formId === 'CMP-008' && entry && p['safeBoundary'] !== true)
+      throw new Error('Unsafe campaign boundary');
+    if (
+      active &&
+      base.availableActionKeys.includes('NET-003::CTA::004') &&
+      (active.target.kind !== 'CANDIDATE' ||
+        p['pendingCommandIdOrNull'] !== null ||
+        p['ownRequestIdOrNull'] !== null)
+    )
+      throw new Error('Unconfirmed device application');
+    const extras: readonly ActionKey[] = active?.terminalResultReadOnly
+      ? base.formId === 'NET-007'
+        ? ['NET-007::CTA::005']
+        : []
+      : active?.target.kind === 'GM' || entry
+        ? [
+            'CMP-008::CTA::001',
+            'NET-017::CTA::006',
+            'NET-016::CTA::006',
+            'NET-017::CTA::011',
+            'GM-001::CTA::012',
+          ]
+        : active
+          ? [
+              'APP-004::CTA::002',
+              'NET-003::CTA::004',
+              'NET-003::CTA::005',
+              'NET-005::CTA::004',
+              'NET-006::CTA::005',
+              'NET-007::CTA::005',
+              'PLY-001::CTA::015',
+            ]
+          : [];
+    const native = decodeNativeSnapshot(
+      {
+        ...message,
+        presentation: {
+          ...message.presentation,
+          base: {
+            ...base,
+            availableActionKeys: base.availableActionKeys.filter((a) => !extras.includes(a)),
+          },
+          layers: layers.filter((l) => l !== layer),
+        },
+      },
+      caps,
+      active,
+    );
+    if (!native.ok) return native;
+    if (active && base.formId === 'APP-004') {
+      if (
+        active.target.kind !== 'CANDIDATE' ||
+        active.selectedSourceUuids === undefined ||
+        !active.selectedSourceUuids.every((id) =>
+          (native.value.projection as App004Projection).finalCharacterIds.includes(id),
+        )
+      )
+        throw new Error('Invalid owned library selection');
+    } else if (active?.selectedSourceUuids !== undefined)
+      throw new Error('Unexpected owned library selection');
+    return {
+      ok: true,
+      value: {
+        ...native.value,
+        availableActionKeys: base.availableActionKeys,
+        // The acknowledged PLY-029 indicator is observational. The native command
+        // validator must still see the actual modal stack (including CHR-028/031).
+        layers: native.value.layers,
+        ...(active ? { hostSeat: active } : {}),
+        ...(active?.target.kind === 'PLAYER' &&
+        base.formId === 'NET-006' &&
+        p['projectionVariant'] === 'LOBBY_SNAPSHOT'
+          ? {
+              hostLobbyPresentationFingerprint: reconnectFingerprint([
+                message.projectionRole,
+                message.revisions,
+                base,
+                layers,
+              ]),
+            }
+          : {}),
+      },
+    };
+  } catch {
+    return unrecognized('$.hostSeat', null);
+  }
+}
+
+function decodeNativeSnapshot(
   inputMessage: ProjectionSnapshotV2Message,
   executableWorkflowCommandIds: readonly WorkflowCommandId[],
+  activeHost?: ActiveHostSeat,
 ): DecodeResult<ConfirmedProjectionSnapshot> {
   let message = inputMessage;
   let currentCampaignLifecycle: CampaignLifecycleGmAnchor | undefined;
@@ -4633,6 +4938,7 @@ function decodeConfirmedSnapshot(
   if (
     message.projectionRole !== 'gm' &&
     (executableWorkflowCommandIds.includes(CAMPAIGN_CREATE_COMMAND_ID) ||
+      executableWorkflowCommandIds.includes(HOST_OWNER_PROFILE_CREATE) ||
       [
         ...ENEMY_AUTHORING_WORKFLOWS,
         ...NPC_WORKFLOW_COMMAND_IDS,
@@ -4823,7 +5129,9 @@ function decodeConfirmedSnapshot(
         return unrecognized('$.presentation', null);
       const actions = exactSymbiontActionKeys(
         base.availableActionKeys,
-        admissionOwnerActions(base.formId, p, executableWorkflowCommandIds),
+        admissionOwnerActions(base.formId, p, executableWorkflowCommandIds).filter(
+          (key) => activeHost?.target.kind !== 'CANDIDATE' || key !== 'NET-007::CTA::003',
+        ),
         '$.presentation.base.availableActionKeys',
       );
       if (!actions.ok) return actions;
@@ -4887,7 +5195,9 @@ function decodeConfirmedSnapshot(
       const actions = exactSymbiontActionKeys(
         base.availableActionKeys,
         [
-          ...expectedNetworkActions(base.formId, p, executableWorkflowCommandIds),
+          ...expectedNetworkActions(base.formId, p, executableWorkflowCommandIds).filter(
+            (key) => activeHost?.target.kind !== 'CANDIDATE' || key !== 'NET-011::CTA::005',
+          ),
           ...(base.formId === 'NET-003' &&
           p['campaignStatus'] === 'PAUSED' &&
           p.pendingCommandIdOrNull === null &&
@@ -5011,6 +5321,7 @@ function decodeConfirmedSnapshot(
           base.roleFilteredPayload,
           '$.presentation.base.roleFilteredPayload',
           message.revisions,
+          activeHost,
         );
         break;
       case 'CHR-001':
@@ -5184,7 +5495,9 @@ function decodeConfirmedSnapshot(
         if (projection.ok) {
           const actions = exactActionKeys(
             base.availableActionKeys,
-            NO_ACTION_KEYS,
+            executableWorkflowCommandIds.includes(IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID)
+              ? ['CHR-012::CTA::001']
+              : NO_ACTION_KEYS,
             '$.presentation.base.availableActionKeys',
           );
           if (!actions.ok) return actions;
@@ -5800,6 +6113,12 @@ function visibleSnapshotCore(
   skillCardDraft: CharacterSkillCardDraft | null = null,
   manualCompositionDraft: ManualCompositionDraft | null = null,
 ): ConfirmedProjectionSnapshot {
+  if (snapshot.hostSeat && commandPending)
+    return {
+      ...snapshot,
+      availableActionKeys: [],
+      layers: snapshot.layers.map((l) => ({ ...l, availableActionKeys: [] })),
+    };
   if (snapshot.projection['ordinarySeatView'] === 'LIBRARY' && commandPending)
     return { ...snapshot, availableActionKeys: [] };
   if (snapshot.canResumeOrdinarySeat && commandPending)
@@ -5844,7 +6163,7 @@ function visibleSnapshotCore(
     }
   } else if (isCreationSetDecisionFormId(snapshot.formId) && commandPending) {
     availableActionKeys = [];
-  } else if (snapshot.formId === 'CHR-011' && commandPending) {
+  } else if ((snapshot.formId === 'CHR-011' || snapshot.formId === 'CHR-012') && commandPending) {
     availableActionKeys = [];
   } else if (
     snapshot.formId === 'CHR-009' &&
@@ -5993,7 +6312,11 @@ function activePresentedForm(snapshot: ConfirmedProjectionSnapshot): {
   readonly projection: JsonObject;
 } {
   const layer = snapshot.layers.at(-1);
-  return snapshot.formId === 'PLY-001' ? snapshot : (layer ?? snapshot);
+  return snapshot.formId === 'PLY-001' ||
+    (layer?.formId === 'PLY-029' &&
+      (snapshot.hostActive || snapshot.hostSeat?.hostSeatView === 'ACTIVE'))
+    ? snapshot
+    : (layer ?? snapshot);
 }
 
 function sameBasePresentation(
@@ -6264,6 +6587,26 @@ function finalizationReceiptSource(snapshot: ConfirmedProjectionSnapshot) {
   return { projection, revisions: snapshot.revisions };
 }
 
+function archivedHostSeat(snapshot: ConfirmedProjectionSnapshot): ActiveHostSeat | undefined {
+  const grant = snapshot.hostSeat;
+  return grant?.hostSeatView === 'ACTIVE' && grant.terminalResultReadOnly ? grant : undefined;
+}
+
+function sameArchivedResult(
+  previous: ConfirmedProjectionSnapshot,
+  next: ConfirmedProjectionSnapshot,
+): boolean {
+  const before = archivedHostSeat(previous);
+  const after = archivedHostSeat(next);
+  return (
+    before !== undefined &&
+    after !== undefined &&
+    sameJson(before, after) &&
+    sameCampaignRevisions(previous.revisions, next.revisions) &&
+    sameJson(previous.projection, next.projection)
+  );
+}
+
 function decodeFormActionSnapshot(
   message: ProjectionSnapshotV2Message,
   pending: FormActionIntentV2Message,
@@ -6299,6 +6642,15 @@ function decodeFormActionSnapshot(
       decoded.value.projection['deviceId'] !== previous.projection['deviceId']
     )
       return unrecognized('$.presentation', null);
+    if (archivedHostSeat(previous) || archivedHostSeat(decoded.value)) {
+      // Both screens display the same signed outcome. Reading its proposal
+      // does not reopen the input tab or advance any revision.
+      return sameArchivedResult(previous, decoded.value) &&
+        (pending.actionKey === 'NET-007::CTA::001' || pending.actionKey === 'NET-027::CTA::002') &&
+        previous.availableActionKeys.includes(pending.actionKey)
+        ? decoded
+        : unrecognized('$.hostSeat.terminalResult', null);
+    }
     if (target === 'APP-002') return decoded;
     if (target === 'NET-003')
       return decoded.value.projection['networkScopeId'] === previous.projection['networkScopeId'] &&
@@ -6647,6 +6999,18 @@ function decodeFormActionSnapshot(
       n = decoded.value.projection;
     const owner = p['sourceEntityId'] ?? p['characterDraftId'];
     if (
+      pending.actionKey === 'CHR-040::CTA::003' &&
+      previous.hostSeat?.hostSeatView === 'ACTIVE' &&
+      previous.hostSeat.target.kind === 'CANDIDATE' &&
+      (decoded.value.formId !== 'APP-004' ||
+        typeof owner !== 'string' ||
+        !(decoded.value.projection as App004Projection).finalCharacterIds.includes(owner) ||
+        decoded.value.hostSeat?.hostSeatView !== 'ACTIVE' ||
+        decoded.value.hostSeat.contextId !== previous.hostSeat.contextId ||
+        decoded.value.hostSeat.receiptId !== previous.hostSeat.receiptId)
+    )
+      return unrecognized('$.hostSeat.ownedFinal', null);
+    if (
       p['postSaveScopeId'] !== undefined &&
       p['postSaveScopeId'] === n['postSaveScopeId'] &&
       (message.revisions.stateRevision !== previous.revisions.stateRevision ||
@@ -6692,6 +7056,30 @@ function decodeFormActionSnapshot(
   }
   const decoded = decodeConfirmedSnapshot(message, previous.executableWorkflowCommandIds);
   if (!decoded.ok) return decoded;
+  if (
+    pending.actionKey === 'APP-004::CTA::001' &&
+    previous.formId === 'APP-004' &&
+    previous.hostSeat?.hostSeatView === 'ACTIVE' &&
+    previous.hostSeat.target.kind === 'CANDIDATE'
+  ) {
+    const next = decoded.value,
+      p = next.projection;
+    if (
+      next.formId !== 'CHR-001' ||
+      next.layers.length !== 0 ||
+      next.hostSeat?.hostSeatView !== 'ACTIVE' ||
+      next.hostSeat.contextId !== previous.hostSeat.contextId ||
+      next.hostSeat.receiptId !== previous.hostSeat.receiptId ||
+      p['draftRevision'] !== 0 ||
+      ['age', 'artAssetKeyOrLocalFile', 'description', 'massKg', 'name', 'sex'].some(
+        (k) => p[k] !== null,
+      ) ||
+      (previous.projection as App004Projection).libraryEntries.some(
+        (e) => e.localCharacterId === p['characterDraftId'],
+      )
+    )
+      return unrecognized('$.hostSeat.freshCharacter', null);
+  }
   if (
     Object.hasOwn(previous.projection, 'correctionContext') ||
     Object.hasOwn(decoded.value.projection, 'correctionContext') ||
@@ -7273,6 +7661,71 @@ function decodeCheckpointTerminal(
     return unrecognized('$.receipt.receiptId', receipt.receiptId);
   }
   const payload = pending.request.payload;
+  if (payload.stage === 'SKILLS' && payload.sourceFormId === 'CHR-012') {
+    if (pending.sourceSnapshot.formId !== 'CHR-012')
+      return unrecognized('$.receipt.result.sourceFormId', null);
+    const source = pending.sourceSnapshot.projection as Chr012Projection,
+      raw = receipt.result;
+    const hasClass = source.mandatoryClassSkillOrNull !== null;
+    const checked = decodeProjection(raw, '$.receipt.result', {
+      stage: (v) => v === 'SKILLS',
+      sourceFormId: (v) => v === 'CHR-012',
+      nextFormId: (v) => v === 'CHR-013',
+      characterDraftId: (v) => v === payload.characterDraftId,
+      checkpointOwnerId: (v) => v === payload.characterDraftId,
+      checkpointId: (v) => v === payload.wizardCheckpointId,
+      checkpointRevision: (v) => isSafeIntegerAtLeast(v, 1),
+      branchCacheHash: (v) => v === EMPTY_BRANCH_CACHE_HASH,
+      branchUuid: isNonEmptyString,
+      draftRevision: (v) => v === payload.draftRevision + 1,
+      raceCode: (v) => (hasClass ? v === 'PURE' : v === 'UNITED' || v === 'FREE'),
+      classCodeOrNull: (v) => (hasClass ? PURE_CLASSES.some((c) => c === v) : v === null),
+      skillStageStats: (v) => sameJson(v, source.skillStageStats),
+      mandatoryClassSkillOrNull: (v) => sameJson(v, source.mandatoryClassSkillOrNull),
+      requiredSlotCount: (v) => isSafeIntegerAtLeast(v, 1),
+      eligibleSkillIds: (v) =>
+        Array.isArray(v) &&
+        (v as readonly JsonValue[]).every(isPublicSkillId) &&
+        new Set(v as readonly JsonValue[]).size === v.length,
+      racialFreeSkills: (v) =>
+        Array.isArray(v) &&
+        (raw['raceCode'] === 'UNITED' || v.length === 0) &&
+        v.every(
+          (s: JsonValue) =>
+            isJsonObject(s) &&
+            Object.keys(s).length === 3 &&
+            isPublicSkillId(s['skillKey'] ?? null) &&
+            isSafeIntegerAtLeast(s['bonus'] ?? null, 1) &&
+            s['slotCost'] === 0,
+        ),
+    });
+    if (!checked.ok) return checked;
+    const result = raw as SkillEligibilityCheckpointResult;
+    const skillIds = [
+      ...result.eligibleSkillIds,
+      ...result.racialFreeSkills.map((s) => s.skillKey),
+      ...(source.mandatoryClassSkillOrNull ? [source.mandatoryClassSkillOrNull.skillKey] : []),
+    ];
+    if (new Set(skillIds).size !== skillIds.length)
+      return unrecognized('$.receipt.result.eligibleSkillIds', null);
+    const ids = [
+      payload.characterDraftId,
+      payload.wizardCheckpointId,
+      pending.request.commandId,
+      receipt.receiptId,
+      result.branchUuid,
+    ];
+    if (new Set(ids).size !== ids.length)
+      return unrecognized('$.receipt.result.branchUuid', result.branchUuid);
+    const expected = pending.request.expectedRevisions;
+    if (
+      receipt.revisions.actorVisibilityRevision !== expected.actorVisibilityRevision ||
+      receipt.revisions.stateRevision !== expected.stateRevision + 1 ||
+      receipt.revisions.projectionRevision !== expected.projectionRevision + 1
+    )
+      return unrecognized('$.receipt.revisions', { ...receipt.revisions });
+    return { ok: true, value: receipt as CommandReceipt<SkillEligibilityCheckpointResult> };
+  }
   if (payload.stage === 'SKILLS') {
     const sourceFormId = pending.sourceSnapshot.formId;
     if (
@@ -7904,6 +8357,18 @@ function decodeRollCommitTerminal(
   };
   let result: DecodeResult<JsonObject>;
   if (payload.sourceFormId === 'CHR-003') {
+    const source = pending.sourceProjection;
+    const decisionForm = CREATION_SET_DECISION_FORM_IDS.find((form) => {
+      const rule = CREATION_SET_DECISION_FORMS[form];
+      return (
+        rule.method === source['statMethod'] &&
+        (rule.attempt === null
+          ? isSafeIntegerAtLeast(source['attemptIndex'], 1) && source['attemptIndex'] <= 5
+          : source['attemptIndex'] === rule.attempt)
+      );
+    });
+    if (!decisionForm)
+      return unrecognized('$.receipt.result.nextFormId', receipt.result['nextFormId']!);
     const faces = decodeFaceSlots(receipt.result['faces']!, '$.receipt.result.faces', false);
     if (!faces.ok) return faces;
     const queue = decodeNaturalCriticalQueue(
@@ -7919,7 +8384,7 @@ function decodeRollCommitTerminal(
         field === (payload.manualFacesOrNull === null ? 'AUTO' : 'MANUAL'),
       faces: (field) => field === receipt.result['faces'],
       naturalCriticalQueue: (field) => field === receipt.result['naturalCriticalQueue'],
-      nextFormId: (field) => field === (queue.value.length === 0 ? 'CHR-003' : 'CHR-004'),
+      nextFormId: (field) => field === (queue.value.length === 0 ? decisionForm : 'CHR-004'),
       setRollReceiptId: (field) => field === receipt.receiptId,
       setRollRequestId: (field) => field === payload.setRollRequestId,
       shownResultLocked: (field) => field === true,
@@ -7958,7 +8423,11 @@ function decodeRollCommitTerminal(
       confirmationRollRequestId: (field) => field === payload.confirmationRollRequestId,
       criticalQueueIndex: (field) => field === payload.criticalQueueIndex,
       nextConfirmationRollRequestIdOrNull: (field) => field === null || isNonEmptyString(field),
-      nextFormId: (field) => field === 'CHR-004',
+      nextFormId: (field) =>
+        field ===
+        (receipt.result['nextConfirmationRollRequestIdOrNull'] === null
+          ? confirmationSource.returnDecisionFormId
+          : 'CHR-004'),
       originFace: (field) => field === confirmationSource.originFace,
       outcomeOrNull: (field) => field === null || isJsonObject(field),
       returnDecisionFormId: (field) => field === confirmationSource.returnDecisionFormId,
@@ -8408,6 +8877,36 @@ function checkpointSnapshotMatchesReceipt(
     );
   }
   if (result.stage === 'SKILLS') {
+    if (result.sourceFormId === 'CHR-012') {
+      if (
+        snapshot.formId !== 'CHR-013' ||
+        sourceSnapshot.formId !== 'CHR-012' ||
+        snapshot.layers.length !== 0
+      )
+        return unrecognized('$.presentation.base.formId', snapshot.formId);
+      const p = snapshot.projection as Chr013Projection;
+      const fixed = (v: FixedSkillProjection) => ({
+        skillKey: v.skillId,
+        bonus: v.bonus,
+        slotCost: v.slotCost,
+      });
+      if (
+        p.characterDraftId !== result.characterDraftId ||
+        p.wizardCheckpointId !== result.checkpointId ||
+        p.draftRevision !== result.draftRevision ||
+        !sameCampaignRevisions(snapshot.revisions, receipt.revisions) ||
+        !sameJson(p.skillStageStats, result.skillStageStats) ||
+        !sameJson(p.eligibleSkillIds, result.eligibleSkillIds) ||
+        p.slotSources.requiredSlotCount !== result.requiredSlotCount ||
+        !sameJson(
+          p.slotSources.mandatoryClassSkillOrNull && fixed(p.slotSources.mandatoryClassSkillOrNull),
+          result.mandatoryClassSkillOrNull,
+        ) ||
+        !sameJson(p.slotSources.racialFreeSkills.map(fixed), result.racialFreeSkills)
+      )
+        return unrecognized('$.presentation.base.roleFilteredPayload', p);
+      return { ok: true, value: snapshot };
+    }
     if (
       result.sourceFormId === 'CHR-015' &&
       result.nextFormId === 'CHR-017' &&
@@ -8803,14 +9302,27 @@ function rollCommitSnapshotMatchesReceipt(
           receipt as CommandReceipt<SymbiontRollCommitResult>,
         );
   }
-  if (snapshot.formId !== 'CHR-003' && snapshot.formId !== 'CHR-004') {
-    return unrecognized('$.presentation.base.formId', snapshot.formId);
+  if (isCreationSetDecisionFormId(result.nextFormId)) {
+    const rule = CREATION_SET_DECISION_FORMS[result.nextFormId],
+      p = snapshot.projection;
+    // The decision screen publishes the set receipt, not the private recorded faces or branch.
+    if (
+      snapshot.formId !== result.nextFormId ||
+      snapshot.layers.length !== 0 ||
+      p['characterDraftId'] !== result.characterDraftId ||
+      p['wizardCheckpointId'] !== result.checkpointId ||
+      p['draftRevision'] !== result.draftRevision ||
+      p['decision'] !== 'PENDING' ||
+      p[rule.receiptKey] !== result.setRollReceiptId ||
+      (result.sourceFormId === 'CHR-003' &&
+        result.nextFormId !== 'CHR-005' &&
+        p['attemptIndex'] !== source.projection['attemptIndex']) ||
+      !sameCampaignRevisions(snapshot.revisions, receipt.revisions)
+    )
+      return unrecognized('$.presentation.base.roleFilteredPayload', p);
+    return { ok: true, value: snapshot };
   }
-  if (result.sourceFormId === 'CHR-003') {
-    if (result.nextFormId === 'CHR-003' && snapshot.formId !== 'CHR-003') {
-      return unrecognized('$.presentation.base.formId', snapshot.formId);
-    }
-  } else if (snapshot.formId !== 'CHR-004') {
+  if (snapshot.formId !== 'CHR-004') {
     return unrecognized('$.presentation.base.formId', snapshot.formId);
   }
   const projection = snapshot.projection;
@@ -8847,18 +9359,6 @@ function rollCommitSnapshotMatchesReceipt(
       return unrecognized(
         '$.presentation.base.roleFilteredPayload.setRollReceiptId',
         projection['setRollReceiptId']!,
-      );
-    }
-    if (
-      snapshot.formId === 'CHR-003' &&
-      (projection['setRollRequestId'] !== result.setRollRequestId ||
-        !sameJson(projection['facesOrManualInputs']!, result.faces) ||
-        !sameJson(projection['naturalCriticalQueue']!, result.naturalCriticalQueue) ||
-        projection['shownResultLocked'] !== true)
-    ) {
-      return unrecognized(
-        '$.presentation.base.roleFilteredPayload.setRollRequestId',
-        projection['setRollRequestId']!,
       );
     }
     if (
@@ -9418,6 +9918,106 @@ function gmQueueScope(
     ? { contextId, campaignId }
     : null;
 }
+function gmReconnectSource(s: ConfirmedProjectionSnapshot) {
+  const q = s.formId === 'NET-017' ? gmRequestProjection(s.projection) : null;
+  return {
+    form: s.formId,
+    scope: gmQueueScope(s),
+    revisions: s.revisions,
+    digest: reconnectFingerprint([s.projection, s.layers.map((l) => [l.formId, l.projection])]),
+    lifecycle: s.currentCampaignLifecycle && {
+      ...s.currentCampaignLifecycle,
+      pauseReasonOrNull: reconnectFingerprint(s.currentCampaignLifecycle.pauseReasonOrNull),
+    },
+    queue: q && {
+      revision: q.requestQueueRevision,
+      returnDigest: reconnectFingerprint(q.returnContext),
+      rows: new Map(
+        q.requests.map((r) => [
+          r.requestId,
+          {
+            revision: r.requestRevision,
+            immutable: reconnectFingerprint([
+              r.requestOwnerDeviceId,
+              r.requestedCandidateCount,
+              r.batchCharacterSummaries,
+            ]),
+            status: reconnectFingerprint([
+              r.requestStatus,
+              r.decisionReceiptIdOrNull,
+              r.gmMessageOrNull,
+            ]),
+          },
+        ]),
+      ),
+    },
+  };
+}
+function gmReconnectMatches(
+  s: ConfirmedProjectionSnapshot,
+  source: ReturnType<typeof gmReconnectSource> | null,
+): boolean {
+  const scope = gmQueueScope(s);
+  if (
+    !source ||
+    !scope ||
+    !source.scope ||
+    scope.contextId !== source.scope.contextId ||
+    scope.campaignId !== source.scope.campaignId ||
+    s.revisions.actorVisibilityRevision < source.revisions.actorVisibilityRevision ||
+    s.revisions.projectionRevision < source.revisions.projectionRevision ||
+    s.revisions.stateRevision < source.revisions.stateRevision
+  )
+    return false;
+  const lifecycle = s.currentCampaignLifecycle;
+  if (
+    source.lifecycle &&
+    (!lifecycle ||
+      !campaignLifecycleGmAnchorMonotonic(
+        { ...lifecycle, pauseReasonOrNull: reconnectFingerprint(lifecycle.pauseReasonOrNull) },
+        source.lifecycle,
+      ) ||
+      (s.revisions.stateRevision === source.revisions.stateRevision &&
+        lifecycle.campaignRevision !== source.lifecycle.campaignRevision))
+  )
+    return false;
+  if (sameCampaignRevisions(s.revisions, source.revisions))
+    return (
+      s.formId === source.form &&
+      reconnectFingerprint([s.projection, s.layers.map((l) => [l.formId, l.projection])]) ===
+        source.digest
+    );
+  if (!source.queue) return true;
+  const q = s.formId === 'NET-017' ? gmRequestProjection(s.projection) : null;
+  if (
+    !q ||
+    q.requestQueueRevision < source.queue.revision ||
+    reconnectFingerprint(q.returnContext) !== source.queue.returnDigest
+  )
+    return false;
+  const sameQueue = q.requestQueueRevision === source.queue.revision;
+  if (sameQueue && q.requests.length !== source.queue.rows.size) return false;
+  for (const r of q.requests) {
+    const old = source.queue.rows.get(r.requestId);
+    if (!old) {
+      if (sameQueue) return false;
+      continue;
+    }
+    if (
+      r.requestRevision < old.revision ||
+      reconnectFingerprint([
+        r.requestOwnerDeviceId,
+        r.requestedCandidateCount,
+        r.batchCharacterSummaries,
+      ]) !== old.immutable ||
+      (r.requestRevision === old.revision &&
+        reconnectFingerprint([r.requestStatus, r.decisionReceiptIdOrNull, r.gmMessageOrNull]) !==
+          old.status)
+    )
+      return false;
+  }
+  return true;
+}
 function gmQueueMonotonic(
   next: ConfirmedProjectionSnapshot,
   previous: ConfirmedProjectionSnapshot,
@@ -9901,7 +10501,8 @@ export function connectProjection(
     witness: OwnerCommandWitness;
     receipt: OwnerReceiptWitness | null;
   } | null = null;
-  const npc = new NpcBrowserSession();
+  const hostReadySources = new WeakMap<WebSocket, { commandId: string; presentation: string }>();
+  let npc = new NpcBrowserSession();
   let gmEdit: NetworkGmRequestDraftValues | null = null;
   let pendingAdmissionDraft: {
     request: AdmissionGmClientV3Message;
@@ -10042,6 +10643,28 @@ export function connectProjection(
     emptyReturn = value;
   };
   let seatDelivery = readSeatDelivery();
+  let hostDelivery: HostDelivery | null = null;
+  let hostRevision = -1;
+  let hostCapabilities: readonly WorkflowCommandId[] = [];
+  let hostIntent: {
+    id: string;
+    destination: string;
+    targetFingerprint?: string;
+    profileId?: string;
+    finals?: readonly string[];
+  } | null = null;
+  let profileCommand: { id: string; label: string; ownerId: string | null } | null = null;
+  let hostAckSent = false;
+  let hostReplayReceiptId: string | null = null;
+  let hostDraftFollowup: string | null = null;
+  const setHostDelivery = (d: HostDelivery) => {
+    writeHostDelivery(d);
+    hostDelivery = d;
+  };
+  const hostTransitionOrChooser = () =>
+    (hostIntent !== null && lastSnapshot === null) ||
+    lastSnapshot?.hostSeat?.hostSeatView === 'ROSTER' ||
+    lastSnapshot?.hostSeat?.hostSeatView === 'SWITCH';
   let seatControl: OrdinarySeatControlV3Message | null = null;
   let selectedSeat: { sourceSeatId: string; targetOrdinal: number } | null = null;
   let seatAckSent = false;
@@ -10049,6 +10672,7 @@ export function connectProjection(
   let seatAuthorityKnown = seatDelivery !== null;
   let suspendedPlayerRevisions: RevisionVector | null = null;
   let suspendedNetwork: ReturnType<typeof networkReconnectWitness> | null = null;
+  let suspendedGm: ReturnType<typeof gmReconnectSource> | null = null;
   let suspendedPage = false;
   let seatRevision = -1;
   let durableHandoff = seatDelivery !== null;
@@ -10108,6 +10732,8 @@ export function connectProjection(
       return;
     const p = lastSnapshot.projection;
     if (
+      (lastSnapshot.hostSeat?.hostSeatView === 'ACTIVE' &&
+        lastSnapshot.hostSeat.terminalResultReadOnly) ||
       !(lastSnapshot.formId === 'NET-005' || isCampaignOwnerForm(lastSnapshot.formId)) ||
       typeof p['networkScopeId'] !== 'string' ||
       typeof p['contextId'] !== 'string' ||
@@ -10313,6 +10939,10 @@ export function connectProjection(
   }
 
   const commandPending = (ignoreLocalNpcInput = false) =>
+    hostDraftFollowup !== null ||
+    hostIntent !== null ||
+    profileCommand !== null ||
+    hostAckSent ||
     seatControl !== null ||
     seatNavigation !== null ||
     seatAckSent ||
@@ -10751,6 +11381,226 @@ export function connectProjection(
     clearNetworkDraft();
     publishNetworkDraft();
   };
+  const purgeHostScreen = () => {
+    suspendedGm = null;
+    hostReplayReceiptId = null;
+    hostDraftFollowup = null;
+    purgeSeatScreen();
+    seatNavigation = null;
+    seatControl = null;
+    selectedSeat = null;
+    seatAckSent = false;
+    setSeatDelivery(null);
+    setEmptyReturn(null);
+    durableHandoff = false;
+    suspendedPlayerRevisions = null;
+    suspendedNetwork = null;
+    pendingFormAction = null;
+    pendingGmCommand = null;
+    pendingGmRefusal = null;
+    pendingGmDraft = null;
+    pendingAdmissionDraft = null;
+    pendingCampaignDraft = null;
+    pendingCampaignCreate = null;
+    pendingEnemySelection = null;
+    gmQueueHeads.clear();
+    clearGmDraft();
+    publishGmDraft();
+    clearCampaignDraft();
+    publishCampaignDraft();
+    npc.dispose();
+    npc = new NpcBrowserSession();
+    onNpcControls(null, null);
+    gmLocalContextId = null;
+    networkScopeId = null;
+    storeGmContextTicket(null);
+    networkContextTicket(null);
+    playerContextId = null;
+    seatAuthorityKnown = true;
+  };
+  const resetHostSocket = (presentationPurged = false) => {
+    const old = socket;
+    socket = null;
+    stagedCapabilities = null;
+    hostAckSent = false;
+    hostIntent = null;
+    profileCommand = null;
+    if (!presentationPurged) purgeHostScreen();
+    old?.close(1000, 'host handoff');
+    if (deviceId !== null && !disposed && !terminal) openTransport(deviceId);
+  };
+  const sendHostControl = (
+    request: HostSeatControlV3Message,
+    intent: NonNullable<typeof hostIntent>,
+    erase: boolean,
+  ) => {
+    const encoded = encodeClientMessageV3(hostSeatControlValue(request), WEB_PROTOCOL_VOCABULARY);
+    if (!encoded.ok || socket?.readyState !== WebSocket.OPEN)
+      throw new Error('Управление передачей недоступно.');
+    hostIntent = intent;
+    if (erase) purgeHostScreen();
+    try {
+      socket.send(encoded.text);
+    } catch {
+      socket.close(1000, 'host control interrupted');
+    }
+    if (!erase) notifyReady();
+  };
+  const submitHostSeatInput = (input: HostSeatInput): FormActionRequestResult => {
+    if (
+      disposed ||
+      terminal ||
+      !lastSnapshot ||
+      socket?.readyState !== WebSocket.OPEN ||
+      commandPending() ||
+      pendingFormAction ||
+      pendingAddressableRoute
+    )
+      return { ok: false, detail: 'Дождитесь подтверждения хоста.' };
+    try {
+      const view = lastSnapshot.hostSeat,
+        form = activePresentedForm(
+          visibleSnapshotBase(
+            lastSnapshot,
+            identity,
+            false,
+            creationChoiceDraft,
+            creationRollDraft,
+            statAssignmentDraft,
+            skillSelectionDraft,
+          ),
+        );
+      const allowed = (k: ActionKey) => form.availableActionKeys.includes(k);
+      const id = createNetworkCommandId();
+      if (!id || !view) throw new Error();
+      const common = {
+        protocolVersion: 3,
+        messageType: 'host.seat.control',
+        requestId: id,
+        expectedProjectionRevision: lastSnapshot.revisions.projectionRevision,
+      } as const;
+      hostCapabilities = lastSnapshot.executableWorkflowCommandIds;
+      if (
+        input.kind === 'CREATE_PROFILE' &&
+        view.hostSeatView === 'SETUP' &&
+        allowed('APP-003::CTA::011') &&
+        hostCapabilities.includes(HOST_OWNER_PROFILE_CREATE) &&
+        input.label.trim().length
+      ) {
+        const encoded = encodeClientMessage(
+          {
+            protocolVersion: 1,
+            messageType: 'command.request',
+            commandKind: 'workflow-command',
+            workflowCommandId: HOST_OWNER_PROFILE_CREATE,
+            commandId: id,
+            expectedRevisions: lastSnapshot.revisions,
+            role: 'gm',
+            payload: { targetProfileLabel: input.label },
+          },
+          WEB_PROTOCOL_VOCABULARY,
+        );
+        if (!encoded.ok) throw new Error();
+        profileCommand = { id, label: input.label, ownerId: null };
+        socket.send(encoded.text);
+        notifyReady();
+      } else if (
+        input.kind === 'RESUME_PROFILE' &&
+        view.hostSeatView === 'MANAGE' &&
+        allowed('CMP-009::CTA::004')
+      ) {
+        const profile = view.returnedProfiles?.find((p) => p.targetLocalOwnerId === input.id);
+        if (!profile) throw new Error();
+        sendHostControl(
+          { ...common, operation: 'RESUME_PROFILE', targetLocalOwnerId: input.id },
+          {
+            id,
+            destination: 'CURTAIN',
+            targetFingerprint: reconnectFingerprint({ kind: 'CANDIDATE', ...profile }),
+          },
+          true,
+        );
+      } else if (
+        input.kind === 'SELECT_PROFILE' &&
+        view.hostSeatView === 'SETUP' &&
+        allowed('APP-003::CTA::012') &&
+        view.profiles.some((p) => p.targetLocalOwnerId === input.id)
+      ) {
+        sendHostControl(
+          { ...common, operation: 'SELECT_PROFILE', targetLocalOwnerId: input.id },
+          { id, destination: 'SETUP', profileId: input.id },
+          false,
+        );
+      } else if (
+        input.kind === 'SELECT_APPLICANT' &&
+        view.hostSeatView === 'ACTIVE' &&
+        view.target.kind === 'GM' &&
+        form.formId === 'NET-017' &&
+        allowed('NET-017::CTA::011')
+      ) {
+        const applicant = view.applicants?.find((a) => a.requestId === input.id);
+        if (!applicant) throw new Error();
+        sendHostControl(
+          { ...common, operation: 'SELECT_APPLICANT', selectedRequestId: applicant.requestId },
+          {
+            id,
+            destination: 'CURTAIN',
+            targetFingerprint: reconnectFingerprint({
+              kind: 'CANDIDATE',
+              targetLocalOwnerId: applicant.targetLocalOwnerId,
+              targetProfileLabel: applicant.targetProfileLabel,
+            }),
+          },
+          true,
+        );
+      } else if (
+        input.kind === 'SELECT_SEAT' &&
+        ((view.hostSeatView === 'ROSTER' && allowed('PLY-028::CTA::003')) ||
+          (view.hostSeatView === 'ACTIVE' &&
+            view.target.kind === 'GM' &&
+            form.formId === 'NET-016' &&
+            allowed('NET-016::CTA::006')))
+      ) {
+        const seat = view.seats?.find(
+          (s) =>
+            s.localControllerSeatId === input.id &&
+            (view.hostSeatView !== 'ROSTER' || s.localControllerSeatId !== view.activeSeatIdOrNull),
+        );
+        if (!seat) throw new Error();
+        const target = {
+          kind: 'PLAYER',
+          localControllerSeatId: seat.localControllerSeatId,
+          targetLocalOwnerId: seat.targetLocalOwnerId,
+          targetProfileLabel: seat.targetProfileLabel,
+        };
+        sendHostControl(
+          { ...common, operation: 'SELECT_SEAT', targetSeatId: input.id },
+          { id, destination: 'CURTAIN', targetFingerprint: reconnectFingerprint(target) },
+          true,
+        );
+      } else if (
+        input.kind === 'SELECT_FINALS' &&
+        view.hostSeatView === 'ACTIVE' &&
+        view.target.kind === 'CANDIDATE' &&
+        form.formId === 'APP-004' &&
+        allowed('APP-004::CTA::002') &&
+        input.ids.length <= 3 &&
+        new Set(input.ids).size === input.ids.length &&
+        input.ids.every((id) =>
+          (form.projection as App004Projection).finalCharacterIds.includes(id),
+        )
+      ) {
+        sendHostControl(
+          { ...common, operation: 'SELECT_FINALS', selectedSourceUuids: input.ids },
+          { id, destination: 'ADMISSION', finals: [...input.ids] },
+          false,
+        );
+      } else throw new Error();
+      return { ok: true };
+    } catch {
+      return { ok: false, detail: 'Выбор недоступен в текущей проекции.' };
+    }
+  };
   const sendSeatControl = (control: OrdinarySeatControlV3Message): void => {
     const encoded = encodeClientMessageV3(control, WEB_PROTOCOL_VOCABULARY);
     if (!encoded.ok || socket?.readyState !== WebSocket.OPEN)
@@ -10799,6 +11649,45 @@ export function connectProjection(
     }
   };
   const resetSeatTransport = () => {
+    hostReplayReceiptId = null;
+    hostDraftFollowup = null;
+    if (
+      hostDelivery !== null ||
+      (gmLocalContextId !== null &&
+        lastSnapshot?.executableWorkflowCommandIds.includes(HOST_OWNER_PROFILE_CREATE))
+    ) {
+      hostIntent = null;
+      hostAckSent = false;
+      profileCommand = null;
+      // A proven native command remains in its exact outbox until this holder reconnects.
+      // Neutral transitions call purgeHostScreen to release the previous owner's requests.
+      if (lastSnapshot !== null && (npc.pending || pendingGmDraft !== null))
+        suspendedGm = gmReconnectSource(lastSnapshot);
+      if (lastSnapshot !== null && pendingNetworkDraft !== null)
+        suspendedNetwork = networkReconnectWitness(lastSnapshot);
+      hidePrivatePresentation();
+      gmQueueHeads.clear();
+      if (npc.pending) npc.suspend(true);
+      else {
+        npc.dispose();
+        npc = new NpcBrowserSession();
+      }
+      onNpcControls(null, null);
+      // Only a sent intention may cross a transport failure. Never retain an unsent
+      // local replacement or a campaign secret as evidence of the previous holder.
+      gmEdit = null;
+      networkEdit = null;
+      campaignEdit = null;
+      gmDraftRefresh = null;
+      discardDisconnectedGmInput();
+      discardDisconnectedCampaignInput();
+      discardDisconnectedNetworkInput();
+      publishGmDraft();
+      publishCampaignDraft();
+      publishNetworkDraft();
+      seatAuthorityKnown = true;
+      return;
+    }
     if (
       lastSnapshot?.executableWorkflowCommandIds.includes(ORDINARY_SEAT_ACK) &&
       privateOrdinaryPlayerView(lastSnapshot)
@@ -10871,7 +11760,7 @@ export function connectProjection(
       socket !== null &&
       (socket.readyState === WebSocket.CONNECTING || socket.readyState === WebSocket.OPEN)
     ) {
-      socket.close(1002, 'wire frame refused');
+      socket.close(4002, 'wire frame refused');
     }
   };
 
@@ -11061,11 +11950,33 @@ export function connectProjection(
   };
 
   const adoptSnapshot = (next: ConfirmedProjectionSnapshot, reconnect: boolean): void => {
+    suspendedGm = null;
     const previous = lastSnapshot;
+    if (
+      hostDelivery?.kind === 'SETUP' &&
+      !next.hostSeat &&
+      typeof next.projection['contextId'] === 'string' &&
+      hostDelivery.gmFingerprint ===
+        reconnectFingerprint([next.projection['campaignId'] ?? null, next.projection['contextId']])
+    )
+      next = { ...next, hostSetupGm: true };
+    // Native v3 draft terminals describe just the edited form. They retain the current
+    // recipient only after the native decoder has matched the outstanding edit and its scope.
+    if (
+      !reconnect &&
+      !next.hostSeat &&
+      previous?.hostSeat?.hostSeatView === 'ACTIVE' &&
+      previous.formId === next.formId &&
+      matchesHostRecipient(hostDelivery, previous.hostSeat)
+    ) {
+      next = { ...next, hostSeat: previous.hostSeat };
+    }
     suspendedPlayerRevisions = null;
     suspendedNetwork = null;
     if (
       !durableHandoff &&
+      !next.hostSeat &&
+      !next.hostSetupGm &&
       next.formId !== 'APP-003' &&
       next.projection['ordinarySeatView'] === undefined &&
       !next.layers.some((layer) => layer.formId === 'PLY-029')
@@ -11096,7 +12007,17 @@ export function connectProjection(
               networkEditFromProjection(next.formId, next.projection)?.variant)))
     )
       clearNetworkDraft();
-    if (next.layers[0]?.formId === 'PLY-029') {
+    const activeHost =
+      next.hostActive ?? (next.hostSeat?.hostSeatView === 'ACTIVE' ? next.hostSeat : null);
+    if (activeHost) {
+      const v = activeHost;
+      gmLocalContextId = v.target.kind === 'GM' ? v.contextId : null;
+      networkScopeId = v.networkScopeIdOrNull;
+      playerContextId = v.target.kind === 'GM' ? null : v.contextId;
+      // Managed tabs reconnect exclusively with their receipt-bound browser key.
+      storeGmContextTicket(null);
+      networkContextTicket(null);
+    } else if (next.layers[0]?.formId === 'PLY-029') {
       networkScopeId = null;
       networkContextTicket(null);
     } else if (isNetworkApplicationForm(next.formId) || isCampaignOwnerForm(next.formId)) {
@@ -11158,7 +12079,7 @@ export function connectProjection(
         failUnexpected('$.contextId', null, 'GM queue changed the owned ticket.');
         return;
       }
-      storeGmContextTicket(gmLocalContextId);
+      if (!next.hostSeat && hostDelivery === null) storeGmContextTicket(gmLocalContextId);
     } else if (next.formId === 'APP-001') {
       gmLocalContextId = null;
       storeGmContextTicket(null);
@@ -11361,6 +12282,17 @@ export function connectProjection(
     resumedNetworkScopeId: string | null,
   ): void => {
     let expectingCapabilities = true;
+    const hostResumeRevision =
+      hostDelivery === null
+        ? null
+        : Math.max(
+            hostRevision,
+            hostDelivery.kind === 'ACTIVE'
+              ? hostDelivery.revision
+              : hostDelivery.kind === 'ACK'
+                ? hostDelivery.request.expectedRevisions.projectionRevision
+                : 0,
+          );
     socket = activeSocket;
 
     activeSocket.onopen = () => {
@@ -11417,6 +12349,44 @@ export function connectProjection(
         }
         const message = decoded.value;
         if (message.messageType === 'command.result' || message.messageType === 'command.replay') {
+          if (hostTransitionOrChooser()) return;
+          if (
+            hostAckSent &&
+            hostDelivery?.kind === 'ACK' &&
+            message.receipt.commandId === hostDelivery.request.commandId
+          ) {
+            try {
+              if (
+                hostReplayReceiptId !== null &&
+                (message.messageType !== 'command.replay' ||
+                  message.receipt.receiptId !== hostReplayReceiptId)
+              )
+                throw new Error('A recorded handoff must replay its original receipt');
+              setHostDelivery(hostAckReceipt(hostDelivery, message.receipt));
+              hostReplayReceiptId = null;
+              resetHostSocket();
+            } catch {
+              failUnexpected('$.hostSeat.receipt', null, 'Invalid host handoff receipt.');
+            }
+            return;
+          }
+          if (profileCommand && message.receipt.commandId === profileCommand.id) {
+            const rr = message.receipt.result;
+            if (
+              Object.keys(rr).length !== 3 ||
+              rr['targetProfileLabel'] !== profileCommand.label ||
+              rr['receiptId'] !== message.receipt.receiptId ||
+              typeof rr['targetLocalOwnerId'] !== 'string' ||
+              !UUID_PATTERN.test(rr['targetLocalOwnerId']) ||
+              (profileCommand.ownerId !== null &&
+                profileCommand.ownerId !== rr['targetLocalOwnerId'])
+            ) {
+              failUnexpected('$.hostSeat.profile', null, 'Invalid profile creation receipt.');
+              return;
+            }
+            profileCommand.ownerId = rr['targetLocalOwnerId'];
+            return;
+          }
           if (retiredSeatAcks.has(message.receipt.commandId)) return;
           if (
             seatAckSent &&
@@ -11658,6 +12628,21 @@ export function connectProjection(
           return;
         }
         if (message.messageType === 'command.refusal') {
+          if (hostTransitionOrChooser()) return;
+          if (
+            hostAckSent &&
+            hostDelivery?.kind === 'ACK' &&
+            message.commandId === hostDelivery.request.commandId
+          ) {
+            setHostDelivery({ kind: 'NEUTRAL' });
+            resetHostSocket();
+            return;
+          }
+          if (profileCommand?.id === message.commandId && lastSnapshot) {
+            profileCommand = null;
+            onState({ kind: 'command-refusal', refusal: message.refusal, snapshot: lastSnapshot });
+            return;
+          }
           if (retiredSeatAcks.has(message.commandId)) return;
           if (
             seatAckSent &&
@@ -11883,6 +12868,32 @@ export function connectProjection(
           return;
         }
         const message = decoded.value;
+        if (
+          hostDelivery !== null &&
+          lastSnapshot !== null &&
+          ((message.messageType === 'character.identity-draft.result' &&
+            message.draftUpdateId === identity?.state.outstanding?.draftUpdateId) ||
+            (message.messageType === 'network.gm-request-draft.result' &&
+              message.draftUpdateId === pendingGmDraft?.request.draftUpdateId) ||
+            (message.messageType === 'network.draft.result' &&
+              message.draftUpdateId === pendingNetworkDraft?.request.draftUpdateId) ||
+            (message.messageType === 'campaign.draft.result' &&
+              message.draftUpdateId === pendingCampaignDraft?.request.draftUpdateId))
+        ) {
+          if (hostDraftFollowup !== null) {
+            failUnexpected(
+              '$.hostSeat.draft',
+              null,
+              'A managed draft did not receive its confirmed presentation.',
+            );
+            return;
+          }
+          hostDraftFollowup = message.draftUpdateId;
+        }
+        // A safe-boundary transition has no outstanding native v3 edit. A background
+        // response can finish while the host is assigning the neutral curtain.
+        if (hostTransitionOrChooser() && !expectingCapabilities && stagedCapabilities === null)
+          return;
         if (expectingCapabilities || stagedCapabilities !== null) {
           failUnexpected(
             '$.messageType',
@@ -12298,6 +13309,29 @@ export function connectProjection(
         }
         if (message.messageType === 'character.identity-draft.result') {
           if (identity === null || lastSnapshot === null) return;
+          const active = lastSnapshot.hostSeat;
+          if (active?.hostSeatView === 'ACTIVE') {
+            if (identity.state.outstanding?.draftUpdateId !== message.draftUpdateId) return;
+            const scope = message.presentation.base.roleFilteredPayload['identityDraftScope'];
+            if (
+              active.target.kind !== 'CANDIDATE' ||
+              !matchesHostRecipient(hostDelivery, active) ||
+              message.scope.contextId !== active.contextId ||
+              !isJsonObject(scope) ||
+              scope['contextId'] !== message.scope.contextId ||
+              scope['characterDraftId'] !== message.scope.characterDraftId ||
+              scope['sourceFormId'] !== message.scope.sourceFormId ||
+              scope['wizardCheckpointId'] !== message.scope.wizardCheckpointId ||
+              message.presentation.layers.length !== 0
+            ) {
+              failUnexpected(
+                '$.hostSeat.identity',
+                null,
+                'A candidate identity edit belongs to another authenticated draft.',
+              );
+              return;
+            }
+          }
           const candidate = decodeConfirmedSnapshot(
             {
               messageType: 'projection.snapshot',
@@ -12329,7 +13363,16 @@ export function connectProjection(
               (axis) => message.revisions[axis] >= lastSnapshot!.revisions[axis],
             );
           const next = identity.receiveResult(message, draft.values);
-          if (applicable) lastSnapshot = candidate.value;
+          if (applicable) {
+            lastSnapshot =
+              lastSnapshot.hostSeat?.hostSeatView === 'ACTIVE' &&
+              matchesHostRecipient(hostDelivery, lastSnapshot.hostSeat)
+                ? {
+                    ...candidate.value,
+                    hostSeat: lastSnapshot.hostSeat,
+                  }
+                : candidate.value;
+          }
           onIdentityDraft(identity.state);
           onState({
             kind: 'ready',
@@ -12380,6 +13423,30 @@ export function connectProjection(
       }
       const message = decoded.value;
       if (
+        expectingCapabilities &&
+        stagedCapabilities === null &&
+        hostResumeRevision !== null &&
+        message.messageType === 'navigation.form-action.refusal' &&
+        message.navigationRequestId === requestId &&
+        message.refusal.code === 'NAVIGATION_UNAVAILABLE' &&
+        message.revisions.projectionRevision >= hostResumeRevision &&
+        message.revisions.projectionRevision === message.revisions.stateRevision &&
+        message.revisions.projectionRevision === message.revisions.actorVisibilityRevision
+      ) {
+        // A refused RESUME has no capabilities or destination. Keep the grant for
+        // an explicit retry; the refused transport cannot publish another frame.
+        socket = null;
+        resetSeatTransport();
+        activeSocket.close(1000, 'host seat resume unavailable');
+        onState({
+          kind: 'disconnected',
+          code: null,
+          snapshot: null,
+          detail: 'Хост пока не может восстановить локальный контекст.',
+        });
+        return;
+      }
+      if (
         (expectingCapabilities &&
           message.messageType !== 'session.reconnect.capabilities' &&
           !(
@@ -12423,15 +13490,312 @@ export function connectProjection(
       }
       if (message.messageType === 'projection.snapshot') {
         const { base, layers, assignment } = message.presentation;
+        const tagged =
+          Object.hasOwn(base.roleFilteredPayload, 'hostSeatView') ||
+          layers.some((l) => Object.hasOwn(l.roleFilteredPayload, 'hostSeatView'));
         if (
-          base.formId === 'APP-003' ||
-          (base.formId === 'APP-004' &&
-            base.roleFilteredPayload['ordinarySeatView'] === 'LIBRARY') ||
-          layers.some((l) => l.formId === 'PLY-029') ||
-          durableHandoff ||
-          seatNavigation !== null ||
-          seatControl !== null ||
-          seatAckSent
+          hostTransitionOrChooser() &&
+          stagedCapabilities === null &&
+          (assignment.reason === 'COMMAND_DESTINATION' ||
+            assignment.reason === 'ADDRESSABLE_ROUTE' ||
+            (assignment.reason === 'HOST_SYSTEM_EVENT' &&
+              base.roleFilteredPayload['hostSeatView'] !== 'WAITING'))
+        )
+          return;
+        if (tagged || hostIntent !== null || hostDelivery !== null) {
+          const pair = stagedCapabilities;
+          const caps =
+            pair?.executableWorkflowCommandIds ??
+            lastSnapshot?.executableWorkflowCommandIds ??
+            hostCapabilities;
+          const decodedHost = pair
+            ? decodeReconnectSnapshot(message, pair, requestId)
+            : decodeConfirmedSnapshot(message, caps);
+          if (!decodedHost.ok) {
+            failProtocol(decodedHost.refusal, 'Invalid host handoff presentation.');
+            return;
+          }
+          const next = decodedHost.value,
+            v = next.hostSeat;
+          const recipient = next.hostActive ?? (v?.hostSeatView === 'ACTIVE' ? v : null);
+          const nativeSetupGm =
+            !v &&
+            hostDelivery?.kind === 'SETUP' &&
+            message.projectionRole === 'gm' &&
+            typeof next.projection['contextId'] === 'string' &&
+            hostDelivery.gmFingerprint ===
+              reconnectFingerprint([
+                next.projection['campaignId'] ?? null,
+                next.projection['contextId'],
+              ]);
+          if (nativeSetupGm) gmLocalContextId = next.projection['contextId'] as string;
+          if (
+            hostDraftFollowup !== null &&
+            assignment.reason === 'FORM_ACTION' &&
+            assignment.correlationId === hostDraftFollowup
+          ) {
+            const previous = lastSnapshot,
+              old = previous?.hostSeat;
+            const fresh =
+              v?.hostSeatView === 'ACTIVE' &&
+              old?.hostSeatView === 'ACTIVE' &&
+              matchesHostRecipient(hostDelivery, v) &&
+              v.contextId === old.contextId &&
+              v.receiptId === old.receiptId &&
+              v.networkScopeIdOrNull === old.networkScopeIdOrNull &&
+              v.revision >= old.revision;
+            const nativeActions = (keys: readonly ActionKey[]) =>
+              keys.filter(
+                (key) =>
+                  ![
+                    'CMP-008::CTA::001',
+                    'NET-017::CTA::006',
+                    'NET-017::CTA::011',
+                    'NET-003::CTA::004',
+                    'NET-003::CTA::005',
+                    'NET-005::CTA::004',
+                  ].includes(key),
+              );
+            if (
+              pair ||
+              !previous ||
+              !(fresh || nativeSetupGm) ||
+              next.formId !== previous.formId ||
+              next.path !== previous.path ||
+              !sameCampaignRevisions(next.revisions, previous.revisions) ||
+              !sameJson(next.projection, previous.projection) ||
+              reconnectFingerprint(next.layers) !== reconnectFingerprint(previous.layers) ||
+              !sameJson(
+                nativeActions(next.availableActionKeys),
+                nativeActions(previous.availableActionKeys),
+              )
+            ) {
+              failUnexpected(
+                '$.hostSeat.draft',
+                null,
+                'A managed draft changed its native presentation or recipient.',
+              );
+              return;
+            }
+            hostDraftFollowup = null;
+            lastSnapshot = nativeSetupGm ? { ...next, hostSetupGm: true } : next;
+            notifyReady();
+            return;
+          }
+          // ACCEPT promotes this same acknowledged candidate, with the original grant and
+          // the controller validated by the native admitted-copy/PEACE projection.
+          const promoted =
+            v?.hostSeatView === 'ACTIVE' &&
+            v.target.kind === 'PLAYER' &&
+            hostDelivery?.kind === 'ACTIVE' &&
+            (next.formId === 'NET-006' || next.formId === 'PLY-001') &&
+            next.projection['controllerSeat'] === v.target.localControllerSeatId &&
+            v.receiptId === hostDelivery.receiptId &&
+            v.revision >= hostDelivery.revision &&
+            reconnectFingerprint({
+              kind: 'CANDIDATE',
+              targetLocalOwnerId: v.target.targetLocalOwnerId,
+              targetProfileLabel: v.target.targetProfileLabel,
+            }) === hostDelivery.targetFingerprint &&
+            (pair !== null ||
+              (pendingOwnerCommand !== null &&
+                pendingOwnerCommand.receipt !== null &&
+                pendingOwnerCommand.witness.matchesDestination(
+                  next,
+                  pendingOwnerCommand.receipt,
+                  false,
+                )));
+          if (promoted && hostDelivery?.kind === 'ACTIVE' && v?.hostSeatView === 'ACTIVE')
+            setHostDelivery({
+              ...hostDelivery,
+              revision: v.revision,
+              targetFingerprint: reconnectFingerprint(v.target),
+            });
+          const matchedIntent =
+            hostIntent !== null &&
+            assignment.reason === 'FORM_ACTION' &&
+            assignment.correlationId === hostIntent.id &&
+            (hostIntent.destination === v?.hostSeatView ||
+              hostIntent.destination === next.formId) &&
+            (hostIntent.targetFingerprint === undefined ||
+              (v?.hostSeatView === 'CURTAIN' &&
+                reconnectFingerprint(v.target) === hostIntent.targetFingerprint)) &&
+            (hostIntent.profileId === undefined ||
+              (v?.hostSeatView === 'SETUP' &&
+                v.selectedProfileOrNull?.targetLocalOwnerId === hostIntent.profileId)) &&
+            (!hostIntent.finals ||
+              (v?.hostSeatView === 'ADMISSION' &&
+                sameJson(hostIntent.finals, v.selectedSourceUuids)));
+          const profileDone =
+            profileCommand !== null &&
+            profileCommand.ownerId !== null &&
+            assignment.reason === 'COMMAND_DESTINATION' &&
+            assignment.correlationId === profileCommand.id &&
+            v?.hostSeatView === 'SETUP' &&
+            v.profiles.some(
+              (p) =>
+                p.targetLocalOwnerId === profileCommand!.ownerId &&
+                p.targetProfileLabel === profileCommand!.label,
+            );
+          const onSubmit =
+            v?.hostSeatView === 'CURTAIN' &&
+            v.target.kind === 'GM' &&
+            lastSnapshot?.hostSeat?.hostSeatView === 'ACTIVE' &&
+            lastSnapshot.hostSeat.target.kind === 'CANDIDATE' &&
+            matchesHostRecipient(hostDelivery, lastSnapshot.hostSeat) &&
+            pendingNetworkCommand?.request.workflowCommandId === 'UI-CMD-DEVICE-REQUEST-SUBMIT' &&
+            pendingNetworkCommand.receipt !== null &&
+            assignment.reason === 'COMMAND_DESTINATION' &&
+            assignment.correlationId === pendingNetworkCommand.request.commandId;
+          const neutral = v?.hostSeatView === 'WAITING' || v?.hostSeatView === 'CURTAIN';
+          const systemPurge =
+            assignment.reason === 'HOST_SYSTEM_EVENT' &&
+            neutral &&
+            (lastSnapshot !== null || hostDelivery !== null);
+          const resumed =
+            pair !== null &&
+            (hostDelivery !== null ||
+              neutral ||
+              (v?.hostSeatView === 'MANAGE' && gmLocalContextId === v.gmContextId));
+          const nativeRecovery =
+            resumed &&
+            commandPending() &&
+            (nativeSetupGm ||
+              (v?.hostSeatView === 'ACTIVE' &&
+                matchesHostRecipient(hostDelivery, v) &&
+                v.revision >= hostRevision)) &&
+            lastSnapshot === null;
+          const isolateSetup =
+            matchedIntent && v?.hostSeatView === 'SETUP' && lastSnapshot === null;
+          if (nativeRecovery) {
+            if (v?.hostSeatView === 'ACTIVE') {
+              gmLocalContextId = v.target.kind === 'GM' ? v.contextId : null;
+              networkScopeId = v.networkScopeIdOrNull;
+            }
+          } else if (matchedIntent || profileDone || onSubmit || systemPurge || resumed) {
+            if (
+              (v && v.revision < hostRevision) ||
+              (v?.hostSeatView === 'MANAGE' &&
+                ((gmLocalContextId !== v.gmContextId &&
+                  !(
+                    hostDelivery?.kind === 'SETUP' &&
+                    hostDelivery.gmFingerprint ===
+                      reconnectFingerprint([v.campaignId, v.gmContextId])
+                  ) &&
+                  !(next.hostActive && matchesHostRecipient(hostDelivery, next.hostActive))) ||
+                  !(matchedIntent || resumed))) ||
+              (v?.hostSeatView === 'SETUP' && hostDelivery?.kind !== 'SETUP') ||
+              (v?.hostSeatView === 'GM_ONLY' && hostDelivery?.kind !== 'SETUP') ||
+              ((v?.hostSeatView === 'ROSTER' || v?.hostSeatView === 'SWITCH') &&
+                hostDelivery?.kind !== 'ACTIVE' &&
+                hostDelivery?.kind !== 'SETUP') ||
+              (recipient !== null && !matchesHostRecipient(hostDelivery, recipient)) ||
+              (v?.hostSeatView === 'ADMISSION' &&
+                (hostDelivery?.kind !== 'ACTIVE' ||
+                  reconnectFingerprint({ kind: 'CANDIDATE', ...v.profile }) !==
+                    hostDelivery.targetFingerprint)) ||
+              (!v && !nativeSetupGm && (next.formId !== 'CMP-008' || !matchedIntent)) ||
+              (typeof next.projection['deviceId'] === 'string' &&
+                next.projection['deviceId'] !== deviceId)
+            ) {
+              failUnexpected('$.hostSeat', null, 'Host seat recipient, scope or revision changed.');
+              return;
+            }
+            const pendingAck = hostDelivery?.kind === 'ACK' ? hostDelivery : null;
+            if (
+              v?.hostSeatView === 'CURTAIN' &&
+              pendingAck &&
+              v.handoffId === pendingAck.request.payload.handoffId &&
+              (v.signedReturnContext !== pendingAck.request.payload.signedReturnContext ||
+                v.decision !== pendingAck.request.payload.decision ||
+                v.revision !== pendingAck.request.expectedRevisions.projectionRevision ||
+                reconnectFingerprint(v.target) !== pendingAck.targetFingerprint)
+            ) {
+              failUnexpected(
+                '$.hostSeat.handoff',
+                null,
+                'A pending handoff changed its signed recipient or revision.',
+              );
+              return;
+            }
+            if (neutral) {
+              purgeHostScreen();
+              if (!(
+                v?.hostSeatView === 'CURTAIN' &&
+                pendingAck &&
+                pendingAck.request.payload.handoffId === v.handoffId &&
+                pendingAck.request.payload.signedReturnContext === v.signedReturnContext &&
+                pendingAck.request.payload.decision === v.decision &&
+                pendingAck.request.expectedRevisions.projectionRevision === v.revision &&
+                pendingAck.targetFingerprint === reconnectFingerprint(v.target)
+              ))
+                setHostDelivery({ kind: 'NEUTRAL' });
+            } else if (v?.hostSeatView === 'ROSTER' || v?.hostSeatView === 'SWITCH') {
+              // No recipient exists yet. The chooser still belongs to its current acknowledged holder.
+              purgeHostScreen();
+            }
+            if (v) hostRevision = v.revision;
+            hostCapabilities = caps;
+            hostIntent = null;
+            profileCommand = null;
+            stagedCapabilities = null;
+            hostAckSent = false;
+            if ((neutral && !resumed) || isolateSetup) {
+              // Do not let queued native frames or subscriptions from the former principal
+              // compete with the recipient's ACK. RESUME(null) revalidates the addressed curtain.
+              resetHostSocket(neutral);
+              return;
+            }
+            if (resumed && hostDelivery?.kind === 'ACK' && recipient) {
+              // RESUME identifies the current holder. Only the replay of the outstanding
+              // command confirms its exact receipt before a private screen can be published.
+              hostReplayReceiptId = recipient.receiptId;
+            } else {
+              adoptSnapshot(nativeSetupGm ? { ...next, hostSetupGm: true } : next, resumed);
+            }
+            if (
+              resumed &&
+              hostDelivery?.kind === 'ACK' &&
+              (v?.hostSeatView === 'CURTAIN' || hostReplayReceiptId !== null)
+            ) {
+              const encoded = encodeClientMessage(hostDelivery.request, WEB_PROTOCOL_VOCABULARY);
+              if (!encoded.ok) {
+                failUnexpected('$.hostSeat.ack', null, 'Invalid pending handoff.');
+                return;
+              }
+              hostAckSent = true;
+              activeSocket.send(encoded.text);
+            }
+            return;
+          }
+          if (
+            !nativeSetupGm &&
+            (!v ||
+              v.hostSeatView !== 'ACTIVE' ||
+              !matchesHostRecipient(hostDelivery, v) ||
+              v.revision < hostRevision ||
+              hostIntent ||
+              profileCommand ||
+              (pair && !nativeRecovery))
+          ) {
+            failUnexpected(
+              '$.hostSeat',
+              null,
+              'Host seat assignment did not match the pending transition.',
+            );
+            return;
+          }
+        }
+        if (
+          !tagged &&
+          (base.formId === 'APP-003' ||
+            (base.formId === 'APP-004' &&
+              base.roleFilteredPayload['ordinarySeatView'] === 'LIBRARY') ||
+            layers.some((l) => l.formId === 'PLY-029') ||
+            durableHandoff ||
+            seatNavigation !== null ||
+            seatControl !== null ||
+            seatAckSent)
         ) {
           const pair = stagedCapabilities;
           const caps =
@@ -12680,6 +14044,34 @@ export function connectProjection(
             failProtocol(candidate.refusal, 'Invalid current system view.');
             return;
           }
+          const archive = archivedHostSeat(lastSnapshot);
+          if (archive || archivedHostSeat(candidate.value)) {
+            const returnAction = 'NET-007::CTA::005';
+            const actions = new Set(lastSnapshot.availableActionKeys).add(returnAction);
+            if (
+              !archive ||
+              lastSnapshot.formId !== 'NET-007' ||
+              candidate.value.formId !== 'NET-007' ||
+              !sameArchivedResult(lastSnapshot, candidate.value) ||
+              !sameJson([...actions], candidate.value.availableActionKeys) ||
+              message.presentation.assignment.correlationId !==
+                'network-owner-view:' +
+                  reconnectFingerprint([
+                    archive.receiptId,
+                    lastSnapshot.revisions.projectionRevision,
+                    returnAction,
+                  ])
+            ) {
+              failUnexpected(
+                '$.hostSeat.terminalResult',
+                null,
+                'A closed application changed on return to the GM.',
+              );
+              return;
+            }
+            adoptSnapshot(candidate.value, false);
+            return;
+          }
           const gm =
             (lastSnapshot.formId === 'NET-017' ||
               isAdmissionGmForm(lastSnapshot.formId) ||
@@ -12714,6 +14106,32 @@ export function connectProjection(
             return;
           }
           if (pendingOwnerCommand !== null) {
+            // A poll can publish the complete original lobby while Ready is in flight.
+            // That observation settles nothing and must not unlock another command.
+            const source = hostReadySources.get(activeSocket);
+            if (
+              player &&
+              pendingOwnerCommand.request.workflowCommandId === 'UI-CMD-CAMPAIGN-READY-SET' &&
+              pendingOwnerCommand.receipt === null &&
+              source?.commandId === pendingOwnerCommand.request.commandId &&
+              source.presentation === lastSnapshot.hostLobbyPresentationFingerprint &&
+              source.presentation === candidate.value.hostLobbyPresentationFingerprint &&
+              sameNetworkRevisions(
+                candidate.value.revisions,
+                pendingOwnerCommand.request.expectedRevisions,
+              ) &&
+              message.presentation.assignment.correlationId ===
+                'network-owner-view:' +
+                  reconnectFingerprint({
+                    scope: {
+                      ownerDeviceId: deviceId,
+                      networkScopeId: lastSnapshot.projection['networkScopeId'],
+                    },
+                    contextId: pendingOwnerCommand.witness.contextId,
+                    revisions: pendingOwnerCommand.request.expectedRevisions,
+                  })
+            )
+              return;
             if (
               !pendingOwnerCommand.witness.matchesDestination(
                 candidate.value,
@@ -12819,8 +14237,9 @@ export function connectProjection(
               if (
                 scope === null ||
                 !ownGmQueue(snapshot.value) ||
-                lastSnapshot === null ||
-                !gmQueueMonotonic(snapshot.value, lastSnapshot)
+                !(lastSnapshot
+                  ? gmQueueMonotonic(snapshot.value, lastSnapshot)
+                  : gmReconnectMatches(snapshot.value, suspendedGm))
               )
                 throw new Error('NPC replay scope');
               npc.assertReconnectScope(snapshot.value.revisions, scope.contextId, scope.campaignId);
@@ -12834,9 +14253,10 @@ export function connectProjection(
           ) {
             const source = pendingGmCommand?.source ?? pendingGmRefusal?.source ?? lastSnapshot;
             if (
-              source === null ||
               !ownGmQueue(snapshot.value) ||
-              !gmQueueMonotonic(snapshot.value, source) ||
+              !(source
+                ? gmQueueMonotonic(snapshot.value, source)
+                : gmReconnectMatches(snapshot.value, suspendedGm)) ||
               (pendingGmCommand?.receipt !== null &&
                 pendingGmCommand?.receipt !== undefined &&
                 !gmDecisionDestination(
@@ -13306,6 +14726,17 @@ export function connectProjection(
         return;
       }
       if (message.messageType === 'navigation.form-action.refusal') {
+        if (hostIntent?.id === message.navigationRequestId) {
+          hostIntent = null;
+          if (hostDelivery !== null) resetHostSocket();
+          else if (lastSnapshot)
+            onState({
+              kind: 'navigation-refusal',
+              refusal: message.refusal,
+              snapshot: lastSnapshot,
+            });
+          return;
+        }
         if (
           (seatControl?.operation === 'RETURN_LIBRARY' || seatControl?.operation === 'SELECT') &&
           seatControl.requestId === message.navigationRequestId &&
@@ -13466,6 +14897,18 @@ export function connectProjection(
                             ? [pendingRollCommit.request.commandId]
                             : [],
     } as const satisfies SessionReconnectV2Message;
+    const gmSupported = [
+      HOST_SEAT_ACK,
+      HOST_OWNER_PROFILE_CREATE,
+      CAMPAIGN_CREATE_COMMAND_ID,
+      ...ENEMY_AUTHORING_WORKFLOWS,
+      ...NPC_WORKFLOW_COMMAND_IDS,
+      ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
+      ...ADMISSION_GM_WORKFLOW_IDS,
+      ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
+      'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
+      'UI-CMD-CAMPAIGN-START',
+    ] as const;
     const gmResume: CampaignLocalContextResumeV3Message | null =
       gmLocalContextId === null
         ? null
@@ -13475,16 +14918,7 @@ export function connectProjection(
             gmLocalContextId,
             reconnectRequestId: requestId,
             knownRevisions: reconnect.knownRevisions,
-            supportedWorkflowCommandIds: [
-              CAMPAIGN_CREATE_COMMAND_ID,
-              ...ENEMY_AUTHORING_WORKFLOWS,
-              ...NPC_WORKFLOW_COMMAND_IDS,
-              ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
-              ...ADMISSION_GM_WORKFLOW_IDS,
-              ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
-              'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
-              'UI-CMD-CAMPAIGN-START',
-            ],
+            supportedWorkflowCommandIds: gmSupported,
             unacknowledgedCommandIds: reconnect.unacknowledgedCommandIds,
           };
     const networkResume: NetworkLocalContextResumeV3Message | null =
@@ -13500,11 +14934,29 @@ export function connectProjection(
             unacknowledgedCommandIds: reconnect.unacknowledgedCommandIds,
           };
     const encoded =
-      networkResume !== null
-        ? encodeClientMessageV3(networkResume, WEB_PROTOCOL_VOCABULARY)
-        : gmResume === null
-          ? encodeClientMessageV2(reconnect, WEB_PROTOCOL_VOCABULARY)
-          : encodeClientMessageV3(gmResume, WEB_PROTOCOL_VOCABULARY);
+      hostDelivery !== null
+        ? encodeClientMessageV3(
+            {
+              messageType: 'host.seat.control',
+              protocolVersion: 3,
+              operation: 'RESUME',
+              requestId,
+              deliveryKeyOrNull: hostDelivery.kind === 'NEUTRAL' ? null : hostDelivery.key,
+              supportedWorkflowCommandIds: [
+                ...new Set<WorkflowCommandId>([
+                  ...reconnect.supportedWorkflowCommandIds,
+                  ...gmSupported,
+                ]),
+              ],
+              unacknowledgedCommandIds: reconnect.unacknowledgedCommandIds,
+            },
+            WEB_PROTOCOL_VOCABULARY,
+          )
+        : networkResume !== null
+          ? encodeClientMessageV3(networkResume, WEB_PROTOCOL_VOCABULARY)
+          : gmResume === null
+            ? encodeClientMessageV2(reconnect, WEB_PROTOCOL_VOCABULARY)
+            : encodeClientMessageV3(gmResume, WEB_PROTOCOL_VOCABULARY);
     if (!encoded.ok)
       throw new Error(
         `session.reconnect failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
@@ -13542,6 +14994,12 @@ export function connectProjection(
     }
     if (disposed) return;
     deviceId = identity.value;
+    hostDelivery = readHostDelivery();
+    if (hostDelivery !== null) {
+      seatAuthorityKnown = true;
+      openTransport(deviceId);
+      return;
+    }
     const ticket = readGmContextTicket();
     if (ticket !== null && UUID_PATTERN.test(ticket)) gmLocalContextId = ticket;
     else if (ticket !== null) storeGmContextTicket(null);
@@ -13562,6 +15020,9 @@ export function connectProjection(
       terminal ||
       !(
         seatAuthorityKnown ||
+        hostDelivery !== null ||
+        (gmLocalContextId !== null &&
+          lastSnapshot?.executableWorkflowCommandIds.includes(HOST_OWNER_PROFILE_CREATE)) ||
         suspendedPlayerRevisions !== null ||
         (lastSnapshot?.executableWorkflowCommandIds.includes(ORDINARY_SEAT_ACK) &&
           privateOrdinaryPlayerView(lastSnapshot))
@@ -13718,6 +15179,7 @@ export function connectProjection(
   };
   return {
     requestCampaignPeerAction,
+    submitHostSeatInput,
     chooseLocalRole: (role) => {
       if (
         disposed ||
@@ -15664,6 +17126,139 @@ export function connectProjection(
       if (socket === null || socket.readyState !== WebSocket.OPEN) {
         return { ok: false, detail: 'WebSocket is not open' };
       }
+      const managedView = lastSnapshot.hostSeat;
+      if (
+        managedView ||
+        lastSnapshot.hostSetupGm ||
+        actionKey === 'CMP-008::CTA::001' ||
+        actionKey === 'NET-017::CTA::006'
+      ) {
+        const id = createNetworkCommandId();
+        if (!id) return { ok: false, detail: 'Не удалось начать передачу.' };
+        const common = {
+          protocolVersion: 3,
+          messageType: 'host.seat.control',
+          requestId: id,
+          expectedProjectionRevision: lastSnapshot.revisions.projectionRevision,
+        } as const;
+        hostCapabilities = lastSnapshot.executableWorkflowCommandIds;
+        try {
+          if (actionKey === 'CMP-009::CTA::002' && managedView?.hostSeatView === 'MANAGE') {
+            const key = newHostDeliveryKey();
+            setHostDelivery({
+              kind: 'SETUP',
+              key,
+              gmFingerprint: reconnectFingerprint([
+                managedView.campaignId,
+                managedView.gmContextId,
+              ]),
+            });
+            sendHostControl(
+              { ...common, operation: 'ENTER_SETUP', deliveryKey: key },
+              { id, destination: 'SETUP' },
+              true,
+            );
+            return { ok: true };
+          }
+          if (managedView?.hostSeatView === 'CURTAIN' && actionKey !== 'PLY-030::CTA::008') {
+            if (
+              !hostCapabilities.includes(HOST_SEAT_ACK) ||
+              !activeForm.availableActionKeys.includes(actionKey)
+            )
+              throw new Error();
+            const d = hostAckDelivery(managedView, lastSnapshot.revisions, id);
+            const encoded = encodeClientMessage(d.request, WEB_PROTOCOL_VOCABULARY);
+            if (!encoded.ok) throw new Error();
+            setHostDelivery(d);
+            hostAckSent = true;
+            socket.send(encoded.text);
+            notifyReady();
+            return { ok: true };
+          }
+          if (
+            actionKey === 'NET-017::CTA::011' &&
+            ((managedView?.hostSeatView === 'ACTIVE' && managedView.target.kind === 'GM') ||
+              lastSnapshot.hostSetupGm)
+          ) {
+            const p = gmRequestProjection(lastSnapshot.projection),
+              idOrNull = p?.selectedRequestIdOrNull;
+            if (managedView?.hostSeatView === 'ACTIVE' && managedView.applicants !== undefined) {
+              if (!idOrNull) throw new Error();
+              return submitHostSeatInput({ kind: 'SELECT_APPLICANT', id: idOrNull });
+            }
+            if (!idOrNull || !p?.requests.some((r) => r.requestId === idOrNull)) throw new Error();
+            sendHostControl(
+              { ...common, operation: 'SELECT_APPLICANT', selectedRequestId: idOrNull },
+              { id, destination: 'CURTAIN' },
+              true,
+            );
+            return { ok: true };
+          }
+          const destinations: Partial<Record<ActionKey, string>> = {
+            'CMP-008::CTA::001': 'MANAGE',
+            'NET-017::CTA::006': 'MANAGE',
+            'NET-003::CTA::004': 'ADMISSION',
+            'CMP-009::CTA::001': 'CMP-008',
+            'APP-003::CTA::004': 'GM_ONLY',
+            'APP-003::CTA::005': 'MANAGE',
+            'APP-003::CTA::010': 'CURTAIN',
+            'PLY-030::CTA::008': 'CURTAIN',
+            'PLY-027::CTA::001': 'MANAGE',
+            'APP-003::CTA::013': 'CURTAIN',
+            'APP-003::CTA::001': 'APP-004',
+            'APP-004::CTA::002': 'ADMISSION',
+            'APP-003::CTA::009': 'NET-003',
+            'APP-003::CTA::014': 'CURTAIN',
+            'NET-003::CTA::005': 'CURTAIN',
+            'NET-005::CTA::004': 'CURTAIN',
+            'NET-006::CTA::005': 'CURTAIN',
+            'NET-007::CTA::005': 'CURTAIN',
+            'GM-001::CTA::012': 'SWITCH',
+            'PLY-001::CTA::015': 'SWITCH',
+            'PLY-027::CTA::004': 'ROSTER',
+            'PLY-028::CTA::001': 'SWITCH',
+            'PLY-028::CTA::002': 'CURTAIN',
+          };
+          const destination = destinations[actionKey];
+          if (actionKey === 'NET-016::CTA::006')
+            return { ok: false, detail: 'Выберите допущенное место для передачи.' };
+          if (destination) {
+            const target =
+              actionKey === 'APP-003::CTA::013' &&
+              managedView?.hostSeatView === 'SETUP' &&
+              managedView.selectedProfileOrNull
+                ? { kind: 'CANDIDATE', ...managedView.selectedProfileOrNull }
+                : destination === 'CURTAIN'
+                  ? { kind: 'GM' }
+                  : undefined;
+            const encoded = encodeClientMessageV2(
+              {
+                protocolVersion: 2,
+                messageType: 'navigation.form-action',
+                navigationRequestId: id,
+                sourceFormId: activeForm.formId,
+                actionKey,
+                expectedProjectionRevision: lastSnapshot.revisions.projectionRevision,
+              },
+              WEB_PROTOCOL_VOCABULARY,
+            );
+            if (!encoded.ok) throw new Error();
+            hostIntent = {
+              id,
+              destination,
+              ...(target ? { targetFingerprint: reconnectFingerprint(target) } : {}),
+            };
+            if (destination === 'CURTAIN' || destination === 'ROSTER' || destination === 'SWITCH') {
+              purgeHostScreen();
+            }
+            socket.send(encoded.text);
+            notifyReady();
+            return { ok: true };
+          }
+        } catch {
+          return { ok: false, detail: 'Передача недоступна. Проверьте соединение с хостом.' };
+        }
+      }
       if (actionKey === 'PLY-027::CTA::003')
         return { ok: false, detail: 'Выберите место для передачи.' };
       if (actionKey === 'PLY-030::CTA::001') {
@@ -15839,6 +17434,11 @@ export function connectProjection(
         }
         const encoded = encodeClientMessage(request, WEB_PROTOCOL_VOCABULARY);
         if (!encoded.ok) return { ok: false, detail: 'Ready intention failed encoding' };
+        if (lastSnapshot.hostLobbyPresentationFingerprint !== undefined)
+          hostReadySources.set(socket, {
+            commandId: request.commandId,
+            presentation: lastSnapshot.hostLobbyPresentationFingerprint,
+          });
         pendingOwnerCommand = {
           request,
           witness: ownerCommandWitness(lastSnapshot, request),
@@ -16398,10 +17998,22 @@ export function connectProjection(
         };
         return sendManualRequest(request);
       }
-      if (activeForm.formId === 'CHR-014' && actionKey === CHR_014_ADD_ACTION_KEY) {
-        let payload: SkillSelectionCheckpointPayload;
+      if (
+        (activeForm.formId === 'CHR-014' && actionKey === CHR_014_ADD_ACTION_KEY) ||
+        (activeForm.formId === 'CHR-012' && actionKey === 'CHR-012::CTA::001')
+      ) {
+        let payload: SkillSelectionCheckpointPayload | SkillEligibilityCheckpointPayload;
         try {
-          payload = skillCardCheckpointPayload(lastSnapshot, skillCardDraft);
+          if (activeForm.formId === 'CHR-012') {
+            const p = lastSnapshot.projection as Chr012Projection;
+            payload = {
+              sourceFormId: 'CHR-012',
+              stage: 'SKILLS',
+              characterDraftId: p.characterDraftId,
+              wizardCheckpointId: p.wizardCheckpointId,
+              draftRevision: p.draftRevision,
+            };
+          } else payload = skillCardCheckpointPayload(lastSnapshot, skillCardDraft);
         } catch (error: unknown) {
           return { ok: false, detail: diagnostic(error) };
         }
