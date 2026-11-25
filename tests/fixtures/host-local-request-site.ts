@@ -534,33 +534,37 @@ export async function submitPreparedHostLocalRequestSite(
       requestOrNull: request,
     });
   }
-  async function decidePublication(decision: 'ACCEPT' | 'DECLINE') {
+  async function decidePublication(decision: 'ACCEPT' | 'DECLINE', diagnosticPhase?: string) {
+    const measured = <T>(name: string, operation: () => Promise<T>): Promise<T> =>
+      diagnosticPhase ? net.measure(diagnosticPhase + '.' + name, operation) : operation();
     const key = addressApplicant().key,
       control = coordinator();
-    const received = await control.resume(key),
+    const received = await measured('open-proposal', () => control.resume(key)),
       payload = received.presentation.base.roleFilteredPayload;
     expect(received.presentation.base.formId).toBe('NET-027');
     const commandId = randomUUID();
-    await p.send({
-      messageType: 'command.request',
-      protocolVersion: 1,
-      commandKind: 'workflow-command',
-      workflowCommandId: 'UI-CMD-ADMISSION-PLAYER-DECIDE',
-      role: 'player',
-      commandId,
-      expectedRevisions: received.revisions,
-      payload: {
-        contextId: p.c.contextId!,
-        networkScopeId,
-        campaignId: h.campaignId,
-        requestId: batch.requestId,
-        admissionBatchId: payload['admissionBatchId']!,
-        proposalRevision: payload['proposalRevision']!,
-        proposalChecksum: payload['proposalChecksum']!,
-        expectedCampaignRevision: payload['campaignRevisionOrNull']!,
-        decision,
-      },
-    });
+    await measured('owner-decision', () =>
+      p.send({
+        messageType: 'command.request',
+        protocolVersion: 1,
+        commandKind: 'workflow-command',
+        workflowCommandId: 'UI-CMD-ADMISSION-PLAYER-DECIDE',
+        role: 'player',
+        commandId,
+        expectedRevisions: received.revisions,
+        payload: {
+          contextId: p.c.contextId!,
+          networkScopeId,
+          campaignId: h.campaignId,
+          requestId: batch.requestId,
+          admissionBatchId: payload['admissionBatchId']!,
+          proposalRevision: payload['proposalRevision']!,
+          proposalChecksum: payload['proposalChecksum']!,
+          expectedCampaignRevision: payload['campaignRevisionOrNull']!,
+          decision,
+        },
+      }),
+    );
     const first = p.sent[0];
     const reason =
       first?.messageType === 'protocol.refusal'
@@ -572,9 +576,9 @@ export async function submitPreparedHostLocalRequestSite(
       messageType: 'command.result',
       receipt: { commandId },
     });
-    expect((await control.resume(key)).presentation.base.formId).toBe(
-      decision === 'ACCEPT' ? 'NET-006' : 'NET-007',
-    );
+    expect(
+      (await measured('authenticated-resume', () => control.resume(key))).presentation.base.formId,
+    ).toBe(decision === 'ACCEPT' ? 'NET-006' : 'NET-007');
     expect(state().active?.kind).toBe(decision === 'ACCEPT' ? 'PLAYER' : 'CANDIDATE');
     return { key, control };
   }
@@ -593,7 +597,10 @@ export async function submitPreparedHostLocalRequestSite(
     gmDelivery,
     batch,
     networkScopeId,
-    acceptPublication: () => decidePublication('ACCEPT'),
+    acceptPublication: (phase?: string) =>
+      phase
+        ? net.measure(phase, () => decidePublication('ACCEPT', phase))
+        : decidePublication('ACCEPT'),
     declinePublication: () => decidePublication('DECLINE'),
   };
 }

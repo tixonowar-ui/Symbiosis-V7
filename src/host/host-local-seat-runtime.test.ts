@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { openPersistenceDatabase } from '../persistence/database.js';
 import type { ActionKey, FormId } from '@generated/types/atlas.js';
 import {
   hostLocalNetworkFixture as net,
@@ -723,6 +724,68 @@ describe('two pending host-local applicants on the same installation', () => {
     p: first.p,
     requestId: first.batch.requestId,
   }));
+  it('rejects a stale promotion after a signed GM handoff supersedes the addressed candidate', async () => {
+    const storage = await import('../persistence/host-local-seat.js');
+    const commit = storage.promoteHostLocalSeat;
+    const other = openPersistenceDatabase(first.p.path);
+    const handoffCommand = randomUUID();
+    let rejectedStale = false;
+    // Interpose only between target selection and the real SQLite transaction.
+    const promotion = vi
+      .spyOn(storage, 'promoteHostLocalSeat')
+      .mockImplementationOnce((db, device, command, guard) => {
+        const prior = first.state();
+        expect(prior.active).toMatchObject({
+          kind: 'CANDIDATE',
+          networkScopeIdOrNull: first.networkScopeId,
+          profile: first.profile,
+        });
+        expect(command.target.networkScopeId).toBe(first.networkScopeId);
+        const wrongReceipt = { ...command.target, admissionReceiptId: randomUUID() };
+        expect(() => commit(db, device, { ...command, target: wrongReceipt }, guard)).toThrow(
+          expect.objectContaining({ code: 'FOREIGN_OWNER' }),
+        );
+        expect(first.state()).toEqual(prior);
+        storage.beginHostLocalSeatHandoff(
+          other,
+          device,
+          {
+            commandId: handoffCommand,
+            expectedRevision: prior.revision,
+            activeProof: prior.activeProof,
+            target: { kind: 'GM', origin: first.origin, destinationFormId: 'NET-017' },
+          },
+          () => undefined,
+        );
+        try {
+          return commit(db, device, command, guard);
+        } catch (error) {
+          expect(error).toMatchObject({ code: 'STALE_REVISION' });
+          rejectedStale = true;
+          throw error;
+        }
+      });
+    try {
+      await expect(first.acceptPublication()).rejects.toThrow('NAVIGATION_UNAVAILABLE');
+      expect(promotion).toHaveBeenCalledOnce();
+      expect(rejectedStale).toBe(true);
+      const command = promotion.mock.calls[0]![2];
+      expect(first.state()).toMatchObject({
+        revision: command.expectedRevision + 1,
+        active: null,
+        activeProof: null,
+        pending: { target: { kind: 'GM', origin: first.origin, destinationFormId: 'NET-017' } },
+      });
+      const event = other.prepare<[string]>(
+        'SELECT 1 FROM local_seat_handoff_event WHERE command_id=?',
+      );
+      expect(event.get(handoffCommand)).toBeDefined();
+      expect(event.get(command.commandId)).toBeUndefined();
+    } finally {
+      promotion.mockRestore();
+      other.close();
+    }
+  }, 60_000);
   it('accepts the addressed earlier request after reopen while the physical pointer still belongs to the second applicant', async () => {
     expect(readActiveLocalNetworkTab(first.p.db, first.device)?.networkScopeId).toBe(
       second.networkScopeId,

@@ -222,7 +222,7 @@ describe.each([
     let ownerControl: ReturnType<typeof site.coordinator>;
     const owner = () => ownerControl.resume(rootKey);
     beforeEach(async () => {
-      const accepted = await site.acceptPublication();
+      const accepted = await site.acceptPublication('mixed-start.accept');
       rootKey = accepted.key;
       ownerControl = accepted.control;
       expect(
@@ -483,83 +483,119 @@ describe.each([
       }).key;
       expect(readHostLocalRoster(p.db, site.device, h.campaignId)).toEqual(roster);
     }, 30_000);
+    // All three fault paths share this budget. The closed channel also requires recovery of the original SUBMIT receipt.
     it('retains the blocked local seat in NET-006 and recovers the addressed first PEACE only after losing the original read channel', async () => {
-      const { p, device, networkScopeId, h } = site;
-      const root = { ownerDeviceId: device, networkScopeId };
-      const submit = readLocalNetworkRequestDeliverySnapshot(p.db, root).outbox;
-      if (submit?.intent.operation !== 'SUBMIT') throw Error('Missing signed original SUBMIT');
-      const endpoint = readLocalCampaignConnection(p.db, root).lastAuthenticatedEndpoint;
-      const peer = p.peerForTest;
-      const read = peer.checkLobbyObservation.bind(peer);
-      for (const fault of ['CLOSED', 'WRONG_SEAT', 'REVOKED'] as const) {
-        const control = site.coordinator();
-        const send = vi.spyOn(control.socket, 'send');
-        const trust = vi.spyOn(control.socket, 'trusted');
-        const pinned = await peer.reconnect(root, endpoint, h.campaignId);
-        expect(await peer.recover(root, submit)).toMatchObject({
+      await net.measure('mixed-start.recovery-all', async () => {
+        const { p, device, networkScopeId, h } = site;
+        const root = { ownerDeviceId: device, networkScopeId };
+        const submit = readLocalNetworkRequestDeliverySnapshot(p.db, root).outbox;
+        if (submit?.intent.operation !== 'SUBMIT') throw Error('Missing signed original SUBMIT');
+        const endpoint = readLocalCampaignConnection(p.db, root).lastAuthenticatedEndpoint;
+        const peer = p.peerForTest;
+        const read = peer.checkLobbyObservation.bind(peer);
+        const originalAck = {
           outcome: 'ACK',
+          operation: 'DEVICE_REQUEST_RECOVER',
           receipt: { commandId: submit.intent.commandId },
-        });
-        const before = p.reconnectCount();
-        const check = vi.spyOn(peer, 'checkLobbyObservation').mockImplementationOnce((...args) => {
-          expect(peer.current(networkScopeId)).toBe(pinned);
-          if (fault === 'WRONG_SEAT') return read(args[0], randomUUID(), args[2], args[3]);
-          pinned.close();
-          if (fault === 'REVOKED') trust.mockReturnValue(false);
-          return read(...args);
-        });
-        try {
-          const id = randomUUID();
-          expect(
-            await control.runtime.handle(control.socket, {
-              messageType: 'host.seat.control',
-              protocolVersion: 3,
-              requestId: id,
-              operation: 'RESUME',
-              deliveryKeyOrNull: activeKey,
-              supportedWorkflowCommandIds: [HOST_SEAT_ACK],
-              unacknowledgedCommandIds: [],
-            }),
-          ).toBe(true);
-          const frames = send.mock.calls.map(([frame]) => frame);
-          if (fault === 'CLOSED') {
-            expect(frames.map((frame) => frame.messageType)).toEqual([
-              'session.reconnect.capabilities',
-              'projection.snapshot',
-            ]);
-            const view = control.view();
-            expect(view.presentation.base.formId).toBe('PLY-001');
-            expect(view.presentation.assignment).toEqual({
-              reason: 'RECONNECT',
-              correlationId: id,
-            });
-            expect(view.presentation.layers.at(-1)?.roleFilteredPayload).toMatchObject({
-              receiptId: site.state().activeReceiptIdOrNull,
-              target: { kind: 'PLAYER' },
-            });
-            expect(check).toHaveBeenCalledTimes(2);
-            expect(p.reconnectCount() - before).toBe(1);
-            expect(frames[0]).toMatchObject({ reconnectRequestId: id, revisions: view.revisions });
-          } else {
-            expect(check).toHaveBeenCalledTimes(1);
-            expect(p.reconnectCount()).toBe(before);
-            expect(pinned.closed).toBe(fault === 'REVOKED');
-            expect(frames).toMatchObject([
-              {
-                messageType: 'navigation.form-action.refusal',
-                navigationRequestId: id,
-                refusal: { code: 'NAVIGATION_UNAVAILABLE' },
-              },
-            ]);
-          }
-        } finally {
-          p.runtimeForTest.disconnect(p.c);
-          check.mockRestore();
-          trust.mockRestore();
-          send.mockRestore();
+        };
+        let authenticated: ReturnType<typeof peer.current> = null;
+        for (const fault of ['CLOSED', 'WRONG_SEAT', 'REVOKED'] as const) {
+          const phase = 'mixed-start.recovery.' + fault;
+          await net.measure(phase, async () => {
+            const control = site.coordinator();
+            const send = vi.spyOn(control.socket, 'send');
+            const trust = vi.spyOn(control.socket, 'trusted');
+            if (authenticated === null || peer.current(networkScopeId) !== authenticated) {
+              authenticated = await net.measure(phase + '.reconnect', () =>
+                peer.reconnect(root, endpoint, h.campaignId),
+              );
+              expect(
+                await net.measure(phase + '.recover-submit', () => peer.recover(root, submit)),
+              ).toMatchObject(originalAck);
+            } else {
+              const confirmed = authenticated;
+              await net.measure(phase + '.reuse', () => {
+                expect(peer.current(networkScopeId)).toBe(confirmed);
+              });
+            }
+            const pinned = authenticated;
+            const responsesBefore = p.responses.length;
+            const before = p.reconnectCount();
+            const check = vi
+              .spyOn(peer, 'checkLobbyObservation')
+              .mockImplementationOnce((...args) => {
+                expect(peer.current(networkScopeId)).toBe(pinned);
+                if (fault === 'WRONG_SEAT') return read(args[0], randomUUID(), args[2], args[3]);
+                pinned.close();
+                if (fault === 'REVOKED') trust.mockReturnValue(false);
+                return read(...args);
+              });
+            try {
+              const id = randomUUID();
+              expect(
+                await net.measure(phase + '.addressed-resume', () =>
+                  control.runtime.handle(control.socket, {
+                    messageType: 'host.seat.control',
+                    protocolVersion: 3,
+                    requestId: id,
+                    operation: 'RESUME',
+                    deliveryKeyOrNull: activeKey,
+                    supportedWorkflowCommandIds: [HOST_SEAT_ACK],
+                    unacknowledgedCommandIds: [],
+                  }),
+                ),
+              ).toBe(true);
+              const frames = send.mock.calls.map(([frame]) => frame);
+              if (fault === 'CLOSED') {
+                expect(frames.map((frame) => frame.messageType)).toEqual([
+                  'session.reconnect.capabilities',
+                  'projection.snapshot',
+                ]);
+                const view = control.view();
+                expect(view.presentation.base.formId).toBe('PLY-001');
+                expect(view.presentation.assignment).toEqual({
+                  reason: 'RECONNECT',
+                  correlationId: id,
+                });
+                expect(view.presentation.layers.at(-1)?.roleFilteredPayload).toMatchObject({
+                  receiptId: site.state().activeReceiptIdOrNull,
+                  target: { kind: 'PLAYER' },
+                });
+                expect(check).toHaveBeenCalledTimes(2);
+                expect(p.reconnectCount() - before).toBe(1);
+                expect(
+                  p.responses
+                    .slice(responsesBefore)
+                    .find((response) => response.operation === 'DEVICE_REQUEST_RECOVER'),
+                ).toMatchObject(originalAck);
+                // The remaining faults start on the channel that proved this very SUBMIT.
+                authenticated = peer.current(networkScopeId);
+                expect(frames[0]).toMatchObject({
+                  reconnectRequestId: id,
+                  revisions: view.revisions,
+                });
+              } else {
+                expect(check).toHaveBeenCalledTimes(1);
+                expect(p.reconnectCount()).toBe(before);
+                expect(pinned.closed).toBe(fault === 'REVOKED');
+                expect(frames).toMatchObject([
+                  {
+                    messageType: 'navigation.form-action.refusal',
+                    navigationRequestId: id,
+                    refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+                  },
+                ]);
+              }
+            } finally {
+              p.runtimeForTest.disconnect(p.c);
+              check.mockRestore();
+              trust.mockRestore();
+              send.mockRestore();
+            }
+          });
         }
-      }
-    }, 30_000);
+      });
+    }, 45_000);
   }
 });
 
@@ -669,8 +705,9 @@ describe('three host-local seats on one physical installation', () => {
   }, 60_000);
   review('MIXED', () => first);
   beforeEach(async () => {
-    admitted = await first.acceptPublication();
-  }, 30_000);
+    // Both owners go through a proposal read, a signed decision and a separate lobby resume.
+    admitted = await first.acceptPublication('three-seats.accept-first');
+  }, 60_000);
   beforeEach(async () => {
     await admitted.control.navigate('NET-006', 'NET-006::CTA::005');
     const returned = await admitted.control.acceptGmReturn();
@@ -689,7 +726,7 @@ describe('three host-local seats on one physical installation', () => {
     ]);
     // This includes the authenticated proposal read, decision and lobby reopen
     // after the first two controllers have already populated the shared database.
-    admitted = await second.acceptPublication();
+    admitted = await second.acceptPublication('three-seats.accept-second');
   }, 60_000);
   it('binds two separate owner admissions and all three controller seats to their exact FINALs', async () => {
     const ordered = readHostLocalRoster(second.p.db, second.device, second.origin.campaignId);

@@ -243,15 +243,18 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
       },
     );
   }
-  function player(
-    s: HostLocalSeatHandoff,
-    origin: HostSeatOrigin,
-    seatId: string,
-  ): Extract<HostLocalSeatTarget, { kind: 'PLAYER' }> {
+  function player(s: HostLocalSeatHandoff, origin: HostSeatOrigin, seatId: string) {
     const row =
       readHostLocalRoster(db, owner(), origin.campaignId).find(
         (r) => r.binding.localControllerSeatId === seatId,
       ) ?? denied();
+    return playerFromRosterRow(s, origin, row);
+  }
+  function playerFromRosterRow(
+    s: HostLocalSeatHandoff,
+    origin: HostSeatOrigin,
+    row: ReturnType<typeof readHostLocalRoster>[number],
+  ): Extract<HostLocalSeatTarget, { kind: 'PLAYER' }> {
     const profile = s.profiles.find((p) => p.targetLocalOwnerId === row.profileOwnerId) ?? denied();
     const scope = { ownerDeviceId: owner(), networkScopeId: row.binding.networkScopeId };
     d.network.hostScopeIdle(scope);
@@ -264,7 +267,7 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
       origin,
       profile,
       networkScopeId: scope.networkScopeId,
-      localControllerSeatId: seatId,
+      localControllerSeatId: row.binding.localControllerSeatId,
       admissionReceiptId: row.binding.admissionReceiptId,
       destinationFormId: scene === null ? 'NET-006' : 'PLY-001',
       sceneIdOrNull: scene,
@@ -654,7 +657,7 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
         r.profileOwnerId === t.profile.targetLocalOwnerId,
     );
     if (!row) return denied();
-    const target = player(s, t.origin, row.binding.localControllerSeatId);
+    const target = playerFromRosterRow(s, t.origin, row);
     promoteHostLocalSeat(
       db,
       owner(),
