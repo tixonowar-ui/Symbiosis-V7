@@ -379,6 +379,32 @@ export async function createNetworkBrowserScenario(browser: Browser, finalCount:
   }
 }
 
+export async function createHostLocalBrowserScenario(browser: Browser, finalCount: number) {
+  const resources: (() => Promise<unknown>)[] = [];
+  try {
+    const host = await createNetworkBrowserProcess(finalCount);
+    resources.unshift(() => host.close());
+    const openPage = async () => {
+      const context = await browser.newContext();
+      resources.unshift(() => context.close());
+      const page = await context.newPage();
+      page.setDefaultTimeout(host.operationTimeoutMs);
+      return page;
+    };
+    const master = await openPage();
+    const participant = await openPage();
+    return {
+      host,
+      master,
+      participant,
+      close: (originalError?: unknown) => disposeNetworkResources(resources, originalError),
+    };
+  } catch (error) {
+    await disposeNetworkResources(resources, error);
+    throw error;
+  }
+}
+
 export function safeNetworkInspection(
   process: Awaited<ReturnType<typeof createNetworkBrowserProcess>>,
 ) {

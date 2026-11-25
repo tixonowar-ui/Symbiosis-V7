@@ -2106,6 +2106,25 @@ export type ConfirmedProjectionSnapshot = (
   readonly hostLobbyPresentationFingerprint?: string;
 };
 
+export function campaignPeerScope(snapshot: ConfirmedProjectionSnapshot | null) {
+  if (
+    snapshot === null ||
+    (snapshot.hostSeat?.hostSeatView === 'ACTIVE' && snapshot.hostSeat.terminalResultReadOnly) ||
+    !(snapshot.formId === 'NET-005' || isCampaignOwnerForm(snapshot.formId))
+  )
+    return null;
+  const p = snapshot.projection;
+  const contextId = p['contextId'];
+  const networkScopeId = p['networkScopeId'];
+  if (
+    typeof contextId !== 'string' ||
+    typeof networkScopeId !== 'string' ||
+    (typeof p['requestId'] !== 'string' && typeof p['requestIdOrNull'] !== 'string')
+  )
+    return null;
+  return { contextId, networkScopeId };
+}
+
 interface ConfirmedAbandonmentLayer {
   readonly availableActionKeys: readonly ActionKey[];
   readonly formId: 'CHR-028';
@@ -4617,7 +4636,11 @@ function decodeConfirmedSnapshot(
     (base.formId === 'NET-017' && base.availableActionKeys.includes('NET-017::CTA::006'));
   if (!baseManaged && hostLayers.length === 0 && !entry) return decodeNativeSnapshot(message, caps);
   try {
-    if (!caps.includes(HOST_SEAT_ACK) || hostLayers.length > 1)
+    // Only an unlayered base can carry the public WAITING view checked below.
+    if (
+      hostLayers.length > 1 ||
+      (!caps.includes(HOST_SEAT_ACK) && (!baseManaged || layers.length !== 0))
+    )
       throw new Error('Invalid host context');
     const layer = hostLayers[0];
     const view = layer
@@ -4804,6 +4827,13 @@ function decodeConfirmedSnapshot(
       active,
     );
     if (!native.ok) return native;
+    const gmScope = gmQueueScope(native.value);
+    if (
+      active &&
+      gmScope &&
+      (active.target.kind !== 'GM' || active.contextId !== gmScope.contextId)
+    )
+      throw new Error('The acknowledged GM and native campaign context differ');
     if (active && base.formId === 'APP-004') {
       if (
         active.target.kind !== 'CANDIDATE' ||
@@ -6590,6 +6620,49 @@ function finalizationReceiptSource(snapshot: ConfirmedProjectionSnapshot) {
 function archivedHostSeat(snapshot: ConfirmedProjectionSnapshot): ActiveHostSeat | undefined {
   const grant = snapshot.hostSeat;
   return grant?.hostSeatView === 'ACTIVE' && grant.terminalResultReadOnly ? grant : undefined;
+}
+
+function idleHostOwnerWitness(snapshot: ConfirmedProjectionSnapshot, grant: ActiveHostSeat) {
+  if (grant.terminalResultReadOnly)
+    return {
+      kind: 'ARCHIVE' as const,
+      fingerprint: reconnectFingerprint([grant, snapshot.revisions, snapshot.projection]),
+    };
+  if (grant.target.kind !== 'PLAYER' || !isCampaignOwnerProjection(snapshot.projection))
+    return null;
+  return {
+    kind: 'PLAYER' as const,
+    holder: reconnectFingerprint([
+      grant.receiptId,
+      grant.target,
+      grant.contextId,
+      grant.networkScopeIdOrNull,
+    ]),
+    acceptsOwner: ownerReconnectCheck(snapshot),
+  };
+}
+
+function acceptsIdleHostOwner(
+  witness: NonNullable<ReturnType<typeof idleHostOwnerWitness>>,
+  next: ConfirmedProjectionSnapshot,
+  grant: ActiveHostSeat,
+): boolean {
+  if (witness.kind === 'ARCHIVE')
+    return (
+      grant.terminalResultReadOnly === true &&
+      witness.fingerprint === reconnectFingerprint([grant, next.revisions, next.projection])
+    );
+  return (
+    grant.target.kind === 'PLAYER' &&
+    witness.holder ===
+      reconnectFingerprint([
+        grant.receiptId,
+        grant.target,
+        grant.contextId,
+        grant.networkScopeIdOrNull,
+      ]) &&
+    witness.acceptsOwner(next)
+  );
 }
 
 function sameArchivedResult(
@@ -10644,6 +10717,8 @@ export function connectProjection(
   };
   let seatDelivery = readSeatDelivery();
   let hostDelivery: HostDelivery | null = null;
+  let recoveringSetupSource: Extract<HostDelivery, { kind: 'SETUP' }> | null = null;
+  let newSetupProbeRefused = false;
   let hostRevision = -1;
   let hostCapabilities: readonly WorkflowCommandId[] = [];
   let hostIntent: {
@@ -10657,7 +10732,7 @@ export function connectProjection(
   let hostAckSent = false;
   let hostReplayReceiptId: string | null = null;
   let hostDraftFollowup: string | null = null;
-  const setHostDelivery = (d: HostDelivery) => {
+  const setHostDelivery = (d: HostDelivery | null) => {
     writeHostDelivery(d);
     hostDelivery = d;
   };
@@ -10672,6 +10747,7 @@ export function connectProjection(
   let seatAuthorityKnown = seatDelivery !== null;
   let suspendedPlayerRevisions: RevisionVector | null = null;
   let suspendedNetwork: ReturnType<typeof networkReconnectWitness> | null = null;
+  let suspendedHostOwner: ReturnType<typeof idleHostOwnerWitness> = null;
   let suspendedGm: ReturnType<typeof gmReconnectSource> | null = null;
   let suspendedPage = false;
   let seatRevision = -1;
@@ -10730,15 +10806,8 @@ export function connectProjection(
       socket?.readyState !== WebSocket.OPEN
     )
       return;
-    const p = lastSnapshot.projection;
-    if (
-      (lastSnapshot.hostSeat?.hostSeatView === 'ACTIVE' &&
-        lastSnapshot.hostSeat.terminalResultReadOnly) ||
-      !(lastSnapshot.formId === 'NET-005' || isCampaignOwnerForm(lastSnapshot.formId)) ||
-      typeof p['networkScopeId'] !== 'string' ||
-      typeof p['contextId'] !== 'string' ||
-      (typeof p['requestId'] !== 'string' && typeof p['requestIdOrNull'] !== 'string')
-    ) {
+    const scope = campaignPeerScope(lastSnapshot);
+    if (scope === null) {
       if (peerSubscription !== null)
         retiredPeerSubscriptions.set(peerSubscription.requestId, peerSubscription);
       peerSubscription = null;
@@ -10749,8 +10818,8 @@ export function connectProjection(
       return;
     }
     if (
-      peerSubscription?.contextId === p['contextId'] &&
-      peerSubscription.networkScopeId === p['networkScopeId']
+      peerSubscription?.contextId === scope.contextId &&
+      peerSubscription.networkScopeId === scope.networkScopeId
     )
       return;
     const requestId = createNetworkCommandId();
@@ -10759,8 +10828,8 @@ export function connectProjection(
       messageType: 'network.peer-control',
       protocolVersion: 3,
       requestId,
-      contextId: p['contextId'],
-      networkScopeId: p['networkScopeId'],
+      contextId: scope.contextId,
+      networkScopeId: scope.networkScopeId,
       expectedRevisions: lastSnapshot.revisions,
       operation: 'WATCH',
       expectedConnectionRevision: null,
@@ -11382,6 +11451,7 @@ export function connectProjection(
     publishNetworkDraft();
   };
   const purgeHostScreen = () => {
+    suspendedHostOwner = null;
     suspendedGm = null;
     hostReplayReceiptId = null;
     hostDraftFollowup = null;
@@ -11428,6 +11498,35 @@ export function connectProjection(
     if (!presentationPurged) purgeHostScreen();
     old?.close(1000, 'host handoff');
     if (deviceId !== null && !disposed && !terminal) openTransport(deviceId);
+  };
+  const observeSetupRevision = (
+    pending: Extract<HostDelivery, { kind: 'SETUP' }>,
+    revision: number,
+  ) => {
+    // The host-seat journal and a native campaign projection have independent revision vectors.
+    // A later probe may confirm the same journal revision observed by an earlier refusal.
+    hostRevision = Math.max(hostRevision, pending.revision ?? 0, revision);
+    const observed = {
+      ...pending,
+      sourceRevision: pending.sourceRevision ?? pending.revision ?? 0,
+      revision: hostRevision,
+    };
+    writeHostDelivery(observed);
+    return observed;
+  };
+  const probePreviousSetupOwner = (refused: boolean, revision: number): boolean => {
+    if (hostDelivery?.kind !== 'SETUP' || !hostDelivery.previous || recoveringSetupSource)
+      return false;
+    const previous = hostDelivery.previous;
+    // Only the new key can establish whether ENTER_SETUP committed. If it cannot
+    // open SETUP, ask the host about the old owner on a fresh, still blank socket.
+    recoveringSetupSource = observeSetupRevision(hostDelivery, revision);
+    newSetupProbeRefused = refused;
+    purgeHostScreen();
+    hostDelivery = previous.kind === 'BOOTSTRAP' ? null : previous;
+    if (previous.kind === 'BOOTSTRAP') gmLocalContextId = previous.gmContextId;
+    resetHostSocket(true);
+    return true;
   };
   const sendHostControl = (
     request: HostSeatControlV3Message,
@@ -11661,6 +11760,15 @@ export function connectProjection(
       profileCommand = null;
       // A proven native command remains in its exact outbox until this holder reconnects.
       // Neutral transitions call purgeHostScreen to release the previous owner's requests.
+      const grant = lastSnapshot?.hostSeat;
+      if (
+        lastSnapshot &&
+        grant?.hostSeatView === 'ACTIVE' &&
+        hostDelivery?.kind === 'ACTIVE' &&
+        matchesHostRecipient(hostDelivery, grant) &&
+        !commandPending()
+      )
+        suspendedHostOwner = idleHostOwnerWitness(lastSnapshot, grant);
       if (lastSnapshot !== null && (npc.pending || pendingGmDraft !== null))
         suspendedGm = gmReconnectSource(lastSnapshot);
       if (lastSnapshot !== null && pendingNetworkDraft !== null)
@@ -11949,17 +12057,61 @@ export function connectProjection(
     notifyReady();
   };
 
+  const receiptlessGmScope = (next: ConfirmedProjectionSnapshot) => {
+    if (next.hostSeat || hostDelivery?.kind !== 'SETUP') return null;
+    const scope = gmQueueScope(next);
+    return scope &&
+      hostDelivery.gmFingerprint === reconnectFingerprint([scope.campaignId, scope.contextId])
+      ? scope
+      : null;
+  };
   const adoptSnapshot = (next: ConfirmedProjectionSnapshot, reconnect: boolean): void => {
+    suspendedHostOwner = null;
+    if (recoveringSetupSource !== null) {
+      const previous = recoveringSetupSource.previous;
+      const view = next.hostSeat;
+      if (view?.hostSeatView !== 'CURTAIN' && view?.hostSeatView !== 'WAITING') {
+        const holder = next.hostActive ?? (view?.hostSeatView === 'ACTIVE' ? view : null);
+        const scope =
+          view?.hostSeatView === 'MANAGE'
+            ? { campaignId: view.campaignId, contextId: view.gmContextId }
+            : gmQueueScope(next);
+        const gmOnly =
+          view?.hostSeatView === 'GM_ONLY' &&
+          (previous?.kind === 'ACTIVE' || previous?.kind === 'SETUP');
+        if (
+          !reconnect ||
+          (!gmOnly &&
+            (!scope ||
+              reconnectFingerprint([scope.campaignId, scope.contextId]) !==
+                recoveringSetupSource.gmFingerprint ||
+              (previous?.kind === 'ACTIVE' &&
+                (!holder ||
+                  holder.target.kind !== 'GM' ||
+                  !matchesHostRecipient(previous, holder)))))
+        ) {
+          failUnexpected('$.hostSeat', null, 'The host did not confirm the original GM context.');
+          return;
+        }
+        if (previous?.kind === 'BOOTSTRAP') {
+          storeGmContextTicket(previous.gmContextId);
+          if (readGmContextTicket() !== previous.gmContextId) {
+            failUnexpected('$.hostSeat', null, 'The recovered GM ticket could not be stored.');
+            return;
+          }
+        }
+        if (hostDelivery?.kind === 'SETUP' || hostDelivery?.kind === 'ACTIVE')
+          setHostDelivery({
+            ...hostDelivery,
+            revision: Math.max(hostRevision, view?.revision ?? 0, hostDelivery.revision ?? 0),
+          });
+        else setHostDelivery(hostDelivery);
+      }
+      recoveringSetupSource = null;
+    }
     suspendedGm = null;
     const previous = lastSnapshot;
-    if (
-      hostDelivery?.kind === 'SETUP' &&
-      !next.hostSeat &&
-      typeof next.projection['contextId'] === 'string' &&
-      hostDelivery.gmFingerprint ===
-        reconnectFingerprint([next.projection['campaignId'] ?? null, next.projection['contextId']])
-    )
-      next = { ...next, hostSetupGm: true };
+    if (receiptlessGmScope(next)) next = { ...next, hostSetupGm: true };
     // Native v3 draft terminals describe just the edited form. They retain the current
     // recipient only after the native decoder has matched the outstanding edit and its scope.
     if (
@@ -12043,7 +12195,7 @@ export function connectProjection(
     if (isCampaignCreationForm(next.formId)) {
       gmLocalContextId = next.projection['gmLocalContextId'] as string;
       try {
-        storeGmContextTicket(gmLocalContextId);
+        storeGmContextTicket(hostDelivery === null ? gmLocalContextId : null);
       } catch {
         failUnexpected(
           '$.gmLocalContextId',
@@ -12291,7 +12443,9 @@ export function connectProjection(
               ? hostDelivery.revision
               : hostDelivery.kind === 'ACK'
                 ? hostDelivery.request.expectedRevisions.projectionRevision
-                : 0,
+                : hostDelivery.kind === 'SETUP'
+                  ? (hostDelivery.revision ?? 0)
+                  : 0,
           );
     socket = activeSocket;
 
@@ -13433,6 +13587,14 @@ export function connectProjection(
         message.revisions.projectionRevision === message.revisions.stateRevision &&
         message.revisions.projectionRevision === message.revisions.actorVisibilityRevision
       ) {
+        if (probePreviousSetupOwner(true, message.revisions.projectionRevision)) return;
+        if (recoveringSetupSource) {
+          hostDelivery = observeSetupRevision(
+            recoveringSetupSource,
+            message.revisions.projectionRevision,
+          );
+          recoveringSetupSource = null;
+        }
         // A refused RESUME has no capabilities or destination. Keep the grant for
         // an explicit retry; the refused transport cannot publish another frame.
         socket = null;
@@ -13508,6 +13670,15 @@ export function connectProjection(
             pair?.executableWorkflowCommandIds ??
             lastSnapshot?.executableWorkflowCommandIds ??
             hostCapabilities;
+          // A native GM screen may legitimately omit PLY-029 after the first setup.
+          // The managed connection must still negotiate handoff before showing it.
+          if (
+            !caps.includes(HOST_SEAT_ACK) &&
+            base.roleFilteredPayload['hostSeatView'] !== 'WAITING'
+          ) {
+            failUnexpected('$.hostSeat', null, 'Host handoff was not negotiated.');
+            return;
+          }
           const decodedHost = pair
             ? decodeReconnectSnapshot(message, pair, requestId)
             : decodeConfirmedSnapshot(message, caps);
@@ -13517,18 +13688,21 @@ export function connectProjection(
           }
           const next = decodedHost.value,
             v = next.hostSeat;
+          if (
+            (v && v.revision < Math.max(hostRevision, pair ? (hostResumeRevision ?? -1) : -1)) ||
+            (next.formId === 'CMP-006' && next.projection['hostDeviceId'] !== deviceId)
+          ) {
+            failUnexpected(
+              '$.hostSeat',
+              null,
+              'The host seat revision or QR installation changed.',
+            );
+            return;
+          }
           const recipient = next.hostActive ?? (v?.hostSeatView === 'ACTIVE' ? v : null);
-          const nativeSetupGm =
-            !v &&
-            hostDelivery?.kind === 'SETUP' &&
-            message.projectionRole === 'gm' &&
-            typeof next.projection['contextId'] === 'string' &&
-            hostDelivery.gmFingerprint ===
-              reconnectFingerprint([
-                next.projection['campaignId'] ?? null,
-                next.projection['contextId'],
-              ]);
-          if (nativeSetupGm) gmLocalContextId = next.projection['contextId'] as string;
+          const setupScope = message.projectionRole === 'gm' ? receiptlessGmScope(next) : null;
+          const nativeSetupGm = setupScope !== null;
+          if (setupScope) gmLocalContextId = setupScope.contextId;
           if (
             hostDraftFollowup !== null &&
             assignment.reason === 'FORM_ACTION' &&
@@ -13657,6 +13831,81 @@ export function connectProjection(
             (hostDelivery !== null ||
               neutral ||
               (v?.hostSeatView === 'MANAGE' && gmLocalContextId === v.gmContextId));
+          if (hostDelivery?.kind === 'SETUP' && hostDelivery.previous) {
+            if (v && v.revision < (hostDelivery.revision ?? 0)) {
+              failUnexpected('$.hostSeat', null, 'The setup probe predates its GM owner.');
+              return;
+            }
+            if (
+              resumed &&
+              v?.hostSeatView === 'WAITING' &&
+              probePreviousSetupOwner(false, v.revision)
+            )
+              return;
+            if (v?.hostSeatView === 'WAITING' && systemPurge) {
+              hostDelivery = observeSetupRevision(hostDelivery, v.revision);
+              resetHostSocket();
+              return;
+            }
+            if (
+              v?.hostSeatView !== 'CURTAIN' &&
+              !(
+                (matchedIntent || resumed) &&
+                v?.hostSeatView === 'SETUP' &&
+                v.revision > (hostDelivery.sourceRevision ?? hostDelivery.revision ?? -1)
+              )
+            ) {
+              failUnexpected('$.hostSeat', null, 'The host did not confirm the new setup grant.');
+              return;
+            }
+          }
+          // RETURN_SETUP keeps the new key and restores the receipt from before setup.
+          // Verify both its original GM scope and receipt before adopting the returned grant.
+          const returnedGm =
+            hostDelivery?.kind === 'SETUP' &&
+            !hostDelivery.previous &&
+            hostDelivery.returnReceiptId &&
+            recipient?.target.kind === 'GM' &&
+            (resumed || matchedIntent) &&
+            recipient.receiptId === hostDelivery.returnReceiptId &&
+            recipient.revision >= (hostDelivery.revision ?? 0) &&
+            hostDelivery.gmFingerprint ===
+              reconnectFingerprint([
+                v?.hostSeatView === 'MANAGE'
+                  ? v.campaignId
+                  : (next.projection['campaignId'] ?? null),
+                recipient.contextId,
+              ])
+              ? {
+                  kind: 'ACTIVE' as const,
+                  key: hostDelivery.key,
+                  receiptId: recipient.receiptId,
+                  revision: recipient.revision,
+                  targetFingerprint: reconnectFingerprint(recipient.target),
+                }
+              : null;
+          const recipientGrant = returnedGm ?? hostDelivery;
+          if (
+            resumed &&
+            v?.hostSeatView === 'WAITING' &&
+            recoveringSetupSource &&
+            newSetupProbeRefused
+          ) {
+            // A refusal does not say whether the new key committed. Keep both witnesses
+            // for a later reconnect when neither probe could establish the current holder.
+            hostDelivery = observeSetupRevision(recoveringSetupSource, v.revision);
+            recoveringSetupSource = null;
+            socket = null;
+            resetSeatTransport();
+            activeSocket.close(1000, 'host setup recovery unavailable');
+            onState({
+              kind: 'disconnected',
+              code: null,
+              snapshot: null,
+              detail: 'Хост пока не подтвердил место мастера.',
+            });
+            return;
+          }
           const nativeRecovery =
             resumed &&
             commandPending() &&
@@ -13667,6 +13916,10 @@ export function connectProjection(
             lastSnapshot === null;
           const isolateSetup =
             matchedIntent && v?.hostSeatView === 'SETUP' && lastSnapshot === null;
+          const leavingSetup =
+            matchedIntent &&
+            lastSnapshot?.hostSeat?.hostSeatView === 'SETUP' &&
+            (v?.hostSeatView === 'GM_ONLY' || v?.hostSeatView === 'MANAGE');
           if (nativeRecovery) {
             if (v?.hostSeatView === 'ACTIVE') {
               gmLocalContextId = v.target.kind === 'GM' ? v.contextId : null;
@@ -13682,14 +13935,25 @@ export function connectProjection(
                     hostDelivery.gmFingerprint ===
                       reconnectFingerprint([v.campaignId, v.gmContextId])
                   ) &&
-                  !(next.hostActive && matchesHostRecipient(hostDelivery, next.hostActive))) ||
+                  !(next.hostActive && matchesHostRecipient(recipientGrant, next.hostActive))) ||
                   !(matchedIntent || resumed))) ||
               (v?.hostSeatView === 'SETUP' && hostDelivery?.kind !== 'SETUP') ||
-              (v?.hostSeatView === 'GM_ONLY' && hostDelivery?.kind !== 'SETUP') ||
+              (v?.hostSeatView === 'GM_ONLY' &&
+                hostDelivery?.kind !== 'SETUP' &&
+                !(
+                  resumed &&
+                  hostDelivery?.kind === 'ACTIVE' &&
+                  hostDelivery.revision <= v.revision &&
+                  hostDelivery.targetFingerprint === reconnectFingerprint({ kind: 'GM' })
+                )) ||
               ((v?.hostSeatView === 'ROSTER' || v?.hostSeatView === 'SWITCH') &&
                 hostDelivery?.kind !== 'ACTIVE' &&
                 hostDelivery?.kind !== 'SETUP') ||
-              (recipient !== null && !matchesHostRecipient(hostDelivery, recipient)) ||
+              (recipient !== null && !matchesHostRecipient(recipientGrant, recipient)) ||
+              (resumed &&
+                suspendedHostOwner !== null &&
+                recipient !== null &&
+                !acceptsIdleHostOwner(suspendedHostOwner, next, recipient)) ||
               (v?.hostSeatView === 'ADMISSION' &&
                 (hostDelivery?.kind !== 'ACTIVE' ||
                   reconnectFingerprint({ kind: 'CANDIDATE', ...v.profile }) !==
@@ -13700,6 +13964,27 @@ export function connectProjection(
             ) {
               failUnexpected('$.hostSeat', null, 'Host seat recipient, scope or revision changed.');
               return;
+            }
+            if (returnedGm) setHostDelivery(returnedGm);
+            if (
+              hostDelivery?.kind === 'SETUP' &&
+              hostDelivery.previous &&
+              v?.hostSeatView === 'SETUP'
+            ) {
+              const { previous, key, gmFingerprint } = hostDelivery;
+              const receipt =
+                previous.kind === 'ACTIVE'
+                  ? previous.receiptId
+                  : previous.kind === 'SETUP'
+                    ? previous.returnReceiptId
+                    : undefined;
+              setHostDelivery({
+                kind: 'SETUP',
+                key,
+                gmFingerprint,
+                revision: v.revision,
+                ...(receipt ? { returnReceiptId: receipt } : {}),
+              });
             }
             const pendingAck = hostDelivery?.kind === 'ACK' ? hostDelivery : null;
             if (
@@ -13740,9 +14025,10 @@ export function connectProjection(
             profileCommand = null;
             stagedCapabilities = null;
             hostAckSent = false;
-            if ((neutral && !resumed) || isolateSetup) {
+            if ((neutral && !resumed) || isolateSetup || leavingSetup) {
               // Do not let queued native frames or subscriptions from the former principal
-              // compete with the recipient's ACK. RESUME(null) revalidates the addressed curtain.
+              // compete with the recipient's ACK. A GM leaving setup also needs the
+              // full native capabilities from RESUME before opening campaign settings.
               resetHostSocket(neutral);
               return;
             }
@@ -14727,6 +15013,26 @@ export function connectProjection(
       }
       if (message.messageType === 'navigation.form-action.refusal') {
         if (hostIntent?.id === message.navigationRequestId) {
+          if (
+            hostIntent.destination === 'SETUP' &&
+            hostDelivery?.kind === 'SETUP' &&
+            hostDelivery.previous
+          ) {
+            const revision = message.revisions.projectionRevision;
+            if (
+              message.refusal.code !== 'NAVIGATION_UNAVAILABLE' ||
+              Object.values(message.revisions).some((r) => r !== revision) ||
+              revision < (hostDelivery.revision ?? 0)
+            ) {
+              failUnexpected(
+                '$.hostSeat',
+                null,
+                'The rejected setup did not carry a current host-seat revision.',
+              );
+              return;
+            }
+            hostDelivery = observeSetupRevision(hostDelivery, revision);
+          }
           hostIntent = null;
           if (hostDelivery !== null) resetHostSocket();
           else if (lastSnapshot)
@@ -17145,13 +17451,28 @@ export function connectProjection(
         try {
           if (actionKey === 'CMP-009::CTA::002' && managedView?.hostSeatView === 'MANAGE') {
             const key = newHostDeliveryKey();
+            const gmFingerprint = reconnectFingerprint([
+              managedView.campaignId,
+              managedView.gmContextId,
+            ]);
+            const source =
+              hostDelivery?.kind === 'ACTIVE' &&
+              hostDelivery.targetFingerprint === reconnectFingerprint({ kind: 'GM' })
+                ? hostDelivery
+                : hostDelivery?.kind === 'SETUP' &&
+                    !hostDelivery.previous &&
+                    hostDelivery.gmFingerprint === gmFingerprint
+                  ? hostDelivery
+                  : hostDelivery === null && gmLocalContextId === managedView.gmContextId
+                    ? { kind: 'BOOTSTRAP' as const, gmContextId: gmLocalContextId }
+                    : null;
+            if (!source) throw new Error('Missing confirmed GM setup owner');
             setHostDelivery({
               kind: 'SETUP',
               key,
-              gmFingerprint: reconnectFingerprint([
-                managedView.campaignId,
-                managedView.gmContextId,
-              ]),
+              gmFingerprint,
+              revision: managedView.revision,
+              previous: source,
             });
             sendHostControl(
               { ...common, operation: 'ENTER_SETUP', deliveryKey: key },

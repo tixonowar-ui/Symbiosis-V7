@@ -60,6 +60,89 @@ function installSeatIdentity(db: ReturnType<typeof openPersistenceDatabase>) {
   return device;
 }
 
+it('confirms a first native GM destination from its exact signed setup return after reopen', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'host-seat-gm-native-'));
+  const file = join(dir, 'gm.sqlite');
+  let db = openPersistenceDatabase(file);
+  try {
+    const device = installSeatIdentity(db);
+    const proof = sha(randomUUID());
+    openHostLocalSeatSetup(
+      db,
+      device,
+      {
+        commandId: randomUUID(),
+        expectedRevision: 0,
+        activeProof: null,
+        setupProof: proof,
+        origin: {
+          gmContextId: randomUUID(),
+          campaignId: randomUUID(),
+          returnFormId: 'CMP-009',
+          gmDeliveryProof: proof,
+        },
+      },
+      allow,
+    );
+    const returned = returnHostSeatSetup(
+      db,
+      device,
+      {
+        commandId: randomUUID(),
+        expectedRevision: 1,
+        activeProof: proof,
+        formId: 'PLY-027',
+      },
+      allow,
+    ).receipt;
+    db.close();
+    db = openPersistenceDatabase(file);
+    expect(readHostLocalSeatHandoff(db, device)).toMatchObject({
+      gmDestinationConfirmed: false,
+      activeReceiptIdOrNull: null,
+      activeHandoffIdOrNull: null,
+      setupReturnReceiptIdOrNull: returned.receiptId,
+    });
+    const shown = {
+      commandId: 'host-local-setup-shown:' + returned.receiptId,
+      expectedRevision: returned.revision,
+      activeProof: proof,
+      setupReturnReceiptId: returned.receiptId,
+    };
+    expect(() =>
+      markHostLocalGmDestination(db, device, { ...shown, activeProof: sha(randomUUID()) }, allow),
+    ).toThrow();
+    const foreign = randomUUID();
+    expect(() =>
+      markHostLocalGmDestination(
+        db,
+        device,
+        {
+          ...shown,
+          commandId: 'host-local-setup-shown:' + foreign,
+          setupReturnReceiptId: foreign,
+        },
+        allow,
+      ),
+    ).toThrow();
+    const original = markHostLocalGmDestination(db, device, shown, allow);
+    db.close();
+    db = openPersistenceDatabase(file);
+    expect(readHostLocalSeatHandoff(db, device)).toMatchObject({
+      gmDestinationConfirmed: true,
+      activeReceiptIdOrNull: null,
+      activeHandoffIdOrNull: null,
+    });
+    expect(markHostLocalGmDestination(db, device, shown, allow)).toEqual({
+      receipt: original.receipt,
+      replayed: true,
+    });
+  } finally {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 it('chooses the current signed handoff after a device reset that retained the previous installation journal', () => {
   const db = openPersistenceDatabase(':memory:');
   try {
@@ -528,13 +611,44 @@ it('restores a fresh local candidate at each curtain, isolates its checkpoint an
     expect(state()).toEqual(gm);
     expect(readHostLocalCharacterOwner(db, device, id)).toBe(profile.targetLocalOwnerId);
     openHostLocalSeatSetup(db, device, { ...revision(), origin, setupProof: sha('setup2') }, allow);
-    returnHostSeatSetup(db, device, { ...revision(), formId: 'PLY-027' }, allow);
+    const setupReturn = returnHostSeatSetup(
+      db,
+      device,
+      { ...revision(), formId: 'PLY-027' },
+      allow,
+    );
+    reopen();
     expect(state()).toMatchObject({
       gmDestinationConfirmed: false,
       active: { kind: 'GM', destinationFormId: 'PLY-027' },
       activeReceiptIdOrNull: gm.activeReceiptIdOrNull,
       activeHandoffIdOrNull: gm.activeHandoffIdOrNull,
+      setupReturnReceiptIdOrNull: setupReturn.receipt.receiptId,
     });
+    const nextConfirmation = {
+      ...revision(),
+      setupReturnReceiptId: setupReturn.receipt.receiptId,
+      commandId: 'host-local-setup-shown:' + setupReturn.receipt.receiptId,
+    };
+    const shownAgain = markHostLocalGmDestination(db, device, nextConfirmation, allow);
+    expect(shownAgain.receipt.receiptId).not.toBe(shown.receipt.receiptId);
+    reopen();
+    const gmAgain = state();
+    expect(gmAgain).toMatchObject({
+      gmDestinationConfirmed: true,
+      activeReceiptIdOrNull: gm.activeReceiptIdOrNull,
+      activeHandoffIdOrNull: gm.activeHandoffIdOrNull,
+      revision: shownAgain.receipt.revision,
+    });
+    expect(markHostLocalGmDestination(db, device, confirmed, allow)).toEqual({
+      ...shown,
+      replayed: true,
+    });
+    expect(markHostLocalGmDestination(db, device, nextConfirmation, allow)).toEqual({
+      ...shownAgain,
+      replayed: true,
+    });
+    expect(state()).toEqual(gmAgain);
     openHostLocalSeatSetup(db, device, { ...revision(), origin, setupProof: sha('setup3') }, allow);
     beginHostLocalSeatHandoff(
       db,
@@ -584,6 +698,27 @@ it('restores a fresh local candidate at each curtain, isolates its checkpoint an
       allow,
     );
     expect(state().candidateContextIdOrNull).toBeNull();
+    // An older signed journal can contain its first ACK-based confirmation after a return from setup.
+    const oldAck = state().activeReceiptIdOrNull!;
+    openHostLocalSeatSetup(
+      db,
+      device,
+      { ...revision(), origin, setupProof: sha('legacy-setup') },
+      allow,
+    );
+    returnHostSeatSetup(db, device, { ...revision(), formId: 'CMP-009' }, allow);
+    const legacyConfirmation = {
+      ...revision(),
+      commandId: 'host-local-shown:' + oldAck,
+      ackReceiptId: oldAck,
+    };
+    const legacyShown = markHostLocalGmDestination(db, device, legacyConfirmation, allow);
+    reopen();
+    expect(state()).toMatchObject({ activeReceiptIdOrNull: oldAck, gmDestinationConfirmed: true });
+    expect(markHostLocalGmDestination(db, device, legacyConfirmation, allow)).toEqual({
+      ...legacyShown,
+      replayed: true,
+    });
     openHostLocalSeatSetup(db, device, { ...revision(), origin, setupProof: sha('setup4') }, allow);
     beginHostLocalSeatHandoff(
       db,

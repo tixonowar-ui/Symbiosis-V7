@@ -2,10 +2,7 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page, type Response as BrowserResponse } from '@playwright/test';
 import type { ProjectionSnapshotV2Message } from '../../src/shared/wire-v2-protocol.js';
-import {
-  createNetworkBrowserProcess,
-  disposeNetworkResources,
-} from '../fixtures/network-application-e2e.js';
+import { createHostLocalBrowserScenario } from '../fixtures/network-application-e2e.js';
 import {
   atlasControl,
   createNetworkCampaign,
@@ -33,13 +30,12 @@ test('a fresh host-local profile creates its own FINAL, completes admission and 
   browser,
 }, testInfo) => {
   test.setTimeout(900_000);
-  const host = await createNetworkBrowserProcess(2);
-  const gmContext = await browser.newContext();
-  const playerContext = await browser.newContext();
-  const master = await gmContext.newPage();
-  const player = await playerContext.newPage();
-  master.setDefaultTimeout(host.operationTimeoutMs);
-  player.setDefaultTimeout(host.operationTimeoutMs);
+  const {
+    host,
+    master,
+    participant: player,
+    close,
+  } = await createHostLocalBrowserScenario(browser, 2);
   const gmWire = watchAdmissionWire(master);
   const playerFrames = receivedFrames(player);
   const masterFrames = receivedFrames(master);
@@ -215,17 +211,21 @@ test('a fresh host-local profile creates its own FINAL, completes admission and 
     };
     const previousGmBearer = await checkedGmBearer(firstGmArt);
     await host.restart();
-    await master.reload();
+    const [restoredGmArt] = await Promise.all([waitForGmArt(), master.reload()]);
     await expect(networkForm(master, 'NET-016')).toBeVisible(reply);
+    const restoredGmBearer = await checkedGmBearer(restoredGmArt);
+    const gmArtwork = master.getByRole('img', { name: 'Арт кампании', exact: true });
+    await expect(gmArtwork).toBeVisible(reply);
+    const artworkBlob = await gmArtwork.getAttribute('src');
+    if (!artworkBlob?.startsWith('blob:')) throw Error('Expected the rendered GM artwork blob');
     expect(host.inspectOrdinarySeats()).toMatchObject({ controllers, events });
     const seatId = controllers[0]!.local_controller_seat_id;
-    const handToPlayer = async (source: 'NET-016' | 'PLY-028') => {
+    const openPlayerCurtain = async (source: 'NET-016' | 'PLY-028') => {
       await master
         .getByRole('combobox', { name: 'Место для передачи', exact: true })
         .selectOption(seatId);
       await click(master, source === 'NET-016' ? 'NET-016::CTA::006' : 'PLY-028::CTA::003');
       await expect(networkForm(player, 'PLY-030')).toBeVisible(reply);
-      await click(player, 'PLY-030::CTA::001');
     };
     const returnFromLobby = async () => {
       await click(player, 'NET-006::CTA::005');
@@ -233,7 +233,56 @@ test('a fresh host-local profile creates its own FINAL, completes admission and 
       await click(master, 'PLY-030::CTA::001');
       await expect(networkForm(master, 'NET-016')).toBeVisible(reply);
     };
-    await handToPlayer('NET-016');
+    const surfaces = [
+      { page: master, frames: masterFrames, offset: masterFrames.length },
+      { page: player, frames: playerFrames, offset: playerFrames.length },
+    ];
+    await openPlayerCurtain('NET-016');
+    await expect(networkForm(master, 'PLY-030')).toBeVisible(reply);
+    await expectRevokedArt(artUrl, restoredGmBearer);
+    const transitions = host.inspectOrdinarySeats().events.slice(events.length);
+    expect(transitions.map((event) => event.kind)).toEqual(['BEGIN']);
+    const handoffId = transitions[0]!.handoff_id;
+    const privateMarkers = [
+      gmContextId,
+      artChecksum,
+      artworkBlob,
+      'Арт кампании',
+      name,
+      characterId,
+      ...foreign,
+    ];
+    const curtainReason = (raw: string) => {
+      const frame = JSON.parse(raw) as ProjectionSnapshotV2Message;
+      if (frame.messageType !== 'projection.snapshot' || frame.protocolVersion !== 2) return null;
+      const addressed = frame.presentation.layers.some(
+        (layer) =>
+          layer.formId === 'PLY-030' && layer.roleFilteredPayload['handoffId'] === handoffId,
+      );
+      return addressed ? frame.presentation.assignment.reason : null;
+    };
+    for (const { page, frames, offset } of surfaces) {
+      // A lobby update before BEGIN still belongs to the GM. The first curtain starts the purge.
+      await expect
+        .poll(() => frames.slice(offset).some((raw) => curtainReason(raw) === 'RECONNECT'), reply)
+        .toBe(true);
+      const received = frames.slice(offset);
+      const curtain = received.findIndex((raw) => curtainReason(raw) !== null);
+      await verifyNeutralSurface(page, received.slice(curtain), privateMarkers);
+      await expect(networkForm(page, 'NET-016')).toHaveCount(0);
+    }
+    await expect(gmArtwork).toHaveCount(0);
+    expect(
+      await master.evaluate(async (url) => {
+        try {
+          return (await fetch(url)).ok;
+        } catch {
+          return false;
+        }
+      }, artworkBlob),
+    ).toBe(false);
+    expect(host.inspectOrdinarySeats().events.slice(events.length)).toEqual(transitions);
+    await click(player, 'PLY-030::CTA::001');
     await expect(networkForm(player, 'NET-006')).toBeVisible(reply);
     await expectRevokedArt(artUrl, previousGmBearer);
     // An unavailable checksum must get the same authority denial before its bytes are looked up.
@@ -252,7 +301,8 @@ test('a fresh host-local profile creates its own FINAL, completes admission and 
         .getByRole('region', { name: 'Кампания и лобби' })
         .getByText(`Устройство ${host.deviceId}: не готово.`, { exact: false }),
     ).toBeVisible(reply);
-    await handToPlayer('NET-016');
+    await openPlayerCurtain('NET-016');
+    await click(player, 'PLY-030::CTA::001');
     await expect(player.getByText('Ваше устройство не готово.', { exact: true })).toBeVisible(
       reply,
     );
@@ -263,7 +313,8 @@ test('a fresh host-local profile creates its own FINAL, completes admission and 
     await expect(networkForm(master, 'GM-001')).toBeVisible(reply);
     await click(master, 'GM-001::CTA::012');
     await click(master, 'PLY-027::CTA::004');
-    await handToPlayer('PLY-028');
+    await openPlayerCurtain('PLY-028');
+    await click(player, 'PLY-030::CTA::001');
     await expect(networkForm(player, 'PLY-001')).toBeVisible(reply);
     await expect(player.getByRole('region', { name: 'Мирная сцена персонажа' })).toContainText(
       'День 2, 21:07',
@@ -313,9 +364,6 @@ test('a fresh host-local profile creates its own FINAL, completes admission and 
       contentType: 'application/json',
     });
   } finally {
-    await disposeNetworkResources(
-      [() => playerContext.close(), () => gmContext.close(), () => host.close()],
-      failure,
-    );
+    await close(failure);
   }
 });

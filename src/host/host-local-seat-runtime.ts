@@ -85,7 +85,7 @@ export interface HostSeatClient {
   readonly campaign: CampaignConnection;
   readonly trusted: () => boolean;
   readonly send: (message: LocalNetworkHostMessage) => void;
-  readonly revoke: () => void;
+  readonly revoke: (scope: 'CONNECTION' | 'HANDOFF') => void;
   readonly characterContextId: () => string | null;
   readonly replayReceipts: (
     role: 'GM' | 'CANDIDATE',
@@ -130,6 +130,7 @@ function deliverySource(view: Snapshot) {
 }
 type NativeOrigin = { formId: string; revision: number };
 type ConnectionState = {
+  hostWorkflows: readonly WorkflowCommandId[];
   proof: string | null;
   last: ReturnType<typeof deliverySource> | null;
   addressed: string | null;
@@ -178,7 +179,14 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
   function entry(c: HostSeatClient) {
     let item = sockets.get(c);
     if (!item) {
-      item = { proof: null, last: null, addressed: null, manageOrigin: null, nativeOrigin: null };
+      item = {
+        proof: null,
+        last: null,
+        addressed: null,
+        manageOrigin: null,
+        nativeOrigin: null,
+        hostWorkflows: [],
+      };
       sockets.set(c, item);
     }
     return item;
@@ -357,8 +365,33 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
     return target !== null;
   }
   function assign(c: HostSeatClient, view: Snapshot) {
-    const binding = entry(c),
-      delivered = deliverySource(view);
+    const binding = entry(c);
+    const { base, layers, assignment } = view.presentation;
+    if (layers[0]?.formId === 'PLY-030' && !binding.hostWorkflows.includes(HOST_SEAT_ACK)) {
+      binding.addressed = null;
+      view = hostSeatSnapshot(
+        { hostSeatView: 'WAITING', revision: view.revisions.projectionRevision },
+        assignment.correlationId,
+        assignment.reason,
+      );
+    } else if (
+      base.roleFilteredPayload['hostSeatView'] === 'SETUP' &&
+      !binding.hostWorkflows.includes(HOST_OWNER_PROFILE_CREATE)
+    ) {
+      view = {
+        ...view,
+        presentation: {
+          ...view.presentation,
+          base: {
+            ...base,
+            availableActionKeys: base.availableActionKeys.filter(
+              (key) => key !== 'APP-003::CTA::011',
+            ),
+          },
+        },
+      };
+    }
+    const delivered = deliverySource(view);
     binding.last = delivered;
     try {
       c.send(view);
@@ -449,7 +482,10 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
       b.addressed = null;
       b.manageOrigin = null;
       b.nativeOrigin = null;
-      socket.revoke();
+      const negotiatedAck = b.hostWorkflows.includes(HOST_SEAT_ACK);
+      socket.revoke('HANDOFF');
+      b.hostWorkflows =
+        negotiatedAck && socket.capabilities(null).includes(HOST_SEAT_ACK) ? [HOST_SEAT_ACK] : [];
     }
   }
   function broadcast(s: HostLocalSeatHandoff, except: HostSeatClient, id: string) {
@@ -914,6 +950,23 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
     );
     return { ...result, presentation: { ...result.presentation, layers: [badge] } };
   }
+  function confirmNativeGm(s: HostLocalSeatHandoff, verify: () => void) {
+    const ack = s.activeReceiptIdOrNull;
+    const setupReturn = s.setupReturnReceiptIdOrNull;
+    // A new setup return can retain the same GM ACK while issuing a new proof.
+    const anchor = setupReturn
+      ? { commandId: 'host-local-setup-shown:' + setupReturn, setupReturnReceiptId: setupReturn }
+      : ack
+        ? { commandId: 'host-local-shown:' + ack, ackReceiptId: ack }
+        : denied();
+    markHostLocalGmDestination(
+      db,
+      owner(),
+      { ...anchor, expectedRevision: s.revision, activeProof: s.activeProof },
+      verify,
+    );
+    fresh();
+  }
   async function destination(
     c: HostSeatClient,
     s: HostLocalSeatHandoff,
@@ -946,20 +999,9 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
           : hostSeatSnapshot({ hostSeatView: 'GM_ONLY', revision: s.revision }, id, reason, [
               'PLY-027::CTA::001',
             ]);
-      if (!s.gmDestinationConfirmed && s.activeReceiptIdOrNull) {
+      if (!s.gmDestinationConfirmed) {
         if (native.presentation.base.formId !== desired) return denied();
-        markHostLocalGmDestination(
-          db,
-          owner(),
-          {
-            commandId: 'host-local-shown:' + s.activeReceiptIdOrNull,
-            expectedRevision: s.revision,
-            activeProof: s.activeProof,
-            ackReceiptId: s.activeReceiptIdOrNull,
-          },
-          verify,
-        );
-        fresh();
+        confirmNativeGm(s, verify);
       }
     } else if (
       t.kind === 'CANDIDATE' &&
@@ -1109,7 +1151,37 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
     b.addressed = null;
     b.manageOrigin = null;
     b.nativeOrigin = null;
-    b.proof = key && key === s.activeProof ? key : null;
+    const supportsHandoff = m.supportedWorkflowCommandIds.includes(HOST_SEAT_ACK);
+    b.proof = supportsHandoff && key && key === s.activeProof ? key : null;
+    b.hostWorkflows = [];
+    function publish(view: Snapshot, executable: readonly WorkflowCommandId[]) {
+      c.send({
+        protocolVersion: 2,
+        messageType: 'session.reconnect.capabilities',
+        reconnectRequestId: m.requestId,
+        executableWorkflowCommandIds: executable,
+        revisions: view.revisions,
+      });
+      b.hostWorkflows = executable.filter(
+        (id) => id === HOST_SEAT_ACK || id === HOST_OWNER_PROFILE_CREATE,
+      );
+      assign(c, view);
+    }
+    function waitWithoutGrant() {
+      b.proof = null;
+      b.addressed = null;
+      b.manageOrigin = null;
+      b.nativeOrigin = null;
+      c.revoke('CONNECTION');
+      publish(
+        hostSeatSnapshot(
+          { hostSeatView: 'WAITING', revision: state?.revision ?? s.revision },
+          m.requestId,
+          'RECONNECT',
+        ),
+        [],
+      );
+    }
     const grant = authority(c);
     const role =
       b.proof && s.setupOrNull
@@ -1117,7 +1189,8 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
         : grant.role === 'GM' || grant.role === 'PLAYER' || grant.role === 'CANDIDATE'
           ? grant.role
           : null;
-    c.capabilities(role);
+    if (!supportsHandoff || !c.capabilities(role).includes(HOST_SEAT_ACK))
+      return waitWithoutGrant();
     const view = await destination(c, s, m.requestId, 'RECONNECT', m.unacknowledgedCommandIds);
     const historical = deliverySource(view).terminalResultReadOnly;
     const executable = c
@@ -1128,6 +1201,7 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
           (!historical || id === HOST_SEAT_ACK) &&
           (!s.setupOrNull || id === HOST_SEAT_ACK || id === HOST_OWNER_PROFILE_CREATE),
       );
+    if (!executable.includes(HOST_SEAT_ACK)) return waitWithoutGrant();
     if (b.proof && state?.activeProof === b.proof && state.active) {
       const now = authority(c);
       const ids = m.unacknowledgedCommandIds;
@@ -1160,14 +1234,7 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
         }
       }
     }
-    c.send({
-      protocolVersion: 2,
-      messageType: 'session.reconnect.capabilities',
-      reconnectRequestId: m.requestId,
-      executableWorkflowCommandIds: executable,
-      revisions: view.revisions,
-    });
-    assign(c, view);
+    publish(view, executable);
   }
   const idVector = (value: {
     projectionRevision: number;
@@ -1263,19 +1330,10 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
         const origin = b.manageOrigin ?? denied();
         safe(origin);
         const snap = await c.restoreGm(origin, 'CMP-008', nav.navigationRequestId, 'FORM_ACTION');
-        if (s.active?.kind === 'GM' && !s.gmDestinationConfirmed && s.activeReceiptIdOrNull) {
-          markHostLocalGmDestination(
-            db,
-            owner(),
-            {
-              commandId: 'host-local-shown:' + s.activeReceiptIdOrNull,
-              expectedRevision: s.revision,
-              activeProof: s.activeProof,
-              ackReceiptId: s.activeReceiptIdOrNull,
-            },
-            () => licensed(c, s),
-          );
-          fresh();
+        if (s.active?.kind === 'GM' && !s.gmDestinationConfirmed) {
+          if (snap.projectionRole !== 'gm' || snap.presentation.base.formId !== 'CMP-008')
+            return denied();
+          confirmNativeGm(s, () => licensed(c, s));
         }
         const checked = decorate(c, snap) ?? denied();
         assign(c, checked);
@@ -1291,6 +1349,8 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
         )
           return denied();
         const key = digest(control.deliveryKey);
+        const sourceWorkflows =
+          grant.role === 'LEGACY' ? (c.campaign.executableReview ?? []) : b.hostWorkflows;
         const scoped = { ...origin, gmDeliveryProof: s.active?.origin.gmDeliveryProof ?? key };
         openHostLocalSeatSetup(
           db,
@@ -1313,7 +1373,13 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
         const next = fresh();
         revoke();
         b.proof = key;
-        c.capabilities('GM');
+        b.hostWorkflows = c
+          .capabilities('GM')
+          .filter(
+            (id) =>
+              (id === HOST_SEAT_ACK || id === HOST_OWNER_PROFILE_CREATE) &&
+              sourceWorkflows.includes(id),
+          );
         broadcast(next, c, control.requestId);
         assign(c, setup(next, control.requestId, 'FORM_ACTION'));
         return true;
@@ -1329,6 +1395,7 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
           const p = actual.pending ?? denied();
           const returning = p.target.kind === 'GM' && p.target.destinationFormId === 'CMP-009';
           if (
+            !b.hostWorkflows.includes(HOST_SEAT_ACK) ||
             !freshAck ||
             b.addressed !== p.handoffId ||
             p.handoffId !== payload.handoffId ||
@@ -1388,7 +1455,10 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
             activeProof: b.proof,
             profile,
           },
-          guard,
+          (_actual, phase) => {
+            guard();
+            if (phase === 'APPLY' && !b.hostWorkflows.includes(HOST_OWNER_PROFILE_CREATE)) denied();
+          },
         );
         completed = true;
         result(c, out, profile);

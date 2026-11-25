@@ -27,7 +27,6 @@ import {
   NpcHistoryContent,
   NpcFinalReviewContent,
 } from './forms/npc/npc-library-content.js';
-import { isCampaignOwnerForm } from './forms/net/admission-client.js';
 import { CampaignPeerConnection } from './forms/net/campaign-peer-connection.js';
 import type { CampaignPeerStateV3Message } from '@shared/campaign-lifecycle.js';
 import { isCampaignLifecycleForm } from '@shared/campaign-lifecycle.js';
@@ -106,7 +105,7 @@ import { OrdinarySeatPanel } from './forms/ply/ordinary-seat-panel.js';
 import { HostSeatPanel, OwnedFinalSelection } from './forms/ply/host-seat-panel.js';
 import type { App004Projection } from './ws-client.js';
 import { AtlasForm } from './renderer/atlas-form.js';
-import { connectProjection, LOCAL_ROLE_CHOICE_DETAIL } from './ws-client.js';
+import { campaignPeerScope, connectProjection, LOCAL_ROLE_CHOICE_DETAIL } from './ws-client.js';
 import type {
   AdvisorSkillSelectionDraft,
   App001Projection,
@@ -2826,14 +2825,8 @@ export function App(): ReactElement {
   }, []);
 
   const snapshot = confirmedSnapshot(state);
-  const peerApplicable =
-    snapshot !== null &&
-    (snapshot.formId === 'NET-005' || isCampaignOwnerForm(snapshot.formId)) &&
-    typeof snapshot.projection['networkScopeId'] === 'string' &&
-    (typeof snapshot.projection['requestId'] === 'string' ||
-      typeof snapshot.projection['requestIdOrNull'] === 'string');
   const peerBlocked =
-    peerApplicable &&
+    campaignPeerScope(snapshot) !== null &&
     (campaignPeerState === null ||
       campaignPeerState.connectionState !== 'CONNECTED' ||
       campaignPeerState.formOrNull !== null);

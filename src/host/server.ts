@@ -7580,9 +7580,9 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
             sendCheckedV2(socket, message, vocabulary, true, true);
           else sendChecked(socket, message, vocabulary, true);
         }),
-      revoke() {
+      revoke(scope) {
         ordinaryOnlySockets.delete(socket);
-        ownerSessions.clear();
+        if (scope === 'HANDOFF') ownerSessions.clear();
         gmNetwork.unwatch(connection.campaign);
         localNetwork.disconnect(connection.network);
         connection.network.contextId = null;

@@ -24,8 +24,24 @@ export type HostSeatInput =
 
 export const HOST_DELIVERY_STORAGE = 'symbiosis.host-seat.delivery.v1';
 type HostAck = WorkflowCommandRequestMessage<typeof HOST_SEAT_ACK, HostSeatAckPayload>;
+type ActiveGrant = {
+  readonly kind: 'ACTIVE';
+  readonly key: string;
+  readonly receiptId: string;
+  readonly targetFingerprint: string;
+  readonly revision: number;
+};
+type SetupGrant = {
+  readonly kind: 'SETUP';
+  readonly key: string;
+  readonly gmFingerprint: string;
+  readonly returnReceiptId?: string;
+  readonly revision?: number;
+};
+export type SetupSource =
+  ActiveGrant | SetupGrant | { readonly kind: 'BOOTSTRAP'; readonly gmContextId: string };
 export type HostDelivery =
-  | { readonly kind: 'SETUP'; readonly key: string; readonly gmFingerprint: string }
+  | (SetupGrant & { readonly previous?: SetupSource; readonly sourceRevision?: number })
   | { readonly kind: 'NEUTRAL' }
   | {
       readonly kind: 'ACK';
@@ -33,13 +49,7 @@ export type HostDelivery =
       readonly request: HostAck;
       readonly targetFingerprint: string;
     }
-  | {
-      readonly kind: 'ACTIVE';
-      readonly key: string;
-      readonly receiptId: string;
-      readonly targetFingerprint: string;
-      readonly revision: number;
-    };
+  | ActiveGrant;
 
 export function newHostDeliveryKey(): string {
   return Array.from(crypto.getRandomValues(new Uint8Array(32)), (b) =>
@@ -79,7 +89,10 @@ export function readHostDelivery(): HostDelivery | null {
   if (typeof sessionStorage === 'undefined') return null;
   const raw = sessionStorage.getItem(HOST_DELIVERY_STORAGE);
   if (raw === null) return null;
-  const value: unknown = JSON.parse(raw);
+  return parseHostDelivery(JSON.parse(raw), true);
+}
+
+function parseHostDelivery(value: unknown, allowSetupSource: boolean): HostDelivery {
   if (typeof value !== 'object' || value === null || !('kind' in value))
     throw new Error('Invalid host handoff witness');
   if (value.kind === 'NEUTRAL' && Object.keys(value).length === 1) return { kind: 'NEUTRAL' };
@@ -87,12 +100,82 @@ export function readHostDelivery(): HostDelivery | null {
     throw new Error('Invalid host handoff key');
   if (
     value.kind === 'SETUP' &&
-    Object.keys(value).length === 3 &&
     'gmFingerprint' in value &&
     typeof value.gmFingerprint === 'string' &&
-    /^[0-9a-f]{64}$/u.test(value.gmFingerprint)
-  )
-    return { kind: 'SETUP', key: value.key, gmFingerprint: value.gmFingerprint };
+    /^[0-9a-f]{64}$/u.test(value.gmFingerprint) &&
+    Object.keys(value).every((k) =>
+      [
+        'kind',
+        'key',
+        'gmFingerprint',
+        'returnReceiptId',
+        'revision',
+        'previous',
+        'sourceRevision',
+      ].includes(k),
+    )
+  ) {
+    const revision = 'revision' in value ? value.revision : undefined;
+    const sourceRevision = 'sourceRevision' in value ? value.sourceRevision : undefined;
+    const returnReceiptId = 'returnReceiptId' in value ? value.returnReceiptId : undefined;
+    if (
+      revision !== undefined &&
+      (typeof revision !== 'number' || !Number.isSafeInteger(revision) || revision < 0)
+    )
+      throw new Error('Invalid setup revision');
+    if (
+      sourceRevision !== undefined &&
+      (!('previous' in value) ||
+        revision === undefined ||
+        typeof sourceRevision !== 'number' ||
+        !Number.isSafeInteger(sourceRevision) ||
+        sourceRevision < 0 ||
+        sourceRevision > revision)
+    )
+      throw new Error('Invalid setup source revision');
+    if (
+      returnReceiptId !== undefined &&
+      (typeof returnReceiptId !== 'string' || returnReceiptId.length === 0)
+    )
+      throw new Error('Invalid setup return receipt');
+    let previous: SetupSource | undefined;
+    if ('previous' in value) {
+      if (!allowSetupSource || !value.previous || typeof value.previous !== 'object')
+        throw new Error('Invalid prior GM proof');
+      const p = value.previous;
+      if (
+        'kind' in p &&
+        p.kind === 'BOOTSTRAP' &&
+        Object.keys(p).length === 2 &&
+        'gmContextId' in p &&
+        typeof p.gmContextId === 'string' &&
+        /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/u.test(p.gmContextId)
+      )
+        previous = { kind: 'BOOTSTRAP', gmContextId: p.gmContextId };
+      else {
+        const grant = parseHostDelivery(p, false);
+        if (
+          !(
+            (grant.kind === 'ACTIVE' &&
+              grant.targetFingerprint === reconnectFingerprint({ kind: 'GM' })) ||
+            (grant.kind === 'SETUP' && grant.gmFingerprint === value.gmFingerprint)
+          ) ||
+          grant.key === value.key
+        )
+          throw new Error('Invalid prior GM grant');
+        previous = grant;
+      }
+    }
+    return {
+      kind: 'SETUP',
+      key: value.key,
+      gmFingerprint: value.gmFingerprint,
+      ...(returnReceiptId !== undefined ? { returnReceiptId } : {}),
+      ...(revision !== undefined ? { revision } : {}),
+      ...(sourceRevision !== undefined ? { sourceRevision } : {}),
+      ...(previous ? { previous } : {}),
+    };
+  }
   if (
     !('targetFingerprint' in value) ||
     typeof value.targetFingerprint !== 'string' ||
@@ -149,8 +232,9 @@ export function readHostDelivery(): HostDelivery | null {
   throw new Error('Invalid saved host handoff');
 }
 
-export function writeHostDelivery(delivery: HostDelivery): void {
-  sessionStorage.setItem(HOST_DELIVERY_STORAGE, JSON.stringify(delivery));
+export function writeHostDelivery(delivery: HostDelivery | null): void {
+  if (delivery === null) sessionStorage.removeItem(HOST_DELIVERY_STORAGE);
+  else sessionStorage.setItem(HOST_DELIVERY_STORAGE, JSON.stringify(delivery));
 }
 
 export function hostAckReceipt(
@@ -200,7 +284,11 @@ export function checkedHostView(
   capabilities: readonly string[],
 ): HostSeatView {
   const view = hostSeatViewValue(payload);
-  if (!capabilities.includes(HOST_SEAT_ACK)) throw new Error('Host handoff is unavailable');
+  if (
+    !capabilities.includes(HOST_SEAT_ACK) &&
+    !(capabilities.length === 0 && view.hostSeatView === 'WAITING')
+  )
+    throw new Error('Host handoff is unavailable');
   let allowed: string[];
   switch (view.hostSeatView) {
     case 'WAITING':

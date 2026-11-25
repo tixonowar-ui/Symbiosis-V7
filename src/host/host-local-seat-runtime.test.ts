@@ -17,10 +17,16 @@ import {
 } from '../persistence/network-local-tab.js';
 import { readLocalNetworkApplication } from '../persistence/network-local-application.js';
 import { readHostLocalRoster } from '../persistence/local-seat-roster.js';
-import type { JsonObject } from '../shared/wire-protocol.js';
+import type {
+  CommandReceipt,
+  JsonObject,
+  WorkflowCommandId,
+  WorkflowCommandRequestMessage,
+} from '../shared/wire-protocol.js';
 import {
   ackHostLocalSeatHandoff,
   readHostLocalOwnedCharacters,
+  readHostLocalSeatHandoff,
   readHostLocalProfileScope,
   readHostLocalScopeOwner,
   selectHostLocalFinals,
@@ -32,9 +38,10 @@ import type { ProjectionSnapshotV2Message } from '../shared/wire-v2-protocol.js'
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import type { LocalNetworkHostMessage } from './network-application.js';
 import { createHostLocalSeatRuntime, type HostSeatClient } from './host-local-seat-runtime.js';
+import { hostSeatSnapshot, hostSeatVector } from './host-local-seat-presentation.js';
 
 setupNetworkFixture('host-local-application-returns');
-it('opens CMP-009 from the confirmed CMP-008 GM cursor and erases its private settings at setup', async () => {
+async function enterFirstHostSetup() {
   const p = await net.client(),
     h = await net.host({ path: p.path }),
     gm = net.gmClient(h);
@@ -179,7 +186,241 @@ it('opens CMP-009 from the confirmed CMP-008 GM cursor and erases its private se
     },
   });
   expect(runtime.decorate(socket, settings)).toBeNull();
+  return { runtime, socket, sent, h, nav };
+}
+
+it('opens CMP-009 from the confirmed CMP-008 GM cursor and erases its private settings at setup', async () => {
+  await enterFirstHostSetup();
 }, 60_000);
+
+it.each([HOST_SEAT_ACK, HOST_OWNER_PROFILE_CREATE])(
+  'requires the negotiated host workflow %s for a new command and replays its exact historical receipt',
+  async (workflow) => {
+    const { runtime, socket, sent, h, nav } = await enterFirstHostSetup();
+    const restrictedFrames: LocalNetworkHostMessage[] = [];
+    const restrictedSocket: HostSeatClient = {
+      ...socket,
+      network: { ...socket.network },
+      campaign: { ...socket.campaign },
+      send: (message) => {
+        restrictedFrames.push(message);
+      },
+    };
+    const isAck = workflow === HOST_SEAT_ACK;
+    const state = () => readHostLocalSeatHandoff(h.db, h.principal.hostOwnerDeviceId);
+    const durable = () => ({
+      handoff: state(),
+      events: h.db.prepare('SELECT COUNT(*) AS count FROM local_seat_handoff_event').get(),
+    });
+    const current = (frames = sent) => {
+      const message = frames.at(-1);
+      if (message?.messageType !== 'projection.snapshot' || message.protocolVersion !== 2)
+        throw new Error('Missing host seat presentation');
+      return message;
+    };
+    const resume = async (supportedWorkflowCommandIds: readonly WorkflowCommandId[]) => {
+      restrictedFrames.length = 0;
+      const requestId = randomUUID();
+      await runtime.handle(restrictedSocket, {
+        protocolVersion: 3,
+        messageType: 'host.seat.control',
+        operation: 'RESUME',
+        requestId,
+        deliveryKeyOrNull: isAck ? null : '8'.repeat(64),
+        supportedWorkflowCommandIds,
+        unacknowledgedCommandIds: [],
+      });
+      expect(restrictedFrames[0]).toMatchObject({
+        messageType: 'session.reconnect.capabilities',
+        reconnectRequestId: requestId,
+        executableWorkflowCommandIds: supportedWorkflowCommandIds,
+      });
+      return current(restrictedFrames);
+    };
+    const createRequest = () => ({
+      protocolVersion: 1 as const,
+      messageType: 'command.request' as const,
+      commandKind: 'workflow-command' as const,
+      workflowCommandId: HOST_OWNER_PROFILE_CREATE,
+      commandId: randomUUID(),
+      role: 'gm' as const,
+      expectedRevisions: current().revisions,
+      payload: { targetProfileLabel: 'Первый профиль' },
+    });
+    let request: WorkflowCommandRequestMessage;
+    let action: ActionKey;
+    if (isAck) {
+      const create = createRequest();
+      await runtime.handle(socket, create);
+      await nav('APP-003', 'APP-003::CTA::013', current().revisions.projectionRevision);
+      action = 'PLY-030::CTA::004';
+      expect(current().presentation.layers.at(-1)?.availableActionKeys).toContain(action);
+      const pending = state().pending!;
+      request = {
+        protocolVersion: 1 as const,
+        messageType: 'command.request' as const,
+        commandKind: 'workflow-command' as const,
+        workflowCommandId: HOST_SEAT_ACK,
+        commandId: randomUUID(),
+        role: 'player' as const,
+        expectedRevisions: current().revisions,
+        payload: {
+          handoffId: pending.handoffId,
+          signedReturnContext: pending.signedReturnContext,
+          decision: 'ACTIVATE_TARGET',
+          deliveryKey: '9'.repeat(64),
+        },
+      };
+    } else {
+      request = createRequest();
+      action = 'APP-003::CTA::011';
+    }
+    const without: readonly WorkflowCommandId[] = isAck ? [] : [HOST_SEAT_ACK];
+    const restricted = await resume(without);
+    const active = restricted.presentation.layers.at(-1) ?? restricted.presentation.base;
+    expect.soft(active.availableActionKeys).not.toContain(action);
+    const before = durable();
+    restrictedFrames.length = 0;
+    await runtime.handle(restrictedSocket, request);
+    expect
+      .soft(restrictedFrames)
+      .toMatchObject([{ messageType: 'command.refusal', commandId: request.commandId }]);
+    expect(durable()).toEqual(before);
+    // The original socket still has its negotiated capabilities from the native GM to SETUP transition.
+    sent.length = 0;
+    await runtime.handle(socket, request);
+    const result = sent[0];
+    if (result?.messageType !== 'command.result')
+      throw new Error('Missing confirmed command receipt');
+    expect(result.receipt.commandId).toBe(request.commandId);
+    const after = durable();
+    expect(after.handoff.revision).toBe(before.handoff.revision + 1);
+    await resume(without);
+    restrictedFrames.length = 0;
+    await runtime.handle(restrictedSocket, request);
+    expect(restrictedFrames[0]).toMatchObject({
+      messageType: 'command.replay',
+      receipt: result.receipt,
+    });
+    expect(durable()).toEqual(after);
+  },
+  60_000,
+);
+
+it.each(['SETUP', 'CANDIDATE'] as const)(
+  'keeps an otherwise valid %s key neutral without the negotiated host workflow ACK',
+  async (phase) => {
+    const { runtime, socket, sent, h, nav } = await enterFirstHostSetup();
+    const state = () => readHostLocalSeatHandoff(h.db, h.principal.hostOwnerDeviceId);
+    const setupKey = '8'.repeat(64),
+      candidateKey = '9'.repeat(64);
+    const create = {
+      protocolVersion: 1,
+      messageType: 'command.request',
+      commandKind: 'workflow-command',
+      commandId: randomUUID(),
+      role: 'gm',
+      workflowCommandId: HOST_OWNER_PROFILE_CREATE,
+      expectedRevisions: hostSeatVector(state().revision),
+      payload: { targetProfileLabel: 'Личный профиль' },
+    } as const;
+    await runtime.handle(socket, create);
+    expect(state().profiles).toHaveLength(1);
+    let ack: WorkflowCommandRequestMessage | undefined;
+    let ackReceipt: CommandReceipt | undefined;
+    if (phase === 'CANDIDATE') {
+      await nav('APP-003', 'APP-003::CTA::013', state().revision);
+      const pending = state().pending!;
+      ack = {
+        protocolVersion: 1,
+        messageType: 'command.request',
+        commandKind: 'workflow-command',
+        commandId: randomUUID(),
+        role: 'player',
+        workflowCommandId: HOST_SEAT_ACK,
+        expectedRevisions: hostSeatVector(state().revision),
+        payload: {
+          handoffId: pending.handoffId,
+          signedReturnContext: pending.signedReturnContext,
+          decision: 'ACTIVATE_TARGET',
+          deliveryKey: candidateKey,
+        },
+      };
+      await runtime.handle(socket, ack);
+      const answer = sent.at(-1);
+      if (answer?.messageType !== 'command.result') throw new Error('Missing candidate ACK');
+      ackReceipt = answer.receipt;
+    }
+    const frames: LocalNetworkHostMessage[] = [];
+    const privateReads: string[] = [];
+    const revoked: string[] = [];
+    const unexpected = (source: string): never => {
+      privateReads.push(source);
+      throw new Error('Unexpected private read: ' + source);
+    };
+    const receiver: HostSeatClient = {
+      ...socket,
+      network: { ...socket.network },
+      campaign: { ...socket.campaign },
+      send: (message) => {
+        frames.push(message);
+      },
+      revoke: (scope?: string) => {
+        revoked.push(scope ?? 'HANDOFF');
+      },
+      openOwnedLibrary: () => unexpected('library'),
+      restoreGm: () => unexpected('gm'),
+      replayReceipts: () => unexpected('receipts'),
+    };
+    const before = state();
+    const revisions = hostSeatVector(before.revision);
+    const requestId = randomUUID();
+    await runtime.handle(receiver, {
+      protocolVersion: 3,
+      messageType: 'host.seat.control',
+      operation: 'RESUME',
+      requestId,
+      deliveryKeyOrNull: phase === 'SETUP' ? setupKey : candidateKey,
+      supportedWorkflowCommandIds: phase === 'SETUP' ? [HOST_OWNER_PROFILE_CREATE] : [],
+      unacknowledgedCommandIds: [create.commandId],
+    });
+    expect.soft(privateReads).toEqual([]);
+    expect.soft(revoked).toEqual(['CONNECTION']);
+    expect.soft(frames).toEqual([
+      {
+        protocolVersion: 2,
+        messageType: 'session.reconnect.capabilities',
+        reconnectRequestId: requestId,
+        executableWorkflowCommandIds: [],
+        revisions,
+      },
+      hostSeatSnapshot(
+        { hostSeatView: 'WAITING', revision: before.revision },
+        requestId,
+        'RECONNECT',
+      ),
+    ]);
+    expect.soft(runtime.authority(receiver)).toEqual({ role: 'WAITING' });
+    frames.length = 0;
+    const freshCreate = { ...create, commandId: randomUUID(), expectedRevisions: revisions };
+    await runtime.handle(receiver, freshCreate);
+    expect
+      .soft(frames)
+      .toMatchObject([{ messageType: 'command.refusal', commandId: freshCreate.commandId }]);
+    frames.length = 0;
+    if (ack) {
+      await runtime.handle(receiver, ack);
+      expect(frames).toMatchObject([{ messageType: 'command.replay', receipt: ackReceipt }]);
+    } else {
+      await runtime.handle(receiver, create);
+      expect(frames).toMatchObject([
+        { messageType: 'command.refusal', commandId: create.commandId },
+      ]);
+    }
+    expect(state()).toEqual(before);
+  },
+  60_000,
+);
 
 it('recovers the original APP-003 entry after the scoped tab committed before OPEN', async () => {
   const { p, h, gm, state, device, profile, origin, initial, ids } =

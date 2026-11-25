@@ -79,6 +79,7 @@ export interface HostLocalSeatHandoff {
   readonly activeReceiptIdOrNull: string | null;
   readonly activeHandoffIdOrNull: string | null;
   readonly gmDestinationConfirmed: boolean;
+  readonly setupReturnReceiptIdOrNull: string | null;
   readonly candidateContextIdOrNull: string | null;
   readonly candidateAckReceiptIdOrNull: string | null;
   readonly setupOrNull: {
@@ -144,7 +145,8 @@ type Cursor = Mutator & {
   readonly formId: string;
   readonly postSaveScopeId?: string;
 };
-type GmDestination = Mutator & { readonly ackReceiptId: string };
+type GmDestination = Mutator &
+  ({ readonly ackReceiptId: string } | { readonly setupReturnReceiptId: string });
 type ReturnSetup = Mutator & { readonly formId: 'CMP-009' | 'PLY-027' };
 type CancelCurtain = Pick<
   Ack,
@@ -196,6 +198,7 @@ function empty(): HostLocalSeatHandoff {
     active: null,
     activeProof: null,
     gmDestinationConfirmed: false,
+    setupReturnReceiptIdOrNull: null,
     activeReceiptIdOrNull: null,
     activeHandoffIdOrNull: null,
     candidateContextIdOrNull: null,
@@ -392,19 +395,34 @@ function transition(h: History, c: Command, r: SeatEventReceipt, signature: stri
         candidateSelectionOrNull: null,
       };
       break;
-    case 'GM_DESTINATION':
-      if (
-        st.gmDestinationConfirmed ||
-        st.active?.kind !== 'GM' ||
-        !st.activeProof ||
-        !st.activeHandoffIdOrNull ||
-        !st.activeReceiptIdOrNull ||
-        st.activeReceiptIdOrNull !== c.ackReceiptId ||
-        c.commandId !== 'host-local-shown:' + c.ackReceiptId
+    case 'GM_DESTINATION': {
+      if (st.gmDestinationConfirmed || st.active?.kind !== 'GM' || !st.activeProof)
+        return s.fail('FOREIGN_OWNER');
+      const issued = 'ackReceiptId' in c;
+      s.object(c, [
+        'operation',
+        'commandId',
+        'expectedRevision',
+        'activeProof',
+        issued ? 'ackReceiptId' : 'setupReturnReceiptId',
+      ]);
+      if (issued) {
+        if (
+          !st.activeHandoffIdOrNull ||
+          !st.activeReceiptIdOrNull ||
+          st.activeReceiptIdOrNull !== c.ackReceiptId ||
+          c.commandId !== 'host-local-shown:' + c.ackReceiptId
+        )
+          return s.fail('FOREIGN_OWNER');
+      } else if (
+        !st.setupReturnReceiptIdOrNull ||
+        c.setupReturnReceiptId !== st.setupReturnReceiptIdOrNull ||
+        c.commandId !== 'host-local-setup-shown:' + c.setupReturnReceiptId
       )
         return s.fail('FOREIGN_OWNER');
       next = { ...next, gmDestinationConfirmed: true };
       break;
+    }
     case 'PROFILE':
       checkProfile(c.profile);
       if (
@@ -434,6 +452,7 @@ function transition(h: History, c: Command, r: SeatEventReceipt, signature: stri
         active: { kind: 'GM', origin: setup.origin, destinationFormId: c.formId },
         activeReceiptIdOrNull: h.setupAuthority.receipt,
         activeHandoffIdOrNull: h.setupAuthority.handoff,
+        setupReturnReceiptIdOrNull: r.receiptId,
       };
       h.setupAuthority = null;
       break;
@@ -739,6 +758,8 @@ function transition(h: History, c: Command, r: SeatEventReceipt, signature: stri
   }
   if (c.operation === 'ACK' || c.operation === 'SETUP' || c.operation === 'BEGIN')
     next = { ...next, gmDestinationConfirmed: false };
+  if (c.operation !== 'RETURN_SETUP' && next.setupReturnReceiptIdOrNull !== null)
+    next = { ...next, setupReturnReceiptIdOrNull: null };
   if (next.active?.kind !== 'CANDIDATE') {
     next = { ...next, candidateContextIdOrNull: null };
   } else if (c.operation === 'ACK' && next.active?.kind === 'CANDIDATE') {

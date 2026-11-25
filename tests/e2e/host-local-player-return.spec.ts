@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { HOST_SEAT_ACK } from '../../src/shared/host-seat.js';
 import type {
@@ -12,6 +13,7 @@ import {
   networkForm,
 } from '../fixtures/network-admission-browser.js';
 import {
+  createHostLocalBrowserScenario,
   createNetworkBrowserProcess,
   disposeNetworkResources,
 } from '../fixtures/network-application-e2e.js';
@@ -33,17 +35,63 @@ function captureFrames(page: Page) {
   return received;
 }
 
+test('a first GM_ONLY exit restores the native panel and its campaign QR after restart', async ({
+  page: master,
+}) => {
+  test.setTimeout(240_000);
+  const host = await createNetworkBrowserProcess(0);
+  master.setDefaultTimeout(host.operationTimeoutMs);
+  const reply = { timeout: host.operationTimeoutMs };
+  let failure: unknown;
+  try {
+    await createNetworkCampaign(master, host.baseURL);
+    const qr = master
+      .getByRole('region', { name: 'Созданная кампания' })
+      .getByRole('img', { name: 'QR подключения к кампании', exact: true });
+    const qrDigest = async () =>
+      createHash('sha256')
+        .update(await qr.innerHTML())
+        .digest('hex');
+    const originalQr = await qrDigest();
+    await click(master, 'CMP-006::CTA::001');
+    await click(master, 'CMP-007::CTA::003');
+    await click(master, 'CMP-008::CTA::001');
+    await click(master, 'CMP-009::CTA::002');
+    await click(master, 'APP-003::CTA::004');
+    await expect(networkForm(master, 'PLY-027')).toBeVisible(reply);
+    await click(master, 'PLY-027::CTA::001');
+    await click(master, 'CMP-009::CTA::001');
+    await expect(networkForm(master, 'CMP-008')).toBeVisible(reply);
+    await host.restart();
+    await master.reload();
+    await expect(networkForm(master, 'CMP-008')).toBeVisible(reply);
+    await click(master, 'CMP-008::CTA::009');
+    await click(master, 'CMP-007::CTA::006');
+    await expect(networkForm(master, 'CMP-006')).toBeVisible(reply);
+    await expect(qr).toBeVisible(reply);
+    expect(await qrDigest()).toBe(originalQr);
+    await master.reload();
+    await expect(networkForm(master, 'CMP-006')).toBeVisible(reply);
+    await expect(qr).toBeVisible(reply);
+    expect(await qrDigest()).toBe(originalQr);
+    expect(host.inspectOrdinarySeats().controllers).toEqual([]);
+  } catch (error) {
+    failure = error;
+  } finally {
+    await disposeNetworkResources([() => host.close()], failure);
+  }
+});
+
 test('an empty host-local candidate returns before SUBMIT through the signed GM curtain and the host restores GM_ONLY', async ({
   browser,
 }) => {
   test.setTimeout(240_000);
-  const host = await createNetworkBrowserProcess(2);
-  const gmContext = await browser.newContext(),
-    candidateContext = await browser.newContext();
-  const master = await gmContext.newPage(),
-    candidate = await candidateContext.newPage();
-  master.setDefaultTimeout(host.operationTimeoutMs);
-  candidate.setDefaultTimeout(host.operationTimeoutMs);
+  const {
+    host,
+    master,
+    participant: candidate,
+    close,
+  } = await createHostLocalBrowserScenario(browser, 2);
   const candidateFrames = captureFrames(candidate);
   const received: string[] = [],
     sent: string[] = [],
@@ -190,6 +238,8 @@ test('an empty host-local candidate returns before SUBMIT through the signed GM 
       profile,
     ]);
 
+    await navigateGm('CMP-009::CTA::001', 'CMP-008');
+    await navigateGm('CMP-008::CTA::001', 'CMP-009');
     await navigateGm('CMP-009::CTA::002', 'APP-003');
     await click(master, 'APP-003::CTA::004');
     await expect(networkForm(master, 'PLY-027')).toContainText(
@@ -199,6 +249,14 @@ test('an empty host-local candidate returns before SUBMIT through the signed GM 
     await expect(atlasControl(master, 'PLY-027::CTA::003')).toHaveCount(0);
     await master.reload();
     await expect(networkForm(master, 'PLY-027')).toBeVisible(reply);
+    await navigateGm('PLY-027::CTA::001', 'CMP-009');
+    await navigateGm('CMP-009::CTA::002', 'APP-003');
+    await navigateGm('APP-003::CTA::005', 'CMP-009');
+    await master.reload();
+    await expect(networkForm(master, 'CMP-009')).toBeVisible(reply);
+    await navigateGm('CMP-009::CTA::001', 'CMP-008');
+    await master.reload();
+    await expect(networkForm(master, 'CMP-008')).toBeVisible(reply);
     const final = host.inspect();
     expect(final.sources).toEqual(before.sources);
     expect(final.requests).toEqual([]);
@@ -210,9 +268,6 @@ test('an empty host-local candidate returns before SUBMIT through the signed GM 
   } catch (error) {
     failure = error;
   } finally {
-    await disposeNetworkResources(
-      [() => candidateContext.close(), () => gmContext.close(), () => host.close()],
-      failure,
-    );
+    await close(failure);
   }
 });

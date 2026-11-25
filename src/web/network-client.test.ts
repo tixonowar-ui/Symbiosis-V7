@@ -506,6 +506,72 @@ describe('host-local admitted player Ready delivery', () => {
     };
   }
   it.each([
+    ['same Ready', true, true, 0, 0, true],
+    ['new Not ready', true, false, 2, 1, true],
+    ['new Ready', false, true, 2, 1, true],
+    ['old Not ready', true, false, -1, -1, false],
+    ['old Ready', false, true, -1, -1, false],
+    ['changed Ready at equal revisions', false, true, 0, 0, false],
+    ['old readiness at newer native revisions', true, false, 2, -1, false],
+  ] as const)(
+    'checks idle managed reconnect of the admitted lobby (%s)',
+    async (_case, firstReady, nextReady, revisionDelta, counterDelta, accepted) => {
+      writeHostDelivery({
+        kind: 'ACTIVE',
+        key: 'a'.repeat(64),
+        receiptId: player.receiptId,
+        revision: player.revision,
+        targetFingerprint: reconnectFingerprint(player.target),
+      });
+      const { connection, states, socket } = await openNetworkTransport(p.deviceId);
+      function publish(s: Socket, ready: boolean, delta: number, counter: number) {
+        const id = sent(s)['requestId'] as string;
+        const body = {
+          ...p,
+          stateRevision: p.stateRevision + delta,
+          projectionRevision: p.projectionRevision + delta,
+          readyStatus: ready ? 'READY' : 'NOT_READY',
+          lobby: {
+            ...p.lobby,
+            ready,
+            lobbyEventRevision: p.lobby.lobbyEventRevision + counter,
+            readinessRevision: p.lobby.readinessRevision + counter,
+          },
+        };
+        const next = frame('RECONNECT', id, body);
+        s.message({
+          messageType: 'session.reconnect.capabilities',
+          protocolVersion: 2,
+          reconnectRequestId: id,
+          revisions: next.revisions,
+          executableWorkflowCommandIds: [HOST_SEAT_ACK, readyCommand],
+        });
+        s.message(next);
+      }
+      publish(socket, firstReady, 0, 0);
+      expect(states.at(-1)).toMatchObject({
+        kind: 'ready',
+        snapshot: { hostSeat: player, projection: { lobby: { ready: firstReady } } },
+      });
+      socket.drop();
+      expect(states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+      const afterDrop = states.length;
+      expect(connection.reconnect()).toEqual({ ok: true });
+      const retry = Socket.instances.at(-1)!;
+      retry.open();
+      publish(retry, nextReady, revisionDelta, counterDelta);
+      if (accepted) {
+        expect(states.at(-1)).toMatchObject({
+          kind: 'ready',
+          snapshot: { hostSeat: player, projection: { lobby: { ready: nextReady } } },
+        });
+      } else {
+        expect(states.at(-1)).toMatchObject({ kind: 'protocol-error', snapshot: null });
+        expect(states.slice(afterDrop).some((s) => s.kind === 'ready')).toBe(false);
+      }
+    },
+  );
+  it.each([
     'identical',
     'foreign grant',
     'changed actions',
@@ -677,6 +743,37 @@ describe('historical host-local candidate admission result', () => {
     'NET-007': ['NET-007::CTA::001', 'NET-007::CTA::005'],
     'NET-027': ['NET-027::CTA::002'],
   } as const;
+  function rejectedProjection() {
+    const gmReason = 'Заявка отклонена мастером.';
+    const body = {
+      schemaVersion: 1,
+      groupLabels: [],
+      proposalOrNull: null,
+      gmDecision: {
+        ...source.publication.gmDecision,
+        decision: 'REJECT',
+        reasonOrNull: gmReason,
+        workflowCommandId: 'UI-CMD-ADMISSION-GM-REJECT',
+        campaignCharacterIds: [],
+        proposalRevisionOrNull: null,
+        proposalChecksumOrNull: null,
+      },
+    };
+    return {
+      ...projection,
+      publication: { ...body, publicationChecksum: reconnectFingerprint(body) },
+      result: 'GM_REJECTED',
+      gmReasonOrNull: gmReason,
+      decision: null,
+      receiptOrNull: null,
+      decisionReceiptId: body.gmDecision.receiptId,
+      proposalRevision: null,
+      proposalChecksum: null,
+      fullCampaignCopyDiffs: [],
+      blockers: [],
+      ownCampaignCopies: [],
+    };
+  }
   function frame(
     formId: keyof typeof allowed,
     reason: 'RECONNECT' | 'FORM_ACTION' | 'HOST_SYSTEM_EVENT',
@@ -749,6 +846,60 @@ describe('historical host-local candidate admission result', () => {
     flow.socket.message(initial(offer(flow.socket, capabilities)));
     return flow;
   }
+  it.each([
+    ['NET-007', 'unchanged'],
+    ['NET-027', 'unchanged'],
+    ['NET-007', 'changed historical copy'],
+    ['NET-027', 'changed decision receipt'],
+    ['NET-027', 'changed native revisions'],
+  ] as const)(
+    'checks idle managed reconnect of the signed archive (%s, %s)',
+    async (origin, scenario) => {
+      const { connection, socket, states } = await resume([HOST_SEAT_ACK], (id) =>
+        frame(origin, 'RECONNECT', id),
+      );
+      expect(states.at(-1)).toMatchObject({
+        kind: 'ready',
+        snapshot: { formId: origin, hostSeat: active },
+      });
+      socket.drop();
+      expect(states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+      const afterDrop = states.length;
+      expect(connection.reconnect()).toEqual({ ok: true });
+      const retry = Socket.instances.at(-1)!;
+      retry.open();
+      const id = sent(retry)['requestId'] as string;
+      const body = structuredClone(projection);
+      if (scenario === 'changed historical copy') body.itemLabels[0]!.name += ' changed';
+      if (scenario === 'changed decision receipt') {
+        body.receiptOrNull.receiptId = ATTEMPT;
+        body.decisionReceiptId = ATTEMPT;
+      }
+      const nextRevisions = { ...revisions };
+      if (scenario === 'changed native revisions') {
+        nextRevisions.projectionRevision++;
+        body.projectionRevision++;
+      }
+      const response = frame('NET-007', 'RECONNECT', id, body);
+      retry.message({
+        messageType: 'session.reconnect.capabilities',
+        protocolVersion: 2,
+        reconnectRequestId: id,
+        revisions: nextRevisions,
+        executableWorkflowCommandIds: [HOST_SEAT_ACK],
+      });
+      retry.message({ ...response, revisions: nextRevisions });
+      if (scenario === 'unchanged') {
+        expect(states.at(-1)).toMatchObject({
+          kind: 'ready',
+          snapshot: { formId: 'NET-007', hostSeat: active, projection },
+        });
+      } else {
+        expect(states.at(-1)).toMatchObject({ kind: 'protocol-error', snapshot: null });
+        expect(states.slice(afterDrop).some((s) => s.kind === 'ready')).toBe(false);
+      }
+    },
+  );
   function refuseResume(socket: Socket, requestId: string, revision: number = active.revision) {
     socket.message({
       messageType: 'navigation.form-action.refusal',
@@ -888,6 +1039,85 @@ describe('historical host-local candidate admission result', () => {
     const { states } = await resume([HOST_SEAT_ACK, 'UI-CMD-ADMISSION-PLAYER-DECIDE']);
     expect(states.at(-1)).toMatchObject({ kind: 'protocol-error', snapshot: null });
   });
+  it.each(['GM_REJECTED', 'PLAYER_DECLINED'] as const)(
+    'lets the user operate the archived result in App without a live peer (%s)',
+    async (result) => {
+      writeHostDelivery({
+        kind: 'ACTIVE',
+        key: 'a'.repeat(64),
+        receiptId: active.receiptId,
+        revision: active.revision,
+        targetFingerprint: reconnectFingerprint(active.target),
+      });
+      vi.stubGlobal('WebSocket', Socket);
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(() => Promise.resolve(Response.json({ deviceId: source.deviceId }))),
+      );
+      const container = document.createElement('div');
+      document.body.append(container);
+      const root = createRoot(container);
+      roots.push({ root, container });
+      act(() => root.render(createElement(App)));
+      await vi.waitFor(() => expect(Socket.instances).toHaveLength(1));
+      const socket = Socket.instances[0]!;
+      const rejected = result === 'GM_REJECTED';
+      const payload = rejected ? rejectedProjection() : projection;
+      const returnAction = 'NET-007::CTA::005';
+      act(() => {
+        socket.open();
+        socket.message(
+          frame('NET-007', 'RECONNECT', offer(socket), payload, rejected ? [] : allowed['NET-007']),
+        );
+      });
+      function click(action: ActionKey) {
+        const button = container.querySelector<HTMLButtonElement>(
+          `button[data-atlas-action-key="${action}"]`,
+        );
+        expect(button, action).not.toBeNull();
+        expect(button!.matches(':disabled'), action).toBe(false);
+        act(() => button!.click());
+      }
+      if (rejected) {
+        const eventId =
+          'network-owner-view:' +
+          reconnectFingerprint([active.receiptId, revisions.projectionRevision, returnAction]);
+        act(() =>
+          socket.message(frame('NET-007', 'HOST_SYSTEM_EVENT', eventId, payload, [returnAction])),
+        );
+      } else {
+        for (const [from, to] of [
+          ['NET-007', 'NET-027'],
+          ['NET-027', 'NET-007'],
+        ] as const) {
+          click(allowed[from][0]);
+          const request = sent(socket);
+          expect(request).toMatchObject({
+            messageType: 'navigation.form-action',
+            sourceFormId: from,
+            actionKey: allowed[from][0],
+          });
+          act(() =>
+            socket.message(frame(to, 'FORM_ACTION', request['navigationRequestId'] as string)),
+          );
+        }
+      }
+      click(returnAction);
+      expect(sent(socket)).toMatchObject({
+        messageType: 'navigation.form-action',
+        sourceFormId: 'NET-007',
+        actionKey: returnAction,
+      });
+      const messages = socket.sent.map(
+        (message) => (JSON.parse(message) as { messageType: string }).messageType,
+      );
+      expect(messages).toEqual([
+        'host.seat.control',
+        ...(rejected ? [] : ['navigation.form-action', 'navigation.form-action']),
+        'navigation.form-action',
+      ]);
+    },
+  );
   it.each([
     'unlocked',
     'old correlation',
@@ -897,35 +1127,7 @@ describe('historical host-local candidate admission result', () => {
   ] as const)(
     'refreshes the archived GM rejection only to unlock return on the current receipt (%s)',
     async (delivery) => {
-      const gmReason = 'Заявка отклонена мастером.';
-      const body = {
-        schemaVersion: 1,
-        groupLabels: [],
-        proposalOrNull: null,
-        gmDecision: {
-          ...source.publication.gmDecision,
-          decision: 'REJECT',
-          reasonOrNull: gmReason,
-          workflowCommandId: 'UI-CMD-ADMISSION-GM-REJECT',
-          campaignCharacterIds: [],
-          proposalRevisionOrNull: null,
-          proposalChecksumOrNull: null,
-        },
-      };
-      const rejected = {
-        ...projection,
-        publication: { ...body, publicationChecksum: reconnectFingerprint(body) },
-        result: 'GM_REJECTED',
-        gmReasonOrNull: gmReason,
-        decision: null,
-        receiptOrNull: null,
-        decisionReceiptId: body.gmDecision.receiptId,
-        proposalRevision: null,
-        proposalChecksum: null,
-        fullCampaignCopyDiffs: [],
-        blockers: [],
-        ownCampaignCopies: [],
-      };
+      const rejected = rejectedProjection();
       const returned = 'NET-007::CTA::005';
       const { socket, states } = await resume([HOST_SEAT_ACK], (id) =>
         frame('NET-007', 'RECONNECT', id, rejected, []),
@@ -2319,6 +2521,40 @@ function gmSnapshot(
     },
   };
 }
+it.each([true, false])(
+  'checks the campaign QR against the original receiptless GM setup scope (%s)',
+  async (sameContext) => {
+    writeHostDelivery({
+      kind: 'SETUP',
+      key: 'a'.repeat(64),
+      gmFingerprint: reconnectFingerprint([CAMPAIGN, CONTEXT]),
+    });
+    const { socket, states } = await openNetworkTransport(DEVICE);
+    const resume = sent(socket);
+    expect(resume).toMatchObject({ messageType: 'host.seat.control', operation: 'RESUME' });
+    const id = resume['requestId'] as string;
+    socket.message({
+      protocolVersion: 2,
+      messageType: 'session.reconnect.capabilities',
+      reconnectRequestId: id,
+      revisions: ZERO,
+      executableWorkflowCommandIds: [HOST_SEAT_ACK],
+    });
+    const projection = { ...gmBirth(), gmLocalContextId: sameContext ? CONTEXT : SCOPE };
+    socket.message(gmSnapshot('CMP-006', projection, ZERO, id));
+    if (sameContext) {
+      expect(states.at(-1)).toMatchObject({
+        kind: 'ready',
+        snapshot: { formId: 'CMP-006', hostSetupGm: true, projection },
+      });
+    } else {
+      expect(states.at(-1)).toMatchObject({ kind: 'protocol-error', snapshot: null });
+      expect(states.some((state) => state.kind === 'ready')).toBe(false);
+    }
+    expect(window.sessionStorage.getItem(GM_CONTEXT_STORAGE_KEY)).toBeNull();
+  },
+);
+
 function gmReady(
   socket: Socket,
   p: JsonObject,
