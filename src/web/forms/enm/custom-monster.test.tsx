@@ -1,3 +1,4 @@
+import { BroadcastChannel } from 'node:worker_threads';
 import { act, createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
@@ -20,6 +21,8 @@ import { GM_CONTEXT_STORAGE_KEY } from '../cmp/campaign-create.js';
 import { EnemyAuthoringContent } from './enemy-authoring-content.js';
 import {
   createCustomMonsterClientFixture,
+  ORDINARY_ENEMY_GM_CAPABILITIES,
+  type InitialEnemyCampaign,
   loadMonsterStatRollClientSnapshots,
 } from '../../../../tests/fixtures/custom-monster-client.js';
 import {
@@ -72,6 +75,7 @@ afterEach(() => {
   connections.splice(0).forEach((connection) => connection.disconnect());
   Socket.instances = [];
   window.sessionStorage.clear();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 function mount(p: CustomMonsterProjection) {
@@ -95,7 +99,12 @@ function mount(p: CustomMonsterProjection) {
   );
   return { container, onValue, onPrepare, onMonsterDraft };
 }
-function frame(p: CustomMonsterProjection, reason: string, correlationId: string) {
+function frame(
+  p: CustomMonsterProjection,
+  reason: string,
+  correlationId: string,
+  campaign?: InitialEnemyCampaign,
+) {
   return {
     messageType: 'projection.snapshot',
     protocolVersion: 2,
@@ -113,13 +122,27 @@ function frame(p: CustomMonsterProjection, reason: string, correlationId: string
         routeTemplate: `/master/campaigns/:campaignId/enemy-catalog/${p.formId.toLowerCase()}`,
         routeBindings: [{ parameterIndex: 0, source: 'inherited', value: p.campaignId }],
         availableActionKeys: enemyAuthoringActions(p),
-        roleFilteredPayload: p,
+        roleFilteredPayload: campaign
+          ? {
+              ...p,
+              currentCampaignLifecycle: {
+                ...campaign,
+                stateRevision: p.stateRevision,
+                projectionRevision: p.projectionRevision,
+                actorVisibilityRevision: p.actorVisibilityRevision,
+              },
+            }
+          : p,
       },
       layers: [],
     },
   };
 }
-async function connect(p: CustomMonsterProjection, ownerDeviceId: string) {
+async function connect(
+  p: CustomMonsterProjection,
+  ownerDeviceId: string,
+  campaign?: InitialEnemyCampaign,
+) {
   vi.stubGlobal('crypto', {
     getRandomValues: (values: Uint32Array) => {
       values.set([1, 2, 3, 4]);
@@ -146,22 +169,115 @@ async function connect(p: CustomMonsterProjection, ownerDeviceId: string) {
   const socket = Socket.instances.at(-1);
   if (socket === undefined) throw Error('Expected browser socket');
   socket.open();
-  const request = JSON.parse(socket.sent[0]!) as { reconnectRequestId: string };
+  const request = JSON.parse(socket.sent[0]!) as {
+    reconnectRequestId: string;
+    supportedWorkflowCommandIds: string[];
+  };
+  if (campaign)
+    expect(request.supportedWorkflowCommandIds).toEqual(
+      expect.arrayContaining([...ORDINARY_ENEMY_GM_CAPABILITIES]),
+    );
   socket.message({
     messageType: 'session.reconnect.capabilities',
     protocolVersion: 2,
     reconnectRequestId: request.reconnectRequestId,
-    executableWorkflowCommandIds: ENEMY_AUTHORING_WORKFLOWS,
+    executableWorkflowCommandIds: campaign
+      ? ORDINARY_ENEMY_GM_CAPABILITIES
+      : ENEMY_AUTHORING_WORKFLOWS,
     revisions: {
       stateRevision: p.stateRevision,
       projectionRevision: p.projectionRevision,
       actorVisibilityRevision: p.actorVisibilityRevision,
     },
   });
-  socket.message(frame(p, 'RECONNECT', request.reconnectRequestId));
-  expect(states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId: p.formId } });
+  socket.message(frame(p, 'RECONNECT', request.reconnectRequestId, campaign));
+  const connected = states.at(-1);
+  if (connected?.kind === 'protocol-error') throw new Error(connected.detail);
+  expect(connected).toMatchObject({ kind: 'ready', snapshot: { formId: p.formId } });
   return { socket, states, connection };
 }
+it('keeps the ordinary GM monster sheet read-only until manual reconnect replays its lost V1 receipt', async ({
+  onTestFinished,
+}) => {
+  vi.stubGlobal('BroadcastChannel', BroadcastChannel);
+  const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+  const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+  const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  onTestFinished(() => {
+    focus.mockRestore();
+    hidden.mockRestore();
+    visibility.mockRestore();
+  });
+  const source = await createCustomMonsterClientFixture(false, { captureSavedV1: true });
+  const receipt = source.commitReceiptOrNull,
+    saved = source.savedOrNull;
+  if (!receipt || !saved || !source.commitCampaignOrNull)
+    throw new Error('Missing original V1 receipt or destination');
+  const { socket, states, connection } = await connect(
+    source.full,
+    source.ownerDeviceId,
+    source.commitCampaignOrNull,
+  );
+  const crypto = globalThis.crypto;
+  const commandBytes = Uint8Array.from(receipt.commandId.replaceAll('-', '').match(/../g)!, (hex) =>
+    Number.parseInt(hex, 16),
+  );
+  vi.stubGlobal('crypto', {
+    getRandomValues(value: Uint8Array<ArrayBuffer> | Uint32Array<ArrayBuffer>) {
+      if (value instanceof Uint8Array) {
+        value.set(commandBytes);
+        return value;
+      }
+      return crypto.getRandomValues(value);
+    },
+  });
+  expect(connection.requestFormAction('ENM-016::CTA::002')).toEqual({ ok: true });
+  expect(w.jsonObject(JSON.parse(socket.sent.at(-1)!), '$.command')).toMatchObject({
+    commandId: receipt.commandId,
+    workflowCommandId: 'UI-CMD-ENEMY-COMMIT-V1',
+  });
+  vi.useFakeTimers();
+  socket.close();
+  socket.onclose?.call(socket as unknown as WebSocket, new CloseEvent('close', { code: 1012 }));
+  expect(states.at(-1)).toMatchObject({
+    kind: 'disconnected',
+    snapshot: { formId: 'ENM-016', projection: source.full },
+  });
+  expect(connection.requestFormAction('ENM-016::CTA::002').ok).toBe(false);
+  await vi.advanceTimersByTimeAsync(1100);
+  expect(Socket.instances.at(-1)).toBe(socket);
+  expect(connection.reconnect()).toEqual({ ok: true });
+  const fresh = Socket.instances.at(-1)!;
+  fresh.open();
+  const request = w.jsonObject(JSON.parse(fresh.sent[0]!), '$.resume');
+  expect(request).toMatchObject({
+    messageType: 'campaign.local-context.resume',
+    gmLocalContextId: source.full.contextId,
+    unacknowledgedCommandIds: [receipt.commandId],
+  });
+  fresh.message({
+    protocolVersion: 1,
+    messageType: 'command.replay',
+    lifecycleState: 'IDEMPOTENT_REPLAY',
+    receipt,
+  });
+  const id = w.string(request['reconnectRequestId'], '$.reconnectRequestId');
+  const destination = frame(saved, 'RECONNECT', id, source.commitCampaignOrNull);
+  fresh.message({
+    protocolVersion: 2,
+    messageType: 'session.reconnect.capabilities',
+    reconnectRequestId: id,
+    revisions: destination.revisions,
+    executableWorkflowCommandIds: ORDINARY_ENEMY_GM_CAPABILITIES,
+  });
+  fresh.message(destination);
+  expect(states.at(-1)).toMatchObject({
+    kind: 'ready',
+    snapshot: { formId: 'ENM-020', projection: saved },
+  });
+  expect(fresh.sent).toHaveLength(1);
+}, 30_000);
+
 it('uses actual source monster controls, explicit empty consent, and rejects malformed/foreign-kind packets before replacing the real complete sheet', async () => {
   // This individual integration body includes the real host/source/SQLite preparation measured at 7.1s.
   // Shared hooks/defaults retain their original budgets; mocked Socket below is not a network claim.

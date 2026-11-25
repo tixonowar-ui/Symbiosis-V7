@@ -70,7 +70,10 @@ async function confirmedGmCommand(
   const start = wire.length;
   const reply = { timeout: scenario.gm.operationTimeoutMs };
   await atlasControl(scenario.masterPage, action).click();
-  const sent = () => wire.slice(start).find((event) => event.action === workflow);
+  const sent = () =>
+    wire
+      .slice(start)
+      .find((event) => event.type === 'command.request' && event.action === workflow);
   await expect.poll(sent, reply).toBeDefined();
   const request = sent()!;
   const response = () =>
@@ -88,6 +91,7 @@ async function confirmedGmCommand(
   const receipt = response()!;
   expect(receipt).toMatchObject({
     type: 'command.result',
+    lifecycleState: 'COMMITTED',
     id: request.id,
     receipt: expect.any(String),
   });
@@ -160,7 +164,10 @@ export async function admitAndStart(
     checksum: expect.stringMatching(/^[0-9a-f]{64}$/u),
     revision: 1,
   });
-  const proposed = gm.inspect().copies;
+  const admission = gm.inspect();
+  const proposed = admission.copies;
+  const originalSessions = admission.sessions.map((row) => row['technical_session_id']);
+  expect(originalSessions).toHaveLength(1);
   expect(proposed).toHaveLength(locations.length);
   expect(proposed.every((row) => row['lifecycle_state'] === 'PROPOSED')).toBe(true);
   // The owner's authenticated poll starts a separate delivery on the other installation.
@@ -283,10 +290,144 @@ export async function admitAndStart(
   await expect(atlasControl(masterPage, 'NET-016::CTA::002')).toBeVisible({
     timeout: gm.operationTimeoutMs,
   });
-  await atlasControl(masterPage, 'NET-016::CTA::002').click();
-  await expect(networkForm(playerPage, 'PLY-001')).toBeVisible({
-    timeout: player.operationTimeoutMs,
+  const fromStart = playerWire.length;
+  const admissionDecisions = gm.inspectAdmissionPublication().gmDecisions;
+  const start = await confirmedGmCommand(
+    scenario,
+    gmReview,
+    'NET-016::CTA::002',
+    'UI-CMD-CAMPAIGN-START',
+    'GM-001',
+  );
+  const scene = start.receipt.startScene;
+  if (!scene) throw Error('Missing GM Start scene in the correlated receipt');
+  expect(scene.campaignId).toBe(beforeReady.campaignId);
+  expect(start.destination.campaignStatus).toBe('HOSTING');
+  const ids = controllers.map((c) => c.campaign_character_id).sort();
+  expect(scene.includedIds.toSorted()).toEqual(ids);
+  const active = gm.inspect().copies;
+  expect(active.map((copy) => copy['campaign_character_id']).sort()).toEqual(ids);
+  expect(
+    active.every(
+      (copy) => copy['campaign_id'] === scene.campaignId && copy['lifecycle_state'] === 'ACTIVE',
+    ),
+  ).toBe(true);
+  const seat = controllers.find((c) => c.local_controller_seat_id === beforeReady.controllerSeat);
+  if (!seat) throw Error('Missing addressed controller in original admission');
+  let deliveryStart = fromStart;
+  let retrySocket: number | undefined;
+  const peace = () => {
+    const frames = playerWire.slice(deliveryStart);
+    return frames.find(
+      (frame, index) =>
+        frame.peace !== undefined &&
+        (retrySocket === undefined ||
+          (frame.socket > retrySocket &&
+            frames
+              .slice(0, index)
+              .some((event) => event.type === 'open' && event.socket === frame.socket))),
+    )?.peace;
+  };
+  const retries = (since = fromStart) =>
+    playerWire
+      .slice(since)
+      .filter((event) => event.type === 'network.peer-control' && event.action === 'RETRY');
+  const latestPeer = () => playerWire.findLast((event) => event.type === 'network.peer-state');
+  const visibleLoss = async () => {
+    if (peace()) return false;
+    const peer = latestPeer();
+    return (
+      peer?.form === 'NET-009' &&
+      peer.peer?.state === 'LOST' &&
+      peer.peer.diagnostic === 'PEER_UNAVAILABLE' &&
+      (await lostForm.isVisible())
+    );
+  };
+  // An ordinary healthy peer must publish the addressed scene without an operator action.
+  await expect.poll(async () => Boolean(peace()) || (await visibleLoss()), reply).toBe(true);
+  let manualRetry = false;
+  if (!peace() && (await visibleLoss())) {
+    const buttons = await lostForm
+      .locator('[data-atlas-action-key="NET-009::CTA::001"]')
+      .elementHandles();
+    expect(buttons.length).toBeLessThanOrEqual(1);
+    const button = buttons[0];
+    const lost = latestPeer();
+    if (button && !peace() && lost?.form === 'NET-009' && lost.peer?.state === 'LOST') {
+      const identity = {
+        context: beforeReady.contextId,
+        campaign: beforeReady.campaignId,
+        scope: beforeReady.networkScopeId,
+        owner: player.deviceId,
+        seat: beforeReady.controllerSeat,
+      };
+      expect(lost.peer).toMatchObject({
+        ...identity,
+        diagnostic: 'PEER_UNAVAILABLE',
+        session: originalSessions[0],
+        pin: gm.publicHostIdentity(),
+        attempt: expect.any(String),
+      });
+      // Use this particular rendered button. A locator would re-resolve a later loss after recovery.
+      expect(retries()).toHaveLength(0);
+      const beforeClick = playerWire.length;
+      try {
+        await button.click(reply);
+      } catch (error) {
+        if (
+          await button.evaluate((element: { readonly isConnected: boolean }) => element.isConnected)
+        )
+          throw error;
+      } finally {
+        await button.dispose();
+      }
+      await expect
+        .poll(() => retries(beforeClick).length > 0 || Boolean(peace()), reply)
+        .toBe(true);
+      const request = retries(beforeClick)[0];
+      if (request) {
+        expect(request).toMatchObject({
+          socket: lost.socket,
+          id: expect.any(String),
+          retry: { command: lost.peer.attempt, scope: identity.scope, context: identity.context },
+        });
+        const outcome = () =>
+          playerWire
+            .slice(playerWire.indexOf(request) + 1)
+            .find(
+              (event) =>
+                event.type === 'network.peer-state' &&
+                event.socket === request.socket &&
+                event.id === request.id &&
+                event.peer?.outcome !== 'NONE',
+            );
+        await expect.poll(outcome, reply).toBeDefined();
+        const confirmed = outcome()!;
+        expect(confirmed.peer).toMatchObject({ ...identity, outcome: 'CONFIRMED' });
+        manualRetry = true;
+        // A confirmed retry reopens /state. An earlier PEACE cannot prove that reconciliation.
+        deliveryStart = playerWire.indexOf(confirmed) + 1;
+        retrySocket = request.socket;
+      }
+    } else {
+      await button?.dispose();
+    }
+  }
+  await expect.poll(peace, reply).toMatchObject({
+    campaign: scene.campaignId,
+    scene: scene.sceneId,
+    scope: beforeReady.networkScopeId,
+    context: beforeReady.contextId,
+    projectionRole: 'player',
+    owner: player.deviceId,
+    seat: beforeReady.controllerSeat,
+    character: seat.campaign_character_id,
   });
+  await expect(networkForm(playerPage, 'PLY-001')).toBeVisible(reply);
+  expect(retries()).toHaveLength(manualRetry ? 1 : 0);
+  expect(gm.inspect().sessions.map((row) => row['technical_session_id'])).toEqual(originalSessions);
+  expect(gm.inspectAdmissionPublication().gmDecisions).toEqual(admissionDecisions);
+  expect(gm.inspectOrdinarySeats().controllers).toEqual(controllers);
   return controllers;
 }
 

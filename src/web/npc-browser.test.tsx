@@ -1086,7 +1086,7 @@ function editRefusal(r: ReturnType<typeof request>) {
     refusal: { code: 'STALE_ATTEMPT' },
   };
 }
-async function mountNpc(final: NpcGmProjection | null = null) {
+async function mountNpc(final: NpcGmProjection | null = null, supported: readonly string[] = caps) {
   setup();
   vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
   container = document.createElement('div');
@@ -1098,7 +1098,7 @@ async function mountNpc(final: NpcGmProjection | null = null) {
   });
   const socket = Socket.all.at(-1)!;
   await act(async () => {
-    if (final === null) resume(socket);
+    if (final === null) resume(socket, identity(), supported);
     else {
       socket.open();
       const reconnect = JSON.parse(socket.sent[0]!) as { reconnectRequestId: string };
@@ -1156,6 +1156,34 @@ async function typeValue(input: HTMLInputElement, value: string) {
   });
 }
 describe('App explicit NPC input confirmation', () => {
+  it('withdraws unsent NPC input from the ordinary GM DOM until authenticated manual reconnect', async ({
+    onTestFinished,
+  }) => {
+    const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const visible = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    onTestFinished(() => {
+      focus.mockRestore();
+      visible.mockRestore();
+    });
+    const supported = [...caps, HOST_SEAT_ACK, HOST_OWNER_PROFILE_CREATE];
+    const socket = await mountNpc(null, supported);
+    const input = namedInput('Имя НПС');
+    const before = socket.sent.length;
+    await typeValue(input, 'Черновое имя без подтверждения');
+    expect(input.value).toBe('Черновое имя без подтверждения');
+    expect(socket.sent).toHaveLength(before);
+    act(() => socket.lost());
+    expect(input.isConnected).toBe(false);
+    expect(container!.querySelector('[data-npc-content]')).toBeNull();
+    expect(container!.querySelector('[aria-label="Локальный ввод НПС"]')).toBeNull();
+    act(() => namedButton('Переподключиться').click());
+    const restored = Socket.all.at(-1)!;
+    expect(restored).not.toBe(socket);
+    act(() => resume(restored, identity(), supported));
+    expect(namedInput('Имя НПС').value).toBe('');
+    expect(namedInput('Имя НПС').matches(':disabled')).toBe(false);
+    expect(restored.sent).toHaveLength(1);
+  });
   it('keeps every typed character and focused DOM node with zero frames/UUID until one explicit full-stage apply', async () => {
     const socket = await mountNpc();
     const before = socket.sent.length,

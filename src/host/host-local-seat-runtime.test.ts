@@ -41,7 +41,7 @@ import { createHostLocalSeatRuntime, type HostSeatClient } from './host-local-se
 import { hostSeatSnapshot, hostSeatVector } from './host-local-seat-presentation.js';
 
 setupNetworkFixture('host-local-application-returns');
-async function enterFirstHostSetup() {
+async function openFirstHostSettings() {
   const p = await net.client(),
     h = await net.host({ path: p.path }),
     gm = net.gmClient(h);
@@ -130,8 +130,22 @@ async function enterFirstHostSetup() {
   await gm.nav(false);
   const native = await gm.campaign.project(gm.c);
   const campaign = await nav('CMP-006', 'CMP-006::CTA::001', native.revisions.projectionRevision);
-  let settings = await nav('CMP-007', 'CMP-007::CTA::003', campaign.revisions.projectionRevision);
+  const settings = await nav('CMP-007', 'CMP-007::CTA::003', campaign.revisions.projectionRevision);
   expect(settings.presentation.base.availableActionKeys).toContain('CMP-008::CTA::001');
+  return { runtime, socket, sent, h, gm, nav, settings };
+}
+
+async function enterFirstHostSetup() {
+  const {
+    runtime,
+    socket,
+    sent,
+    h,
+    gm,
+    nav,
+    settings: initialSettings,
+  } = await openFirstHostSettings();
+  let settings = initialSettings;
   // Another connection with the current GM grant can advance the persisted cursor before this click.
   await gm.send({
     messageType: 'navigation.form-action',
@@ -192,6 +206,29 @@ async function enterFirstHostSetup() {
 it('opens CMP-009 from the confirmed CMP-008 GM cursor and erases its private settings at setup', async () => {
   await enterFirstHostSetup();
 }, 60_000);
+
+it.each([
+  ['CMP-014', 'CMP-008::CTA::005'],
+  ['CMP-015', 'CMP-008::CTA::006'],
+  ['NET-023', 'CMP-008::CTA::007'],
+] as const)(
+  'keeps the covered CMP-008 inert under the native %s modal',
+  async (modal, action) => {
+    const { gm, nav, settings } = await openFirstHostSettings();
+    const snapshot = await nav('CMP-008', action, settings.revisions.projectionRevision);
+    const native = gm.sent.find(
+      (message) => message.messageType === 'projection.snapshot' && message.protocolVersion === 2,
+    );
+    if (native?.messageType !== 'projection.snapshot' || native.protocolVersion !== 2)
+      throw new Error('Missing native modal projection');
+    expect(native.presentation.base.formId).toBe('CMP-008');
+    expect(native.presentation.base.availableActionKeys).toEqual([]);
+    expect(native.presentation.layers.map((layer) => layer.formId)).toEqual([modal]);
+    expect(snapshot.presentation.layers).toEqual(native.presentation.layers);
+    expect(snapshot.presentation.base.availableActionKeys).toEqual([]);
+  },
+  60_000,
+);
 
 it.each([HOST_SEAT_ACK, HOST_OWNER_PROFILE_CREATE])(
   'requires the negotiated host workflow %s for a new command and replays its exact historical receipt',

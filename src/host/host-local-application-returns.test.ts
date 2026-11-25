@@ -255,26 +255,8 @@ describe.each([
         await new Promise<void>((resolve) => setImmediate(resolve));
       }, 30_000);
     }
-    async function time(hour: number) {
-      const { gm, h } = site,
-        view = await gm.runtime.project(gm.c);
-      await gm.send({
-        messageType: 'command.request',
-        protocolVersion: 1,
-        commandKind: 'workflow-command',
-        role: 'gm',
-        commandId: randomUUID(),
-        workflowCommandId: 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
-        expectedRevisions: view.revisions,
-        payload: {
-          campaignId: h.campaignId,
-          expectedLobbySnapshotRevision: view.base.roleFilteredPayload['lobbySnapshotRevision']!,
-          dayNumber: 2,
-          hour,
-          minute: 0,
-        },
-      });
-      expect(gm.sent[0]).toMatchObject({ messageType: 'command.result' });
+    function beforeLobbyPhase(name: string, run: () => Promise<void>) {
+      beforeEach(() => net.measure('mixed-start.' + name, run), 30_000);
     }
     async function ready(sibling = false) {
       if (sibling) {
@@ -334,18 +316,9 @@ describe.each([
         );
       }
     }
-    beforeEach(async () => {
-      const { gm, p } = site;
+    beforeLobbyPhase('unchanged-owner-observation', async () => {
       const send = vi.spyOn(ownerControl.socket, 'send');
-      const poll = vi.spyOn(p.peerForTest, 'checkLobbyObservation');
-      const updates = () =>
-        send.mock.calls.flatMap(([message]) =>
-          message.messageType === 'projection.snapshot' &&
-          message.protocolVersion === 2 &&
-          message.presentation.assignment.reason === 'HOST_SYSTEM_EVENT'
-            ? [message]
-            : [],
-        );
+      const poll = vi.spyOn(site.p.peerForTest, 'checkLobbyObservation');
       try {
         const confirmed = await owner();
         expect(confirmed.presentation.base.availableActionKeys).toContain('NET-006::CTA::005');
@@ -355,43 +328,90 @@ describe.each([
         await expect
           .poll(() => poll.mock.calls.length, { timeout: 15_000 })
           .toBeGreaterThanOrEqual(2);
-        expect(updates()).toEqual([]);
-        let release!: () => void;
-        const gate = new Promise<void>((resolve) => {
-          release = resolve;
-        });
-        const busy = gm.gmScheduler.wire({ ...gm.c }, () => gate);
-        try {
-          const blocked = await owner();
-          expect(blocked.presentation.base.availableActionKeys).not.toContain('NET-006::CTA::005');
-          expect(blocked.revisions).toEqual(confirmed.revisions);
-          send.mockClear();
-        } finally {
-          release();
-          await busy;
-        }
-        await expect
-          .poll(() => updates().at(-1)?.presentation.base.availableActionKeys, { timeout: 15_000 })
-          .toContain('NET-006::CTA::005');
-        expect(updates().at(-1)?.revisions).toEqual(confirmed.revisions);
-        send.mockClear();
-        await time(6);
-        await expect
-          .poll(() => updates().at(-1)?.revisions.projectionRevision ?? 0, { timeout: 15_000 })
-          .toBeGreaterThan(confirmed.revisions.projectionRevision);
-        const actual = updates().at(-1)!;
-        expect(actual.presentation.base.formId).toBe('NET-006');
-        expect(actual.presentation.layers.at(-1)?.roleFilteredPayload['receiptId']).toBe(
-          confirmed.presentation.layers.at(-1)?.roleFilteredPayload['receiptId'],
-        );
+        expect(
+          send.mock.calls.filter(
+            ([message]) =>
+              message.messageType === 'projection.snapshot' &&
+              message.protocolVersion === 2 &&
+              message.presentation.assignment.reason === 'HOST_SYSTEM_EVENT',
+          ),
+        ).toEqual([]);
       } finally {
         poll.mockRestore();
         send.mockRestore();
       }
-    }, 30_000);
-    beforeEach(() => ready(), 30_000);
-    beforeEach(() => time(21), 30_000);
-    beforeEach(() => ready(true), 30_000);
+    });
+    beforeLobbyPhase('restore-safe-return', async () => {
+      const { gm } = site;
+      const confirmed = ownerControl.view();
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const busy = gm.gmScheduler.wire({ ...gm.c }, () => gate);
+      try {
+        const blocked = await owner();
+        expect(blocked.presentation.base.availableActionKeys).not.toContain('NET-006::CTA::005');
+        expect(blocked.revisions).toEqual(confirmed.revisions);
+      } finally {
+        release();
+        await busy;
+      }
+      await expect
+        .poll(() => ownerControl.view().presentation.base.availableActionKeys, { timeout: 15_000 })
+        .toContain('NET-006::CTA::005');
+      const restored = ownerControl.view();
+      expect(restored.presentation.assignment.reason).toBe('HOST_SYSTEM_EVENT');
+      expect(restored.revisions).toEqual(confirmed.revisions);
+    });
+    beforeLobbyPhase('ready-first-seat', () => ready());
+    beforeLobbyPhase('publish-initial-time', async () => {
+      const { gm, h } = site;
+      const confirmed = ownerControl.view();
+      const before = campaignLobbyPlayerProjectionValue(
+        confirmed.presentation.base.roleFilteredPayload,
+      );
+      expect(before.lobby).toMatchObject({ ready: true, initialCampaignTimeOrNull: null });
+      const receipt = confirmed.presentation.layers.at(-1)?.roleFilteredPayload['receiptId'];
+      expect(receipt).toBeTypeOf('string');
+      const initialTime = { dayNumber: 2, hour: 21, minute: 0 };
+      const view = await gm.runtime.project(gm.c);
+      await gm.send({
+        messageType: 'command.request',
+        protocolVersion: 1,
+        commandKind: 'workflow-command',
+        role: 'gm',
+        commandId: randomUUID(),
+        workflowCommandId: 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
+        expectedRevisions: view.revisions,
+        payload: {
+          campaignId: h.campaignId,
+          expectedLobbySnapshotRevision: view.base.roleFilteredPayload['lobbySnapshotRevision']!,
+          ...initialTime,
+        },
+      });
+      expect(gm.sent[0]).toMatchObject({ messageType: 'command.result' });
+      const publishedTime = () => {
+        const snapshot = ownerControl.view();
+        if (snapshot.revisions.projectionRevision <= confirmed.revisions.projectionRevision)
+          return null;
+        const payload = campaignLobbyPlayerProjectionValue(
+          snapshot.presentation.base.roleFilteredPayload,
+        );
+        return payload.lobby.initialCampaignTimeOrNull;
+      };
+      await expect.poll(publishedTime, { timeout: 15_000 }).toMatchObject(initialTime);
+      const updated = ownerControl.view();
+      expect(updated.presentation.assignment.reason).toBe('HOST_SYSTEM_EVENT');
+      expect(updated.presentation.base.formId).toBe('NET-006');
+      expect(updated.presentation.layers.at(-1)?.roleFilteredPayload['receiptId']).toBe(receipt);
+      const after = campaignLobbyPlayerProjectionValue(
+        updated.presentation.base.roleFilteredPayload,
+      );
+      expect(after.lobby).toMatchObject({ ready: false, initialCampaignTimeOrNull: initialTime });
+      expect(after.lobby.lobbySnapshotRevision).not.toBe(before.lobby.lobbySnapshotRevision);
+    });
+    beforeLobbyPhase('ready-sibling-seat', () => ready(true));
     let activeKey: string;
     beforeEach(async () => {
       const { gm, h, origin, p, profile } = site;

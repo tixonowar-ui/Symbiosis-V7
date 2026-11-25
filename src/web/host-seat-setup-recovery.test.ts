@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { HOST_SEAT_ACK } from '@shared/host-seat.js';
+import { HOST_OWNER_PROFILE_CREATE, HOST_SEAT_ACK } from '@shared/host-seat.js';
+import {
+  CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
+  campaignLifecycleGmActions,
+  type CampaignLifecycleGmProjection,
+} from '@shared/campaign-lifecycle.js';
 import {
   decodeClientMessageV2,
   decodeClientMessageV3,
@@ -40,6 +45,7 @@ class Socket {
   readonly sent: string[] = [];
   readyState = 0;
   onopen: (() => void) | null = null;
+  onclose: ((event: CloseEvent) => void) | null = null;
   onmessage: ((event: { data: string }) => void) | null = null;
   constructor() {
     Socket.latest = this;
@@ -51,6 +57,10 @@ class Socket {
   }
   close() {
     this.readyState = 3;
+  }
+  lost() {
+    this.close();
+    this.onclose?.(new CloseEvent('close', { code: 1006 }));
   }
   send(text: string) {
     this.sent.push(text);
@@ -94,6 +104,8 @@ const clients: ProjectionConnection[] = [];
 afterEach(() => {
   for (const client of clients.splice(0)) client.disconnect();
   sessionStorage.clear();
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -293,6 +305,351 @@ it.each(['managed setup', 'ordinary GM'] as const)(
     }
   },
 );
+
+describe('ordinary GM disconnected seat privacy', () => {
+  const capabilities = [HOST_SEAT_ACK, HOST_OWNER_PROFILE_CREATE] as const;
+  const nativeCapabilities = [...capabilities, ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS];
+  function menu(id: string): ProjectionSnapshotV2Message {
+    const revisions = { stateRevision: 4, projectionRevision: 9, actorVisibilityRevision: 3 };
+    const anchor = {
+      contextId: gmContextId,
+      campaignId,
+      ...revisions,
+      campaignRevision: 2,
+      settingsRevision: 0,
+      campaignStatus: 'PAUSED' as const,
+      pauseReasonOrNull: null,
+      firstStartCompleted: false,
+    };
+    const value = {
+      ...anchor,
+      title: 'Кампания',
+      descriptionOrNull: null,
+      defaultFutureRollMode: 'MANUAL',
+      networkForNextLaunch: {
+        hostAddress: '127.0.0.1',
+        hostPort: 31770,
+        networkInterface: 'loopback',
+      },
+      activeListenerEndpointOrNull: {
+        hostAddress: '127.0.0.1',
+        hostPort: 31771,
+        networkInterface: 'loopback',
+      },
+      availableNetworkInterfaces: [
+        { hostAddress: '127.0.0.1', networkInterface: 'loopback', family: 'IPv4' },
+      ],
+      campaignArtChecksumOrNull: null,
+      currentCapacity: 3,
+      activePlayerCount: 0,
+      safeBoundary: true,
+      pendingOperationCount: 0,
+      clockMode: null,
+      checkpointPreview: { campaignRevision: 2, checkpointSha256: 'a'.repeat(64) },
+      devices: [],
+      commandId: null,
+    } satisfies CampaignLifecycleGmProjection;
+    return {
+      protocolVersion: 2,
+      messageType: 'projection.snapshot',
+      projectionRole: 'gm',
+      revisions,
+      presentation: {
+        assignment: { reason: 'RECONNECT', correlationId: id },
+        layers: [],
+        base: {
+          formId: 'CMP-008',
+          formType: 'screen',
+          routeTemplate: '/master/campaigns/:campaignId/campaign/cmp-008',
+          routeBindings: [{ parameterIndex: 0, source: 'inherited', value: campaignId }],
+          availableActionKeys: [
+            ...campaignLifecycleGmActions('CMP-008', value, nativeCapabilities),
+            'CMP-008::CTA::001',
+          ],
+          roleFilteredPayload: { ...value, currentCampaignLifecycle: anchor },
+        },
+      },
+    };
+  }
+  function foreground() {
+    const channels = new Set<LocalChannel>();
+    const notices: unknown[] = [];
+    class LocalChannel {
+      onmessage: ((event: MessageEvent) => void) | null = null;
+      constructor(readonly name: string) {
+        channels.add(this);
+      }
+      close() {
+        channels.delete(this);
+      }
+      postMessage(value: unknown) {
+        notices.push(value);
+        for (const channel of channels) {
+          if (channel !== this && channel.name === this.name)
+            channel.onmessage?.(new MessageEvent('message', { data: structuredClone(value) }));
+        }
+      }
+    }
+    vi.stubGlobal('BroadcastChannel', LocalChannel);
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    vi.stubGlobal('WebSocket', Socket);
+    vi.stubGlobal('fetch', () => Promise.resolve(new Response(JSON.stringify({ deviceId }))));
+    sessionStorage.setItem(GM_CONTEXT_STORAGE_KEY, gmContextId);
+    return { hasFocus, hidden, visibility, notices };
+  }
+  async function ordinary() {
+    const states: WebClientState[] = [];
+    const client = await start(states);
+    const socket = Socket.latest;
+    socket.reconnect(menu(resumeId(socket)), nativeCapabilities);
+    expect(states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId: 'CMP-008' } });
+    return { states, client, socket };
+  }
+  async function enterFromSibling() {
+    const sender = await start([]);
+    const socket = Socket.latest;
+    socket.reconnect(manage(resumeId(socket), false), capabilities);
+    expect(sender.requestFormAction('CMP-009::CTA::002')).toEqual({ ok: true });
+    const enter = socket.request(1);
+    if (enter.messageType !== 'host.seat.control' || enter.operation !== 'ENTER_SETUP')
+      throw new Error('Missing GM setup');
+    return { socket, enter };
+  }
+  it('withdraws the private invitation QR even when the disconnected GM window stays in focus', async () => {
+    foreground();
+    const states: WebClientState[] = [];
+    await start(states);
+    const socket = Socket.latest;
+    socket.reconnect(qr(resumeId(socket), 'correct', false), capabilities);
+    expect(states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId: 'CMP-006' } });
+    socket.lost();
+    expect(states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+  });
+  it.each(['confirmed', 'response lost'] as const)(
+    'withdraws a disconnected peer when another window enters setup (%s)',
+    async (delivery) => {
+      const { notices } = foreground();
+      const peer = await ordinary();
+      peer.socket.lost();
+      expect(peer.states.at(-1)).toMatchObject({
+        kind: 'disconnected',
+        snapshot: { formId: 'CMP-008' },
+      });
+      const { socket, enter } = await enterFromSibling();
+      const setup = {
+        hostSeatView: 'SETUP',
+        revision: 5,
+        profiles: [],
+        selectedProfileOrNull: null,
+      } as const;
+      if (delivery === 'confirmed') {
+        socket.publish(hostSeatSnapshot(setup, enter.requestId, 'FORM_ACTION'));
+        const verified = Socket.latest;
+        verified.reconnect(hostSeatSnapshot(setup, resumeId(verified), 'RECONNECT'), capabilities);
+      } else {
+        socket.lost();
+      }
+      expect(notices.length).toBeGreaterThan(0);
+      expect(notices.every((notice) => notice === null)).toBe(true);
+      expect(peer.states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+      expect(peer.client.requestFormAction('CMP-008::CTA::001').ok).toBe(false);
+      expect(peer.client.reconnect().ok).toBe(true);
+      const waiting = Socket.latest;
+      const request = waiting.open();
+      expect(request).not.toMatchObject({ deliveryKeyOrNull: enter.deliveryKey });
+      const id =
+        request.messageType === 'campaign.local-context.resume'
+          ? request.reconnectRequestId
+          : request.messageType === 'host.seat.control' && request.operation === 'RESUME'
+            ? request.requestId
+            : null;
+      if (!id) throw new Error('Missing separate peer reconnect');
+      waiting.reconnect(
+        hostSeatSnapshot({ hostSeatView: 'WAITING', revision: 5 }, id, 'RECONNECT'),
+      );
+      expect(peer.states.at(-1)).toMatchObject({
+        kind: 'ready',
+        snapshot: { hostSeat: { hostSeatView: 'WAITING' } },
+      });
+    },
+  );
+  it('keeps a live GM editor mounted when the host refuses the other window’s setup', async () => {
+    const { notices } = foreground();
+    const peer = await ordinary();
+    const published = peer.states.length;
+    const { socket, enter } = await enterFromSibling();
+    expect(notices).toEqual([null]);
+    socket.refuse(enter.requestId, 4);
+    // An intervening state would unmount the editor and discard its unsaved inputs.
+    expect(peer.states).toHaveLength(published);
+    expect(peer.socket.readyState).toBe(Socket.OPEN);
+    expect(peer.client.requestFormAction('CMP-008::CTA::001').ok).toBe(true);
+  });
+
+  it('withdraws on transport loss after a notice and trusts a fresh GM resume', async () => {
+    foreground();
+    const peer = await ordinary();
+    await enterFromSibling();
+    expect(peer.socket.readyState).toBe(Socket.OPEN);
+    peer.socket.lost();
+    expect(peer.states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+    expect(peer.client.reconnect().ok).toBe(true);
+    const fresh = Socket.latest;
+    fresh.reconnect(menu(resumeId(fresh)), nativeCapabilities);
+    expect(peer.states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId: 'CMP-008' } });
+    fresh.lost();
+    expect(peer.states.at(-1)).toMatchObject({
+      kind: 'disconnected',
+      snapshot: { formId: 'CMP-008' },
+    });
+  });
+
+  it.each(['cold', 'withdrawn'] as const)(
+    'withdraws an offline GM reply when setup was announced during a %s resume',
+    async (initial) => {
+      foreground();
+      const states: WebClientState[] = [];
+      const client = await start(states);
+      let socket = Socket.latest;
+      if (initial === 'withdrawn') {
+        socket.reconnect(qr(resumeId(socket), 'correct', false), capabilities);
+        socket.lost();
+        expect(states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+        expect(client.reconnect().ok).toBe(true);
+        socket = Socket.latest;
+      }
+      const request = socket.open();
+      if (request.messageType !== 'campaign.local-context.resume')
+        throw new Error('Expected a native GM reconnect');
+      await enterFromSibling();
+      socket.reconnect(menu(request.reconnectRequestId), nativeCapabilities);
+      expect(states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId: 'CMP-008' } });
+      socket.lost();
+      expect(states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+      expect(client.requestFormAction('CMP-008::CTA::001').ok).toBe(false);
+
+      expect(client.reconnect().ok).toBe(true);
+      const fresh = Socket.latest;
+      const id = resumeId(fresh);
+      if (initial === 'cold') {
+        fresh.reconnect(menu(id), nativeCapabilities);
+        fresh.lost();
+        expect(states.at(-1)).toMatchObject({
+          kind: 'disconnected',
+          snapshot: { formId: 'CMP-008' },
+        });
+      } else {
+        fresh.reconnect(
+          hostSeatSnapshot({ hostSeatView: 'WAITING', revision: 5 }, id, 'RECONNECT'),
+        );
+        expect(states.at(-1)).toMatchObject({
+          kind: 'ready',
+          snapshot: { hostSeat: { hostSeatView: 'WAITING' }, availableActionKeys: [] },
+        });
+      }
+    },
+  );
+
+  it('retires a live GM on the host’s WAITING event and resumes the neutral screen', async () => {
+    foreground();
+    const peer = await ordinary();
+    const { enter } = await enterFromSibling();
+    expect(peer.socket.readyState).toBe(Socket.OPEN);
+    const waiting = { hostSeatView: 'WAITING', revision: 5 } as const;
+    peer.socket.publish(hostSeatSnapshot(waiting, enter.requestId, 'HOST_SYSTEM_EVENT'));
+    expect(peer.socket.readyState).not.toBe(Socket.OPEN);
+    const fresh = Socket.latest;
+    const request = fresh.open();
+    if (request.messageType !== 'host.seat.control' || request.operation !== 'RESUME')
+      throw new Error('Missing neutral resume');
+    expect(request.deliveryKeyOrNull).toBeNull();
+    fresh.reconnect(hostSeatSnapshot(waiting, request.requestId, 'RECONNECT'));
+    expect(peer.states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { hostSeat: waiting } });
+  });
+
+  it('withdraws the foreground GM on loss when local revocation cannot be observed', async () => {
+    foreground();
+    vi.stubGlobal('BroadcastChannel', undefined);
+    const peer = await ordinary();
+    peer.socket.lost();
+    expect(peer.states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+  });
+
+  it('hides the retained view while an already requested reconnect awaits its host', async () => {
+    foreground();
+    const peer = await ordinary();
+    peer.socket.lost();
+    expect(peer.states.at(-1)).toMatchObject({
+      kind: 'disconnected',
+      snapshot: { formId: 'CMP-008' },
+    });
+    expect(peer.client.reconnect().ok).toBe(true);
+    const connecting = Socket.latest;
+    await enterFromSibling();
+    expect(connecting.readyState).toBe(0);
+    expect(peer.states.at(-1)).toMatchObject({ kind: 'awaiting-snapshot', localHandoff: true });
+    connecting.reconnect(
+      hostSeatSnapshot({ hostSeatView: 'WAITING', revision: 5 }, resumeId(connecting), 'RECONNECT'),
+    );
+    expect(peer.states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { hostSeat: { hostSeatView: 'WAITING' } },
+    });
+  });
+
+  it.each(['blur after loss', 'hidden after loss', 'already blurred', 'already hidden'] as const)(
+    'withdraws the private view and waits for host authority when the window was %s',
+    async (mode) => {
+      const { hasFocus, hidden, visibility } = foreground();
+      const { states, client, socket } = await ordinary();
+      const setBackground = () => {
+        if (mode.includes('blur')) {
+          hasFocus.mockReturnValue(false);
+          window.dispatchEvent(new Event('blur'));
+        } else {
+          hidden.mockReturnValue(true);
+          visibility.mockReturnValue('hidden');
+          document.dispatchEvent(new Event('visibilitychange'));
+        }
+      };
+      vi.useFakeTimers();
+      if (mode.startsWith('already')) setBackground();
+      socket.lost();
+      if (!mode.startsWith('already')) {
+        expect(states.at(-1)).toMatchObject({
+          kind: 'disconnected',
+          snapshot: { formId: 'CMP-008' },
+        });
+        setBackground();
+      }
+      expect(states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+      expect(client.requestFormAction('CMP-008::CTA::001').ok).toBe(false);
+      states.length = 0;
+      hasFocus.mockReturnValue(true);
+      hidden.mockReturnValue(false);
+      visibility.mockReturnValue('visible');
+      window.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('visibilitychange'));
+      await vi.advanceTimersByTimeAsync(1100);
+      expect(states.some((s) => s.kind === 'ready')).toBe(false);
+      let fresh = Socket.latest;
+      if (fresh === socket) {
+        expect(client.reconnect()).toEqual({ ok: true });
+        fresh = Socket.latest;
+      }
+      fresh.reconnect(
+        hostSeatSnapshot({ hostSeatView: 'WAITING', revision: 1 }, resumeId(fresh), 'RECONNECT'),
+      );
+      expect(states.at(-1)).toMatchObject({
+        kind: 'ready',
+        snapshot: { hostSeat: { hostSeatView: 'WAITING' } },
+      });
+      expect(states.some((s) => s.kind === 'ready' && s.snapshot.formId === 'CMP-008')).toBe(false);
+    },
+  );
+});
 
 describe('setup grant review', () => {
   const states: WebClientState[] = [];

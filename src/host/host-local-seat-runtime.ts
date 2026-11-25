@@ -695,6 +695,7 @@ export function createHostLocalSeatRuntime(d: Dependencies) {
     if (
       gm &&
       base.formId === 'CMP-008' &&
+      view.presentation.layers.length === 0 &&
       p['safeBoundary'] === true &&
       c.campaign.gmLocalContextId !== null &&
       c.campaign.executableReview?.includes(HOST_SEAT_ACK) &&

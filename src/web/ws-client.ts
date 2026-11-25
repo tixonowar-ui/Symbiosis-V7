@@ -756,6 +756,18 @@ export const WEB_PROTOCOL_VOCABULARY: ProtocolVocabulary & WireV3Vocabulary = {
     (Object.values(POST_SAVE_COMMAND_IDS) as readonly string[]).includes(value),
 };
 
+// A handoff acknowledgement belongs to both roles. Only these capabilities retire on GM exit.
+const GM_ONLY_WORKFLOW_IDS: readonly WorkflowCommandId[] = [
+  HOST_OWNER_PROFILE_CREATE,
+  CAMPAIGN_CREATE_COMMAND_ID,
+  ...ENEMY_AUTHORING_WORKFLOWS,
+  ...NPC_WORKFLOW_COMMAND_IDS,
+  ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
+  ...ADMISSION_GM_WORKFLOW_IDS,
+  ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
+  'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
+  'UI-CMD-CAMPAIGN-START',
+];
 const NO_KNOWN_REVISIONS = {
   actorVisibilityRevision: 0,
   projectionRevision: 0,
@@ -4967,17 +4979,7 @@ function decodeNativeSnapshot(
   }
   if (
     message.projectionRole !== 'gm' &&
-    (executableWorkflowCommandIds.includes(CAMPAIGN_CREATE_COMMAND_ID) ||
-      executableWorkflowCommandIds.includes(HOST_OWNER_PROFILE_CREATE) ||
-      [
-        ...ENEMY_AUTHORING_WORKFLOWS,
-        ...NPC_WORKFLOW_COMMAND_IDS,
-        ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
-        ...ADMISSION_GM_WORKFLOW_IDS,
-        ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
-        'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
-        'UI-CMD-CAMPAIGN-START',
-      ].some((id) => executableWorkflowCommandIds.some((available) => available === id)))
+    executableWorkflowCommandIds.some((id) => GM_ONLY_WORKFLOW_IDS.includes(id))
   )
     return unrecognized('$.executableWorkflowCommandIds', CAMPAIGN_CREATE_COMMAND_ID);
   let projection: DecodeResult<JsonObject>;
@@ -7000,17 +7002,7 @@ function decodeFormActionSnapshot(
     const decoded = decodeConfirmedSnapshot(
       message,
       pending.actionKey === 'APP-011::CTA::001'
-        ? previous.executableWorkflowCommandIds.filter(
-            (id) =>
-              id !== CAMPAIGN_CREATE_COMMAND_ID &&
-              !ENEMY_AUTHORING_WORKFLOWS.some((enemyId) => enemyId === id) &&
-              !NPC_WORKFLOW_COMMAND_IDS.some((npcId) => npcId === id) &&
-              !NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS.some((gmId) => gmId === id) &&
-              !ADMISSION_GM_WORKFLOW_IDS.some((gmId) => gmId === id) &&
-              !isCampaignLifecycleWorkflow(id) &&
-              id !== 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET' &&
-              id !== 'UI-CMD-CAMPAIGN-START',
-          )
+        ? previous.executableWorkflowCommandIds.filter((id) => !GM_ONLY_WORKFLOW_IDS.includes(id))
         : previous.executableWorkflowCommandIds,
     );
     if (!decoded.ok) return decoded;
@@ -10717,6 +10709,10 @@ export function connectProjection(
   };
   let seatDelivery = readSeatDelivery();
   let hostDelivery: HostDelivery | null = null;
+  let disconnectedOrdinaryGm: 'VISIBLE' | 'WITHDRAWN' | null = null;
+  let hostRevocationChannel: BroadcastChannel | null = null;
+  let hostRevocationObservedOn: WebSocket | null = null;
+  let pendingNativeGmResume: WebSocket | null = null;
   let recoveringSetupSource: Extract<HostDelivery, { kind: 'SETUP' }> | null = null;
   let newSetupProbeRefused = false;
   let hostRevision = -1;
@@ -11394,7 +11390,7 @@ export function connectProjection(
           skillSelectionDraft,
         );
 
-  const hidePrivatePresentation = () => {
+  const hidePrivatePresentation = (retainConfirmedRoute = false) => {
     // An already queued frame can be discarded by subscription ID without retaining its former owner.
     if (peerSubscription !== null) retiredSeatPeerIds.add(peerSubscription.requestId);
     for (const id of retiredPeerSubscriptions.keys()) retiredSeatPeerIds.add(id);
@@ -11430,7 +11426,7 @@ export function connectProjection(
     startingWeaponDraft = null;
     onStartingWeaponDraft(null);
     onState({ kind: 'awaiting-snapshot', localHandoff: true });
-    window.history.replaceState(null, '', '/local/app-003');
+    if (!retainConfirmedRoute) window.history.replaceState(null, '', '/local/app-003');
   };
   const purgeSeatScreen = () => {
     hidePrivatePresentation();
@@ -11540,6 +11536,8 @@ export function connectProjection(
     if (erase) purgeHostScreen();
     try {
       socket.send(encoded.text);
+      // The host can enter setup even when its reply never reaches this window.
+      if (request.operation === 'ENTER_SETUP') hostRevocations()?.postMessage(null);
     } catch {
       socket.close(1000, 'host control interrupted');
     }
@@ -11747,17 +11745,58 @@ export function connectProjection(
       socket.close(1000, 'seat acknowledgement delivery interrupted');
     }
   };
-  const resetSeatTransport = () => {
+  const ordinaryHostGm = () =>
+    hostDelivery === null &&
+    recoveringSetupSource === null &&
+    gmLocalContextId !== null &&
+    lastSnapshot?.executableWorkflowCommandIds.includes(HOST_OWNER_PROFILE_CREATE) === true;
+  const resetSeatTransport = (withdrawOrdinaryGm = false) => {
     hostReplayReceiptId = null;
     hostDraftFollowup = null;
-    if (
+    const ordinaryGm = ordinaryHostGm();
+    const managed =
       hostDelivery !== null ||
-      (gmLocalContextId !== null &&
-        lastSnapshot?.executableWorkflowCommandIds.includes(HOST_OWNER_PROFILE_CREATE))
-    ) {
+      recoveringSetupSource !== null ||
+      (ordinaryGm && lastSnapshot?.hostSeat !== undefined);
+    if (managed || ordinaryGm) {
       hostIntent = null;
       hostAckSent = false;
       profileCommand = null;
+      disconnectedOrdinaryGm = managed ? null : 'WITHDRAWN';
+      // An offer to create profiles is common on an ordinary GM socket. Until a handoff,
+      // its confirmed native screen may remain read-only while its window stays visible.
+      if (
+        !managed &&
+        !withdrawOrdinaryGm &&
+        !terminal &&
+        lastSnapshot &&
+        hostRevocationChannel !== null &&
+        hostRevocationObservedOn === null &&
+        globalThis.document?.visibilityState === 'visible' &&
+        globalThis.document.hasFocus?.() &&
+        lastSnapshot.formId !== 'CMP-003' &&
+        lastSnapshot.formId !== 'CMP-006' &&
+        !npc.pending &&
+        !npc.dirty &&
+        !npc.busy &&
+        pendingGmDraft === null &&
+        pendingAdmissionDraft === null &&
+        gmEdit === null &&
+        pendingCampaignDraft === null &&
+        campaignEdit === null &&
+        !campaignInputPending
+      ) {
+        const confirmed = lastSnapshot;
+        // Drop component-local edits, file reads, peer subscriptions and controls.
+        // Only the last projection authenticated by the host is republished on disconnect.
+        hidePrivatePresentation(true);
+        lastSnapshot = confirmed;
+        npc.suspend(true);
+        onNpcControls(null, null);
+        disconnectedOrdinaryGm = 'VISIBLE';
+        seatAuthorityKnown = false;
+        return;
+      }
       // A proven native command remains in its exact outbox until this holder reconnects.
       // Neutral transitions call purgeHostScreen to release the previous owner's requests.
       const grant = lastSnapshot?.hostSeat;
@@ -11793,7 +11832,7 @@ export function connectProjection(
       publishGmDraft();
       publishCampaignDraft();
       publishNetworkDraft();
-      seatAuthorityKnown = true;
+      seatAuthorityKnown = managed;
       return;
     }
     if (
@@ -11898,7 +11937,11 @@ export function connectProjection(
     pendingFormAction = null;
     pendingAddressableRoute = null;
     stagedCapabilities = null;
-    if (seatAuthorityKnown || suspendedPlayerRevisions !== null)
+    if (
+      seatAuthorityKnown ||
+      suspendedPlayerRevisions !== null ||
+      disconnectedOrdinaryGm === 'WITHDRAWN'
+    )
       refusal = { code: 'UNRECOGNIZED', path: '$.ordinarySeat', value: null };
     const response = {
       messageType: 'protocol.refusal',
@@ -12260,6 +12303,16 @@ export function connectProjection(
         : undefined;
     if (reconnect) pendingEnemySelection = null;
     lastSnapshot = next;
+    disconnectedOrdinaryGm = null;
+    if (reconnect) {
+      pendingNativeGmResume = null;
+      if (socket !== hostRevocationObservedOn) hostRevocationObservedOn = null;
+    }
+    if (
+      gmLocalContextId !== null &&
+      next.executableWorkflowCommandIds.includes(HOST_OWNER_PROFILE_CREATE)
+    )
+      hostRevocations();
     npc.adopt(checkedNpc(next.formId, next.projection, next.revisions), gmQueueScope(next));
     publishNpc();
     loadNpcPortraits();
@@ -12999,7 +13052,9 @@ export function connectProjection(
           onState({
             kind: 'host-refusal',
             refusal:
-              seatAuthorityKnown || suspendedPlayerRevisions !== null
+              seatAuthorityKnown ||
+              suspendedPlayerRevisions !== null ||
+              disconnectedOrdinaryGm === 'WITHDRAWN'
                 ? { code: 'UNRECOGNIZED', path: '$.ordinarySeat', value: null }
                 : message.refusal,
             snapshot: visibleLast(),
@@ -13985,6 +14040,9 @@ export function connectProjection(
                 revision: v.revision,
                 ...(receipt ? { returnReceiptId: receipt } : {}),
               });
+              // A disconnected sibling cannot receive the host's WebSocket revocation.
+              // This local notice can only withdraw its view; proofs stay with their tab.
+              hostRevocations()?.postMessage(null);
             }
             const pendingAck = hostDelivery?.kind === 'ACK' ? hostDelivery : null;
             if (
@@ -15203,18 +15261,7 @@ export function connectProjection(
                             ? [pendingRollCommit.request.commandId]
                             : [],
     } as const satisfies SessionReconnectV2Message;
-    const gmSupported = [
-      HOST_SEAT_ACK,
-      HOST_OWNER_PROFILE_CREATE,
-      CAMPAIGN_CREATE_COMMAND_ID,
-      ...ENEMY_AUTHORING_WORKFLOWS,
-      ...NPC_WORKFLOW_COMMAND_IDS,
-      ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
-      ...ADMISSION_GM_WORKFLOW_IDS,
-      ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
-      'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
-      'UI-CMD-CAMPAIGN-START',
-    ] as const;
+    const gmSupported = [HOST_SEAT_ACK, ...GM_ONLY_WORKFLOW_IDS];
     const gmResume: CampaignLocalContextResumeV3Message | null =
       gmLocalContextId === null
         ? null
@@ -15268,12 +15315,18 @@ export function connectProjection(
         `session.reconnect failed checked encoding: ${JSON.stringify(encoded.refusal)}`,
       );
     stagedCapabilities = null;
-    attachSocket(
-      new WebSocket(stateSocketUrl(window.location.href)),
-      requestId,
-      encoded.text,
-      networkResume?.networkScopeId ?? null,
-    );
+    const nextSocket = new WebSocket(stateSocketUrl(window.location.href));
+    pendingNativeGmResume =
+      hostDelivery === null &&
+      recoveringSetupSource === null &&
+      networkResume === null &&
+      gmResume !== null
+        ? nextSocket
+        : null;
+    // A sibling may enter setup before this socket receives its first GM snapshot.
+    if (pendingNativeGmResume !== null && hostRevocations() === null)
+      hostRevocationObservedOn = pendingNativeGmResume;
+    attachSocket(nextSocket, requestId, encoded.text, networkResume?.networkScopeId ?? null);
   };
 
   const start = async (): Promise<void> => {
@@ -15320,6 +15373,45 @@ export function connectProjection(
     openTransport(deviceId);
   };
 
+  const withdrawOrdinaryGmView = () => {
+    if (disposed || terminal || disconnectedOrdinaryGm !== 'VISIBLE' || !ordinaryHostGm()) return;
+    resetSeatTransport(true);
+    if (socket === null)
+      onState({
+        kind: 'disconnected',
+        code: null,
+        snapshot: null,
+        detail: 'Для восстановления экрана требуется подтверждение хоста.',
+      });
+  };
+  const hostRevocations = (): BroadcastChannel | null => {
+    if (hostRevocationChannel === null && typeof window.BroadcastChannel === 'function') {
+      try {
+        hostRevocationChannel = new window.BroadcastChannel('symbiosis.host-seat.revocation.v1');
+        hostRevocationChannel.onmessage = (event: MessageEvent<unknown>) => {
+          if (event.data !== null || lastSnapshot?.hostSeat) return;
+          if (socket !== null && (socket === pendingNativeGmResume || ordinaryHostGm())) {
+            // The sender may still be refused. A live peer waits for the host's decision,
+            // but losing this transport before a fresh resume must hide the former view.
+            hostRevocationObservedOn = socket;
+          }
+          withdrawOrdinaryGmView();
+        };
+      } catch (error: unknown) {
+        if (!(
+          error instanceof DOMException &&
+          (error.name === 'SecurityError' ||
+            error.name === 'NotSupportedError' ||
+            error.name === 'InvalidStateError')
+        ))
+          throw error;
+      }
+    }
+    return hostRevocationChannel;
+  };
+  const onVisibilityChange = () => {
+    if (globalThis.document?.visibilityState !== 'visible') withdrawOrdinaryGmView();
+  };
   const suspendOrdinarySeat = (event: Event) => {
     if (
       disposed ||
@@ -15339,14 +15431,14 @@ export function connectProjection(
     cancelSeatReconnect();
     const old = socket;
     socket = null;
-    resetSeatTransport();
+    resetSeatTransport(event.type === 'pagehide');
     if (lastSnapshot?.formId === 'APP-003') purgeSeatScreen();
     old?.close(1000, 'local handoff suspended');
     onState({
       kind: 'disconnected',
       code: null,
       detail: 'Ожидание соединения с хостом.',
-      snapshot: null,
+      snapshot: disconnectedOrdinaryGm === 'VISIBLE' ? visibleLast() : null,
     });
   };
   const resumeOrdinaryPage = (event: PageTransitionEvent) => {
@@ -15364,6 +15456,8 @@ export function connectProjection(
   window.addEventListener?.('offline', suspendOrdinarySeat);
   window.addEventListener?.('pagehide', suspendOrdinarySeat);
   window.addEventListener?.('pageshow', resumeOrdinaryPage);
+  window.addEventListener?.('blur', withdrawOrdinaryGmView);
+  globalThis.document?.addEventListener?.('visibilitychange', onVisibilityChange);
 
   void start().catch((error: unknown) => {
     if (disposed || terminal) return;
@@ -16551,6 +16645,13 @@ export function connectProjection(
       window.removeEventListener?.('offline', suspendOrdinarySeat);
       window.removeEventListener?.('pagehide', suspendOrdinarySeat);
       window.removeEventListener?.('pageshow', resumeOrdinaryPage);
+      window.removeEventListener?.('blur', withdrawOrdinaryGmView);
+      globalThis.document?.removeEventListener?.('visibilitychange', onVisibilityChange);
+      if (hostRevocationChannel) {
+        hostRevocationChannel.onmessage = null;
+        hostRevocationChannel.close();
+        hostRevocationChannel = null;
+      }
       npc.dispose();
       onNpcControls(null, null);
       clearGmDraft();

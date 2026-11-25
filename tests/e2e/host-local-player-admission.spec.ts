@@ -1,6 +1,12 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { expect, test, type Page, type Response as BrowserResponse } from '@playwright/test';
+import {
+  expect,
+  test,
+  type Page,
+  type Request as BrowserRequest,
+  type Response as BrowserResponse,
+} from '@playwright/test';
 import type { ProjectionSnapshotV2Message } from '../../src/shared/wire-v2-protocol.js';
 import { createHostLocalBrowserScenario } from '../fixtures/network-application-e2e.js';
 import {
@@ -211,11 +217,31 @@ test('a fresh host-local profile creates its own FINAL, completes admission and 
     };
     const previousGmBearer = await checkedGmBearer(firstGmArt);
     await host.restart();
-    const [restoredGmArt] = await Promise.all([waitForGmArt(), master.reload()]);
-    await expect(networkForm(master, 'NET-016')).toBeVisible(reply);
-    const restoredGmBearer = await checkedGmBearer(restoredGmArt);
     const gmArtwork = master.getByRole('img', { name: 'Арт кампании', exact: true });
-    await expect(gmArtwork).toBeVisible(reply);
+    const artworkRequests: BrowserRequest[] = [];
+    const recordArtwork = (request: BrowserRequest) => {
+      if (request.url() === artUrl.href && request.frame() === master.mainFrame())
+        artworkRequests.push(request);
+    };
+    // Both documents can fetch the same URL. The reloaded document has its own performance
+    // timeline and can render this blob only after its own authenticated fetch completes.
+    master.on('request', recordArtwork);
+    try {
+      await master.reload({ waitUntil: 'commit' });
+      await expect(networkForm(master, 'NET-016')).toBeVisible(reply);
+      await expect(gmArtwork).toBeVisible(reply);
+      expect(
+        await master.evaluate(
+          (url) => performance.getEntriesByName(url, 'resource').length,
+          artUrl.href,
+        ),
+      ).toBeGreaterThan(0);
+    } finally {
+      master.off('request', recordArtwork);
+    }
+    const restoredGmArt = await artworkRequests.at(-1)?.response();
+    if (!restoredGmArt) throw new Error('The restored GM artwork request received no response');
+    const restoredGmBearer = await checkedGmBearer(restoredGmArt);
     const artworkBlob = await gmArtwork.getAttribute('src');
     if (!artworkBlob?.startsWith('blob:')) throw Error('Expected the rendered GM artwork blob');
     expect(host.inspectOrdinarySeats()).toMatchObject({ controllers, events });

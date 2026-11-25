@@ -35,6 +35,116 @@ function captureFrames(page: Page) {
   return received;
 }
 
+async function enterSetupWithOfflineGm(master: Page, baseURL: string, timeout: number) {
+  const other = await master.context().newPage();
+  const reply = { timeout };
+  other.setDefaultTimeout(timeout);
+  const delivered: string[] = [];
+  let blocked = false;
+  let generation = 0;
+  const transport: { close?: () => Promise<void> } = {};
+  let queued: (() => void)[] = [];
+  const resumeIds = new Set<string>();
+  try {
+    await other.routeWebSocket('**/state', (route) => {
+      const server = route.connectToServer();
+      ++generation;
+      const requests: (() => void)[] = [];
+      queued = requests;
+      transport.close = async () => {
+        await Promise.all([
+          route.close({ code: 1012, reason: 'GM tab disconnected' }),
+          server.close(),
+        ]);
+      };
+      route.onMessage((message) => {
+        const forward = () => {
+          const frame = JSON.parse(String(message)) as JsonObject;
+          const id =
+            frame['operation'] === 'RESUME' ? frame['requestId'] : frame['reconnectRequestId'];
+          if (typeof id === 'string') resumeIds.add(id);
+          server.send(message);
+        };
+        if (blocked) requests.push(forward);
+        else forward();
+      });
+      server.onMessage((message) => {
+        if (blocked) return;
+        delivered.push(String(message));
+        route.send(message);
+      });
+    });
+    await other.goto(baseURL);
+    await click(other, 'APP-001::CTA::002');
+    await expect(networkForm(other, 'CMP-008')).toBeVisible(reply);
+    const title = other.getByLabel('Название кампании', { exact: true });
+    const back = atlasControl(other, 'CMP-008::CTA::009');
+    const campaignName = 'Два независимых устройства';
+    await expect(title).toHaveValue(campaignName);
+    await expect(back).toBeEnabled();
+    await other.bringToFront();
+    await expect
+      .poll(() => other.evaluate<boolean>('document.hasFocus() && !document.hidden'), reply)
+      .toBe(true);
+    if (!transport.close) throw Error('The second GM page has no live socket');
+    blocked = true;
+    const beforeLoss = delivered.length;
+    await transport.close();
+    await expect(other.getByRole('button', { name: 'Переподключиться' })).toBeVisible(reply);
+    await expect(title).toHaveValue(campaignName);
+    await expect(back).toBeDisabled();
+
+    const focus = await other.evaluateHandle<{ lost: boolean }>(`(() => {
+      const state = { lost: document.hidden || !document.hasFocus() };
+      window.addEventListener('blur', () => { state.lost = true; }, { once: true });
+      document.addEventListener('visibilitychange', () => { if (document.hidden) state.lost = true; });
+      return state;
+    })()`);
+    // Activating the master's tab would independently clear the foreground peer on blur.
+    for (const key of ['CMP-008::CTA::001', 'CMP-009::CTA::002']) {
+      const control = atlasControl(master, key);
+      await expect(control).toBeEnabled(reply);
+      await control.dispatchEvent('click');
+    }
+    await expect(networkForm(master, 'APP-003')).toBeVisible(reply);
+    await expect(networkForm(other, 'CMP-008')).toHaveCount(0, reply);
+    expect(await focus.evaluate((state) => state.lost)).toBe(false);
+    await focus.dispose();
+    await expect(back).toHaveCount(0);
+    await verifyNeutralSurface(other, delivered.slice(beforeLoss), [campaignName]);
+
+    const beforeReload = generation;
+    await other.reload();
+    // Hold the real resume request until the freshly loaded page has demonstrated its neutral state.
+    await expect.poll(() => generation > beforeReload && queued.length > 0, reply).toBe(true);
+    await expect(networkForm(other, 'CMP-008')).toHaveCount(0);
+    await expect(back).toHaveCount(0);
+    expect(delivered).toHaveLength(beforeLoss);
+    resumeIds.clear();
+    blocked = false;
+    for (const forward of queued.splice(0)) forward();
+    await expect(other.getByText('Ожидание передачи устройства.', { exact: true })).toBeVisible(
+      reply,
+    );
+    const restored = delivered.slice(beforeLoss);
+    expect(
+      restored.some((raw) => {
+        const frame = JSON.parse(raw) as ProjectionSnapshotV2Message;
+        return (
+          frame.messageType === 'projection.snapshot' &&
+          frame.protocolVersion === 2 &&
+          frame.presentation.base.roleFilteredPayload['hostSeatView'] === 'WAITING' &&
+          frame.presentation.assignment.reason === 'RECONNECT' &&
+          resumeIds.has(frame.presentation.assignment.correlationId)
+        );
+      }),
+    ).toBe(true);
+    await verifyNeutralSurface(other, restored, [campaignName]);
+  } finally {
+    await other.close();
+  }
+}
+
 test('a first GM_ONLY exit restores the native panel and its campaign QR after restart', async ({
   page: master,
 }) => {
@@ -55,8 +165,7 @@ test('a first GM_ONLY exit restores the native panel and its campaign QR after r
     const originalQr = await qrDigest();
     await click(master, 'CMP-006::CTA::001');
     await click(master, 'CMP-007::CTA::003');
-    await click(master, 'CMP-008::CTA::001');
-    await click(master, 'CMP-009::CTA::002');
+    await enterSetupWithOfflineGm(master, host.baseURL, host.operationTimeoutMs);
     await click(master, 'APP-003::CTA::004');
     await expect(networkForm(master, 'PLY-027')).toBeVisible(reply);
     await click(master, 'PLY-027::CTA::001');
