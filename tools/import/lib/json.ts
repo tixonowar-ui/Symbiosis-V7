@@ -13,17 +13,16 @@ export interface JsonObject {
   [key: string]: JsonValue | undefined;
 }
 
+export type OwnerAtlasWitness =
+  | string
+  | {
+      readonly b18?: string;
+      readonly b19: string;
+      readonly b20?: string;
+    };
+
 /** Each release selects its exact witness. Only sections changed by an amendment need an override. */
-export function ownerAtlasSeal(
-  version: JsonValue | undefined,
-  witness:
-    | string
-    | {
-        readonly b18?: string;
-        readonly b19: string;
-        readonly b20?: string;
-      },
-): string {
+export function ownerAtlasSeal(version: JsonValue | undefined, witness: OwnerAtlasWitness): string {
   if (version !== '1.23' && version !== '1.24' && version !== '1.25')
     fail('Atlas owner contract', 'unrecognized Atlas version ' + JSON.stringify(version));
   if (typeof witness === 'string') return witness;

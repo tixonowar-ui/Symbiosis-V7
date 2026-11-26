@@ -8,6 +8,7 @@ import {
   ownerAtlasSeal,
   type JsonObject,
   type JsonValue,
+  type OwnerAtlasWitness,
 } from './lib/json.js';
 
 const WHERE = 'atlas ADR 0095';
@@ -36,7 +37,7 @@ const DECLARATION_SEALS = {
     b20: 'cf9f98c242775c1fd2efce662fdc304920f4e0cb45ceccdc6663db55c1809fba',
   },
 } as const;
-const ROW_SEALS = {
+const ROW_SEALS: Record<keyof typeof ID_FIELDS, Readonly<Record<string, OwnerAtlasWitness>>> = {
   forms: {
     'APP-003': {
       b18: '26eedeeca75aa66b0b6a32d575c969baca24546db44730bff5333afe1c229fe6',
