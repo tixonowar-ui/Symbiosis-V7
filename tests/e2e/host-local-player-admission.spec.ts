@@ -1,12 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import {
-  expect,
-  test,
-  type Page,
-  type Request as BrowserRequest,
-  type Response as BrowserResponse,
-} from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import type { ProjectionSnapshotV2Message } from '../../src/shared/wire-v2-protocol.js';
 import { createHostLocalBrowserScenario } from '../fixtures/network-application-e2e.js';
 import {
@@ -31,6 +25,13 @@ function receivedFrames(page: Page) {
 }
 
 const click = (page: Page, key: string) => atlasControl(page, key).click();
+
+interface RenderedCampaignImage {
+  readonly tagName: string;
+  readonly currentSrc: string;
+  readonly isConnected: boolean;
+  decode(): Promise<void>;
+}
 
 test('a fresh host-local profile creates its own FINAL, completes admission and hands the lobby back to the GM', async ({
   browser,
@@ -169,18 +170,131 @@ test('a fresh host-local profile creates its own FINAL, completes admission and 
     });
     await click(player, 'NET-006::CTA::005');
     await expect(networkForm(master, 'PLY-030')).toBeVisible(reply);
-    const [firstGmArt] = await Promise.all([
-      master.waitForResponse((response) => {
-        const url = new URL(response.url());
-        return (
-          url.origin === new URL(host.baseURL).origin &&
+    const gmArtwork = master.getByRole('img', { name: 'Арт кампании', exact: true });
+    const hostOrigin = new URL(host.baseURL).origin;
+    const renderedArtwork = async () => {
+      // On CI the inspector recorded an empty body even though the GM image held the complete PNG.
+      // Read the blob held by this document's image without issuing a second campaign-art GET.
+      await expect(gmArtwork).toBeVisible(reply);
+      await expect(gmArtwork).toHaveAttribute('src', /^blob:/u, reply);
+      const rendered = await gmArtwork.evaluate(
+        async (image: RenderedCampaignImage, origin: string) => {
+          if (image.tagName !== 'IMG') throw Error('Expected a campaign image');
+          const url = new URL(image.currentSrc);
+          if (url.protocol !== 'blob:' || url.origin !== origin)
+            throw Error('Expected a campaign artwork blob from the current document');
+          await image.decode();
+          const local = await fetch(url);
+          const blob = await local.blob();
+          const bytes = Array.from(new Uint8Array(await blob.arrayBuffer()));
+          if (!local.ok || !image.isConnected || image.currentSrc !== url.href)
+            throw Error('The rendered campaign artwork changed during the read');
+          return { type: blob.type, bytes, url: url.href };
+        },
+        hostOrigin,
+      );
+      expect(rendered.type).toBe('image/png');
+      const bytes = Buffer.from(rendered.bytes);
+      expect(bytes.length).toBe(artwork.length);
+      expect(
+        bytes.equals(artwork),
+        `Rendered PNG SHA-256: ${createHash('sha256').update(bytes).digest('hex')}`,
+      ).toBe(true);
+      return rendered.url;
+    };
+    const httpHeader = (headers: Record<string, string>, name: string) =>
+      Object.entries(headers).find(([key]) => key.toLowerCase() === name)?.[1];
+    // The same URL can be fetched by the old and restored documents and by successive GM grants.
+    // Chrome's loader identifies a document across same-document history changes.
+    const observeGmArtwork = async (action: () => Promise<unknown>, reload = false) => {
+      const session = await master.context().newCDPSession(master);
+      const requests = new Map<
+        string,
+        {
+          url: string;
+          frameId: string | undefined;
+          loaderId: string;
+          bearer: string | undefined;
+          headers?: Record<string, string>;
+          finished?: boolean;
+        }
+      >();
+      session.on('Network.requestWillBeSent', ({ requestId, request, type, frameId, loaderId }) => {
+        requests.delete(requestId); // A redirect can reuse the network request ID.
+        const url = new URL(request.url);
+        if (
+          request.method === 'GET' &&
+          type === 'Fetch' &&
+          url.origin === hostOrigin &&
           url.pathname.startsWith('/campaign-art/') &&
           url.pathname.endsWith('/' + artChecksum)
-        );
-      }, reply),
-      click(master, 'PLY-030::CTA::001'),
-    ]);
-    await expect(networkForm(master, 'NET-016')).toBeVisible(reply);
+        )
+          requests.set(requestId, {
+            url: request.url,
+            frameId,
+            loaderId,
+            bearer: httpHeader(request.headers, 'authorization'),
+          });
+      });
+      session.on('Network.responseReceived', ({ requestId, response, frameId, loaderId }) => {
+        const row = requests.get(requestId);
+        if (
+          row &&
+          row.frameId === frameId &&
+          row.loaderId === loaderId &&
+          row.url === response.url &&
+          response.status === 200 &&
+          !response.fromDiskCache &&
+          !response.fromServiceWorker
+        ) {
+          row.headers = response.headers;
+        }
+      });
+      session.on('Network.loadingFinished', ({ requestId }) => {
+        const row = requests.get(requestId);
+        if (row) row.finished = true;
+      });
+      try {
+        await session.send('Network.enable');
+        const currentFrame = async () => (await session.send('Page.getFrameTree')).frameTree.frame;
+        const prior = reload ? (await currentFrame()).loaderId : undefined;
+        await action();
+        await expect(networkForm(master, 'NET-016')).toBeVisible(reply);
+        const frame = await currentFrame();
+        if (prior !== undefined) expect(frame.loaderId).not.toBe(prior);
+        const blobUrl = await renderedArtwork();
+        const completed = () =>
+          [...requests.values()].filter(
+            (row) =>
+              row.loaderId === frame.loaderId &&
+              row.frameId === frame.id &&
+              row.finished &&
+              row.headers,
+          );
+        await expect.poll(() => completed().length, reply).toBeGreaterThan(0);
+        const matches = completed();
+        expect(new Set(matches.map((row) => row.url)).size).toBe(1);
+        expect(new Set(matches.map((row) => row.bearer)).size).toBe(1);
+        for (const row of matches) {
+          expect(httpHeader(row.headers!, 'cache-control')).toBe('no-store');
+          expect(httpHeader(row.headers!, 'content-type')).toBe('image/png');
+        }
+        const { bearer, url } = matches[0]!;
+        if (!bearer || !/^Bearer [0-9a-f]{64}$/u.test(bearer))
+          throw Error('Missing scoped GM authorization on the actual artwork request');
+        expect(
+          await master.evaluate(
+            (address) => performance.getEntriesByName(address, 'resource').length,
+            url,
+          ),
+        ).toBeGreaterThan(0);
+        expect((await currentFrame()).loaderId).toBe(frame.loaderId);
+        return { bearer, url, blobUrl };
+      } finally {
+        await session.detach();
+      }
+    };
+    const firstGmArt = await observeGmArtwork(() => click(master, 'PLY-030::CTA::001'));
     const events = host.inspectOrdinarySeats().events;
     const lobby = masterFrames
       .map((raw) => JSON.parse(raw) as ProjectionSnapshotV2Message)
@@ -196,54 +310,18 @@ test('a fresh host-local profile creates its own FINAL, completes admission and 
     const gmContextId = lobby?.['contextId'];
     if (typeof gmContextId !== 'string') throw new Error('The GM lobby has no context ID');
     const artUrl = new URL('/campaign-art/' + gmContextId + '/' + artChecksum, host.baseURL);
-    expect(firstGmArt.url()).toBe(artUrl.href);
-    const waitForGmArt = () =>
-      master.waitForResponse((response) => response.url() === artUrl.href, reply);
-    const checkedGmBearer = async (response: BrowserResponse) => {
-      expect(response.status()).toBe(200);
-      expect(await response.headerValue('cache-control')).toBe('no-store');
-      expect(await response.headerValue('content-type')).toBe('image/png');
-      expect((await response.body()).equals(artwork)).toBe(true);
-      const bearer = await response.request().headerValue('authorization');
-      if (!bearer || !/^Bearer [0-9a-f]{64}$/u.test(bearer))
-        throw Error('Missing scoped GM authorization on the actual artwork request');
-      return bearer;
-    };
+    expect(firstGmArt.url).toBe(artUrl.href);
     const expectRevokedArt = async (url: URL, authorization: string) => {
       const response = await fetch(url, { headers: { authorization, origin: artUrl.origin } });
       expect(response.status).toBe(403);
       expect(response.headers.get('cache-control')).toBe('no-store');
       expect(await response.json()).toEqual({ error: 'LOCAL_GM_ONLY' });
     };
-    const previousGmBearer = await checkedGmBearer(firstGmArt);
+    const previousGmBearer = firstGmArt.bearer;
     await host.restart();
-    const gmArtwork = master.getByRole('img', { name: 'Арт кампании', exact: true });
-    const artworkRequests: BrowserRequest[] = [];
-    const recordArtwork = (request: BrowserRequest) => {
-      if (request.url() === artUrl.href && request.frame() === master.mainFrame())
-        artworkRequests.push(request);
-    };
-    // Both documents can fetch the same URL. The reloaded document has its own performance
-    // timeline and can render this blob only after its own authenticated fetch completes.
-    master.on('request', recordArtwork);
-    try {
-      await master.reload({ waitUntil: 'commit' });
-      await expect(networkForm(master, 'NET-016')).toBeVisible(reply);
-      await expect(gmArtwork).toBeVisible(reply);
-      expect(
-        await master.evaluate(
-          (url) => performance.getEntriesByName(url, 'resource').length,
-          artUrl.href,
-        ),
-      ).toBeGreaterThan(0);
-    } finally {
-      master.off('request', recordArtwork);
-    }
-    const restoredGmArt = await artworkRequests.at(-1)?.response();
-    if (!restoredGmArt) throw new Error('The restored GM artwork request received no response');
-    const restoredGmBearer = await checkedGmBearer(restoredGmArt);
-    const artworkBlob = await gmArtwork.getAttribute('src');
-    if (!artworkBlob?.startsWith('blob:')) throw Error('Expected the rendered GM artwork blob');
+    const restored = await observeGmArtwork(() => master.reload({ waitUntil: 'commit' }), true);
+    expect(restored.url).toBe(artUrl.href);
+    const { bearer: restoredGmBearer, blobUrl: artworkBlob } = restored;
     expect(host.inspectOrdinarySeats()).toMatchObject({ controllers, events });
     const seatId = controllers[0]!.local_controller_seat_id;
     const openPlayerCurtain = async (source: 'NET-016' | 'PLY-028') => {
@@ -315,8 +393,9 @@ test('a fresh host-local profile creates its own FINAL, completes admission and 
     await expectRevokedArt(new URL('0'.repeat(64), artUrl), previousGmBearer);
     await click(player, 'NET-006::CTA::003');
     await expect(player.getByText('Ваше устройство готово.', { exact: true })).toBeVisible(reply);
-    const [newGmArt] = await Promise.all([waitForGmArt(), returnFromLobby()]);
-    expect((await checkedGmBearer(newGmArt)) === previousGmBearer).toBe(false);
+    const newGmArt = await observeGmArtwork(returnFromLobby);
+    expect(newGmArt.url).toBe(artUrl.href);
+    expect(newGmArt.bearer === previousGmBearer).toBe(false);
     await expectRevokedArt(artUrl, previousGmBearer);
     await master.getByLabel('День календаря', { exact: true }).fill('2');
     await master.getByLabel('Час', { exact: true }).fill('21');
