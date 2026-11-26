@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 import {
   createNetworkCampaign as createCampaign,
   reviewNetworkAdmissionCopies,
+  watchAdmissionWire,
 } from '../fixtures/network-admission-browser.js';
 import { networkFramesForPrivateDataCheck } from '../fixtures/network-browser-privacy.js';
 import {
@@ -204,6 +205,8 @@ for (const outcome of [
     const scenario = await createNetworkBrowserScenario(browser, 1);
     const { gm, player, masterPage, playerPage } = scenario;
     const peaceful = outcome === 'PEACE' || outcome === 'LIFECYCLE';
+    const gmReview =
+      outcome === 'ACCEPT_WITH_BLOCKERS' ? watchAdmissionWire(masterPage) : undefined;
     const errors: string[] = [];
     const frames: string[] = [];
     const expectRetryConfirmed = async (fromFrame: number) => {
@@ -272,11 +275,13 @@ for (const outcome of [
       await action(masterPage, 'NET-017::CTA::010');
       await expect(form(masterPage, 'NET-018')).toBeVisible();
       if (outcome !== 'REJECT') {
+        const reviewTimeoutMs = outcome === 'LIFECYCLE' ? 30_000 : undefined;
         await reviewNetworkAdmissionCopies(
           masterPage,
           outcome !== 'ACCEPT_WITH_BLOCKERS',
           ['Лагерь'],
-          outcome === 'LIFECYCLE' ? 30_000 : undefined,
+          gmReview === undefined ? reviewTimeoutMs : gm.operationTimeoutMs,
+          gmReview,
         );
       }
       await action(masterPage, 'NET-018::CTA::004');

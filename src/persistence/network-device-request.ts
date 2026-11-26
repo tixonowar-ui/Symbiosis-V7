@@ -648,6 +648,21 @@ export function readGmRequestReviewSource(
 ): GmRequestReviewSource {
   return s.read(db, scope.ownerDeviceId, () => gmSource(db, scope, validate));
 }
+// The key is the exact source created from SQLite. Neither caller-supplied events nor
+// structurally identical source objects establish a verified observation.
+const observedQueueEvents = new WeakMap<
+  GmRequestReviewSource,
+  (db: Database.Database) => GmRequestReviewViewState['events']
+>();
+export function readGmRequestReviewEventsInTransaction(
+  db: Database.Database,
+  source: GmRequestReviewSource,
+): GmRequestReviewViewState['events'] {
+  const observed = observedQueueEvents.get(source);
+  return observed
+    ? observed(db)
+    : readGmRequestReviewViewStateInTransaction(db, source.scope).events;
+}
 /** Compose dependent reads while the fully verified source still owns the same SQL snapshot. */
 export function readGmRequestReviewSourceWith<T>(
   db: Database.Database,
@@ -660,22 +675,33 @@ export function readGmRequestReviewSourceWith<T>(
     const stamp = () =>
       [
         s.changes(db),
+        db.pragma('data_version', { simple: true }),
         db.pragma('schema_version', { simple: true }),
         db.pragma('user_version', { simple: true }),
       ].join('/');
     const before = stamp(),
-      // Detached immutable state belongs only to this synchronous fenced observation.
-      observed = observe(source, immutableReviewState(state));
-    if (types.isPromise(observed)) {
-      void Promise.prototype.then.call(
-        observed,
-        () => undefined,
-        () => undefined,
-      );
-      return s.fail('SOURCE_CHANGED');
+      originalScope = { ...source.scope },
+      checked = immutableReviewState(state);
+    observedQueueEvents.set(source, (connection) => {
+      if (connection !== db || !s.same(source.scope, originalScope)) return s.fail('FOREIGN_OWNER');
+      if (!db.inTransaction || stamp() !== before) return s.fail('SOURCE_CHANGED');
+      return checked.events;
+    });
+    try {
+      const observed = observe(source, checked);
+      if (types.isPromise(observed)) {
+        void Promise.prototype.then.call(
+          observed,
+          () => undefined,
+          () => undefined,
+        );
+        return s.fail('SOURCE_CHANGED');
+      }
+      if (!db.inTransaction || stamp() !== before) return s.fail('SOURCE_CHANGED');
+      return { source, observed };
+    } finally {
+      observedQueueEvents.delete(source);
     }
-    if (!db.inTransaction || stamp() !== before) return s.fail('SOURCE_CHANGED');
-    return { source, observed };
   });
 }
 export function readGmDeviceRequestQueue(

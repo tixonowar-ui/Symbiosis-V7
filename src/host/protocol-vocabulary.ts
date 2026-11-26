@@ -31,6 +31,7 @@ const HOST_TRANSITION_KINDS = new Set([
 const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
   'APP-003',
   'PLY-027',
+  'PLY-028',
   'PLY-029',
   'PLY-030',
   'ENM-001',
@@ -63,6 +64,7 @@ const PRESENTED_FORM_IDS: ReadonlySet<string> = new Set([
   'NPC-016',
   'NPC-017',
   'CMP-008',
+  'CMP-009',
   'CMP-014',
   'CMP-015',
   'CMP-016',
@@ -322,6 +324,7 @@ export async function loadProtocolVocabulary(
         isEnemyLibraryForm(formId) ||
         isEnemyAuthoringForm(formId) ||
         isCampaignLifecycleForm(formId) ||
+        formId === 'CMP-009' ||
         (NPC_CONTROL_FORM_IDS as readonly string[]).includes(formId) ||
         (CAMPAIGN_ADMISSION_FORM_IDS as readonly string[]).includes(formId)
       ) {

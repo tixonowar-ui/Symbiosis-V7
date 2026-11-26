@@ -336,6 +336,25 @@ const CHR_003_AUTO_PROJECTION = {
   ...CHR_003_MANUAL_PROJECTION,
   diceInputModeSnapshot: 'AUTO',
 } as const;
+const CLASSIC_AUTO_SET_RESULT = {
+  branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
+  branchUuid: BRANCH_UUID,
+  characterDraftId: CHARACTER_DRAFT_ID,
+  checkpointId: WIZARD_CHECKPOINT_ID,
+  checkpointOwnerId: CHARACTER_DRAFT_ID,
+  checkpointRevision: 5,
+  confirmationRollRequestIdOrNull: null,
+  diceInputModeSnapshot: 'AUTO',
+  draftRevision: 5,
+  faces: [2, 3, 4, 5, 6, 7, 8],
+  naturalCriticalQueue: [],
+  nextFormId: 'CHR-005',
+  setRollReceiptId: SET_ROLL_RECEIPT_ID,
+  setRollRequestId: SET_ROLL_REQUEST_ID,
+  shownResultLocked: true,
+  sourceFormId: 'CHR-003',
+  stage: 'STAT_ROLLS',
+} as const;
 const ENTITY_REVISIONS = {
   actorVisibilityRevision: 0,
   projectionRevision: 0,
@@ -970,7 +989,7 @@ function chr012Base(
   } = {},
 ): ProjectionSnapshotV2Message['presentation']['base'] {
   return {
-    availableActionKeys: [],
+    availableActionKeys: ['CHR-012::CTA::001'],
     formId: 'CHR-012',
     formType: 'screen',
     roleFilteredPayload: {
@@ -4517,7 +4536,7 @@ describe('APP-001 web entry', () => {
     });
   });
 
-  it('submits AUTO as null and restores the same committed CHR-003 set after replay', async () => {
+  it('submits AUTO as null and restores the CLASSIC decision with the original set receipt after replay', async () => {
     const { container, socket } = await connectToWizardBase(chr003Base(CHR_003_AUTO_PROJECTION), 4);
     act(() => {
       requiredElement(
@@ -4543,26 +4562,6 @@ describe('APP-001 web entry', () => {
       workflowCommandId: ROLL_COMMIT_WORKFLOW_COMMAND_ID,
     });
     if (request.messageType !== 'command.request') throw new Error('missing AUTO roll command');
-    const faces = [2, 3, 4, 5, 6, 7, 8];
-    const result = {
-      branchCacheHash: EMPTY_BRANCH_CACHE_HASH,
-      branchUuid: BRANCH_UUID,
-      characterDraftId: CHARACTER_DRAFT_ID,
-      checkpointId: WIZARD_CHECKPOINT_ID,
-      checkpointOwnerId: CHARACTER_DRAFT_ID,
-      checkpointRevision: 5,
-      confirmationRollRequestIdOrNull: null,
-      diceInputModeSnapshot: 'AUTO',
-      draftRevision: 5,
-      faces,
-      naturalCriticalQueue: [],
-      nextFormId: 'CHR-003',
-      setRollReceiptId: SET_ROLL_RECEIPT_ID,
-      setRollRequestId: SET_ROLL_REQUEST_ID,
-      shownResultLocked: true,
-      sourceFormId: 'CHR-003',
-      stage: 'STAT_ROLLS',
-    } as const;
     act(() => socket.serverClose(1006, 'transport lost'));
     act(() => {
       requiredElement(
@@ -4580,31 +4579,75 @@ describe('APP-001 web entry', () => {
     deliver(
       resumedSocket,
       checkedHostTextV1(
-        rollCommitTerminal(request.commandId, SET_ROLL_RECEIPT_ID, result, 5, true),
+        rollCommitTerminal(
+          request.commandId,
+          SET_ROLL_RECEIPT_ID,
+          CLASSIC_AUTO_SET_RESULT,
+          5,
+          true,
+        ),
       ),
     );
-    const committedProjection = {
-      ...CHR_003_AUTO_PROJECTION,
-      draftRevision: 5,
-      facesOrManualInputs: faces,
-      setRollReceiptId: SET_ROLL_RECEIPT_ID,
-      shownResultLocked: true,
-    } as const;
+    const decision = setDecisionBase('CHR-005', {
+      ...setDecisionProjection('CHR-005', { draftRevision: 5 }),
+      acceptedSetReceiptId: SET_ROLL_RECEIPT_ID,
+    });
     deliverPair(
       resumedSocket,
       capabilities({
         reconnectRequestId: reconnect.reconnectRequestId,
         revisions: entityRevisions(5),
       }),
-      reconnectWizardSnapshot(reconnect.reconnectRequestId, chr003Base(committedProjection), 5),
+      reconnectWizardSnapshot(reconnect.reconnectRequestId, decision, 5),
     );
 
     expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+    expect(container.querySelector('[data-atlas-form-id="CHR-005"]')).not.toBeNull();
     expect(
-      [...container.querySelectorAll('[data-stat-roll-face]')].map((item) => item.textContent),
-    ).toEqual(faces.map(String));
-    expect(container.querySelector('[data-stat-roll-committed]')).not.toBeNull();
+      container.querySelector('[data-host-field="acceptedSetReceiptId"]')?.textContent,
+    ).toContain(SET_ROLL_RECEIPT_ID);
+    expect(container.querySelector('[data-atlas-action-key="CHR-005::CTA::001"]')).not.toBeNull();
     expect(container.querySelector('[data-atlas-action-key="CHR-003::CTA::002"]')).toBeNull();
+  });
+
+  it.each([
+    ['wrong decision form', '$.receipt.result.nextFormId'],
+    ['different set receipt', '$.presentation.base.roleFilteredPayload'],
+  ] as const)('rejects a CLASSIC roll with a %s', async (mismatch, path) => {
+    const { container, socket } = await connectToWizardBase(chr003Base(CHR_003_AUTO_PROJECTION), 4);
+    act(() => {
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-003::CTA::002"]'),
+        'CHR-003 roll',
+      ).click();
+    });
+    const request = decodedClientMessageV1(socket, socket.sent.length - 1);
+    if (request.messageType !== 'command.request') throw new Error('Missing CLASSIC roll request');
+    const result =
+      mismatch === 'wrong decision form'
+        ? { ...CLASSIC_AUTO_SET_RESULT, nextFormId: 'CHR-006' }
+        : CLASSIC_AUTO_SET_RESULT;
+    deliver(
+      socket,
+      checkedHostTextV1(rollCommitTerminal(request.commandId, SET_ROLL_RECEIPT_ID, result, 5)),
+    );
+    if (mismatch === 'different set receipt') {
+      expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+      const decision = setDecisionBase('CHR-005', {
+        ...setDecisionProjection('CHR-005', { draftRevision: 5 }),
+        acceptedSetReceiptId: 'another-set-receipt',
+      });
+      deliver(
+        socket,
+        checkedHostTextV2(setDecisionDestinationSnapshot(request.commandId, decision, 5)),
+      );
+    }
+    expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+    expect(decodedClientMessageV1(socket, socket.sent.length - 1)).toMatchObject({
+      messageType: 'protocol.refusal',
+      refusal: { code: 'UNRECOGNIZED', path },
+    });
+    expect(container.querySelector('[data-atlas-action-key="CHR-005::CTA::001"]')).toBeNull();
   });
 
   it('keeps the AUTO roll CTA absent without the ROLL-COMMIT capability', async () => {
@@ -4629,7 +4672,7 @@ describe('APP-001 web entry', () => {
     expect(socket.sent).toHaveLength(1);
   });
 
-  it('keeps CHR-004 MANUAL confirmation local and renders actionless CHAIN_COMPLETE', async () => {
+  it('keeps CHR-004 MANUAL confirmation local and returns the completed critical chain to its signed decision', async () => {
     const pendingProjection = {
       branchUuid: BRANCH_UUID,
       characterDraftId: CHARACTER_DRAFT_ID,
@@ -4697,7 +4740,7 @@ describe('APP-001 web entry', () => {
       criticalQueueIndex: 0,
       draftRevision: 6,
       nextConfirmationRollRequestIdOrNull: null,
-      nextFormId: 'CHR-004',
+      nextFormId: 'CHR-005',
       originFace: 20,
       outcomeOrNull: {
         creationCriticalPenaltyOrNull: null,
@@ -4720,11 +4763,9 @@ describe('APP-001 web entry', () => {
       checkedHostTextV2(
         setDecisionDestinationSnapshot(
           request.commandId,
-          chr004Base({
-            ...pendingProjection,
-            confirmationFace: 14,
-            confirmationReceiptId,
-            draftRevision: 6,
+          setDecisionBase('CHR-005', {
+            ...setDecisionProjection('CHR-005', { draftRevision: 6 }),
+            acceptedSetReceiptId: SET_ROLL_RECEIPT_ID,
           }),
           6,
         ),
@@ -4732,8 +4773,11 @@ describe('APP-001 web entry', () => {
     );
 
     expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
-    expect(container.querySelector('[data-critical-chain-status="CHAIN_COMPLETE"]')).not.toBeNull();
-    expect(container.querySelector('[data-confirmation-face]')?.textContent).toBe('14');
+    expect(container.querySelector('[data-character-set-decision="PENDING"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-host-field="acceptedSetReceiptId"]')?.textContent,
+    ).toContain(SET_ROLL_RECEIPT_ID);
+    expect(container.querySelector('[data-atlas-action-key="CHR-005::CTA::001"]')).not.toBeNull();
     expect(container.querySelector('[data-atlas-action-key="CHR-004::CTA::001"]')).toBeNull();
   });
 
@@ -5265,7 +5309,7 @@ describe('APP-001 web entry', () => {
     expect(container.querySelector('[data-client-state="disconnected"]')).toBeNull();
     expect(container.textContent).toContain('UNRECOGNIZED');
     expect(socket.sent).toHaveLength(1);
-    expect(socket.closeCalls).toContainEqual({ code: 1002, reason: 'wire frame refused' });
+    expect(socket.closeCalls).toContainEqual({ code: 4002, reason: 'wire frame refused' });
   });
 
   it('keeps the confirmed snapshot read-only after a connection loss', async () => {
@@ -6052,7 +6096,8 @@ describe('APP-001 web entry', () => {
     expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
     expect(container.querySelector('[data-atlas-form-id="CHR-012"]')).not.toBeNull();
     expect(container.querySelector('[data-stat-breakdown]')).not.toBeNull();
-    expect(container.querySelectorAll('[data-atlas-action-key]')).toHaveLength(0);
+    expect(container.querySelectorAll('[data-atlas-action-key]')).toHaveLength(1);
+    expect(container.querySelector('[data-atlas-action-key="CHR-012::CTA::001"]')).not.toBeNull();
   });
 
   it('accepts a historic PURE assignment replay paired with the next signed class checkpoint', async () => {
@@ -6147,6 +6192,33 @@ describe('APP-001 web entry', () => {
       container.querySelector('[data-stat-assignment-validation="ASSIGNMENT_INVALID"]'),
     ).not.toBeNull();
   });
+
+  it.each([false, true])(
+    'checks CHR-012 controls against a read-only session (checkpoint action %s)',
+    async (action) => {
+      const { container, socket } = await connectClient();
+      open(socket);
+      const stats = { C: 10, D: 10, I: 10, M: 10, S: 10, W: 10, Z: 10 };
+      const base = chr012Base(stats);
+      deliverPair(
+        socket,
+        capabilities({ executableWorkflowCommandIds: [], revisions: entityRevisions(8) }),
+        reconnectWizardSnapshot(
+          REQUEST_ID,
+          { ...base, availableActionKeys: action ? base.availableActionKeys : [] },
+          8,
+        ),
+      );
+      expect(container.querySelector('[data-atlas-action-key="CHR-012::CTA::001"]')).toBeNull();
+      if (action) {
+        expect(container.querySelector('[data-client-state="protocol-error"]')).not.toBeNull();
+        expect(container.querySelector('[data-atlas-form-id="CHR-012"]')).toBeNull();
+      } else {
+        expect(container.querySelector('[data-client-state="protocol-error"]')).toBeNull();
+        expect(container.querySelector('[data-atlas-form-id="CHR-012"]')).not.toBeNull();
+      }
+    },
+  );
 
   it('refuses authority-only metadata in the CHR-012 player projection', async () => {
     const stats = { C: 10, D: 10, I: 10, M: 10, S: 10, W: 10, Z: 10 } as const;
@@ -6415,7 +6487,28 @@ describe('APP-001 web entry', () => {
     expect(container.querySelector('[data-mandatory-class-skill]')?.textContent).toContain(
       'PURE_STALKER',
     );
-    expect(container.querySelectorAll('[data-atlas-action-key]')).toHaveLength(0);
+    expect(container.querySelectorAll('[data-atlas-action-key]')).toHaveLength(1);
+    act(() =>
+      requiredElement(
+        container.querySelector<HTMLButtonElement>('[data-atlas-action-key="CHR-012::CTA::001"]'),
+        'CHR-012 skill eligibility checkpoint',
+      ).click(),
+    );
+    const eligibility = decodedClientMessageV1(socket, socket.sent.length - 1);
+    expect(eligibility).toMatchObject({
+      messageType: 'command.request',
+      workflowCommandId: IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+      expectedRevisions: classRevisions,
+    });
+    if (eligibility.messageType !== 'command.request')
+      throw Error('Missing skill eligibility checkpoint');
+    expect(eligibility.payload).toEqual({
+      characterDraftId: CHARACTER_DRAFT_ID,
+      wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+      draftRevision: 9,
+      stage: 'SKILLS',
+      sourceFormId: 'CHR-012',
+    });
   });
 
   it('CONFIRM adventurous abandonment lands on the exact fresh CHR-003 attempt', async () => {

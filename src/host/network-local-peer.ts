@@ -280,16 +280,28 @@ export function createLocalNetworkPeer(d: {
   async function call(
     scope: LocalNetworkScope,
     command: DeviceAdmissionPeerCommand,
+    readChannel?: CampaignPeerClientChannel,
   ): Promise<DeviceAdmissionPeerResponse> {
     const channel = live(scope);
+    if (
+      readChannel !== undefined &&
+      (readChannel !== channel || command.operation !== 'DEVICE_REQUEST_RECOVER')
+    )
+      return fail('UNCONFIRMED_OUTCOME');
+    let awaitingReply = false;
     try {
-      const response = decodeDeviceAdmissionPeerResponse(
-        await channel.call(encodeDeviceAdmissionPeerCommand(command, limits)),
-      );
+      const request = encodeDeviceAdmissionPeerCommand(command, limits);
+      awaitingReply = true;
+      const wire = await channel.call(request);
+      awaitingReply = false;
+      const response = decodeDeviceAdmissionPeerResponse(wire);
       owned(scope);
+      if (readChannel !== undefined && !stillCurrentAfterReply(scope, channel, 'HANDOFF_READ'))
+        return fail('UNCONFIRMED_OUTCOME');
       if (response.operation !== command.operation) return fail('UNCONFIRMED_OUTCOME');
       return response;
-    } catch {
+    } catch (error) {
+      if (awaitingReply && readChannel === channel && transportFailure(error)) throw error;
       return fail('UNCONFIRMED_OUTCOME');
     }
   }
@@ -972,8 +984,16 @@ export function createLocalNetworkPeer(d: {
     async recover(
       scope: LocalNetworkScope,
       outbox: LocalNetworkOutbox,
+      readChannel?: CampaignPeerClientChannel,
     ): Promise<DeviceAdmissionPeerResponse> {
       const intent = outbox.intent;
+      if (
+        readChannel !== undefined &&
+        (intent.operation !== 'SUBMIT' ||
+          intent.batch.schemaVersion !== 2 ||
+          outbox.acknowledgementOrNull?.operation !== 'SUBMIT')
+      )
+        return fail('UNCONFIRMED_OUTCOME');
       if (
         outbox.ownerDeviceId !== scope.ownerDeviceId ||
         outbox.networkScopeId !== scope.networkScopeId
@@ -991,16 +1011,20 @@ export function createLocalNetworkPeer(d: {
       const submitCommandId =
         intent.operation === 'SUBMIT' ? intent.commandId : current.requestOrNull?.submitCommandId;
       if (submitCommandId === undefined) return fail('UNCONFIRMED_OUTCOME');
-      return call(scope, {
-        schemaVersion: 1,
-        operation: 'DEVICE_REQUEST_RECOVER',
-        requestId: intent.requestId,
-        technicalSessionId:
-          intent.operation === 'SUBMIT'
-            ? intent.batch.technicalSessionId
-            : intent.technicalSessionId,
-        submitCommandId,
-      });
+      return call(
+        scope,
+        {
+          schemaVersion: 1,
+          operation: 'DEVICE_REQUEST_RECOVER',
+          requestId: intent.requestId,
+          technicalSessionId:
+            intent.operation === 'SUBMIT'
+              ? intent.batch.technicalSessionId
+              : intent.technicalSessionId,
+          submitCommandId,
+        },
+        readChannel,
+      );
     },
     closeScope,
     close() {

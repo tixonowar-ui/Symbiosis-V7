@@ -27,7 +27,6 @@ import {
   NpcHistoryContent,
   NpcFinalReviewContent,
 } from './forms/npc/npc-library-content.js';
-import { isCampaignOwnerForm } from './forms/net/admission-client.js';
 import { CampaignPeerConnection } from './forms/net/campaign-peer-connection.js';
 import type { CampaignPeerStateV3Message } from '@shared/campaign-lifecycle.js';
 import { isCampaignLifecycleForm } from '@shared/campaign-lifecycle.js';
@@ -103,8 +102,10 @@ import type { StartingWeaponDraft } from './forms/chr/starting-weapon.js';
 import { flushSync } from 'react-dom';
 import { ordinarySeatViewValue } from '@shared/ordinary-seat.js';
 import { OrdinarySeatPanel } from './forms/ply/ordinary-seat-panel.js';
+import { HostSeatPanel, OwnedFinalSelection } from './forms/ply/host-seat-panel.js';
+import type { App004Projection } from './ws-client.js';
 import { AtlasForm } from './renderer/atlas-form.js';
-import { connectProjection, LOCAL_ROLE_CHOICE_DETAIL } from './ws-client.js';
+import { campaignPeerScope, connectProjection, LOCAL_ROLE_CHOICE_DETAIL } from './ws-client.js';
 import type {
   AdvisorSkillSelectionDraft,
   App001Projection,
@@ -289,7 +290,10 @@ function displayValue(key: string, value: unknown): string {
 function HostProjection({ snapshot }: { readonly snapshot: ConfirmedProjectionSnapshot }) {
   if (
     snapshot.formId === 'APP-004' ||
-    (snapshot.formId === 'CHR-001' && Object.hasOwn(snapshot.projection, 'identityDraftScope')) ||
+    (snapshot.formId === 'CHR-001' &&
+      (Object.hasOwn(snapshot.projection, 'identityDraftScope') ||
+        (snapshot.hostSeat?.hostSeatView === 'ACTIVE' &&
+          snapshot.hostSeat.target.kind === 'CANDIDATE'))) ||
     isPostSaveForm(snapshot.formId) ||
     isCampaignCreationForm(snapshot.formId) ||
     isNpcControlForm(snapshot.formId) ||
@@ -2715,6 +2719,25 @@ export function App(): ReactElement {
   const [armorBundleDraft, setArmorBundleDraft] = useState<ArmorBundleDraft | null>(null);
   const [startingWeaponDraft, setStartingWeaponDraft] = useState<StartingWeaponDraft | null>(null);
   const [characterArtReadPending, setCharacterArtReadPending] = useState(false);
+  const lifecycleEditorRef = useRef<CampaignLifecycleEditor | null>(null);
+  const setLifecycleEditor = useCallback((editor: CampaignLifecycleEditor | null) => {
+    lifecycleEditorRef.current = editor;
+  }, []);
+  const takeLifecycleInputs = () => {
+    const editor = lifecycleEditorRef.current;
+    if (editor === null) return {};
+    try {
+      return editor.readInputs();
+    } finally {
+      editor.clearSecrets();
+    }
+  };
+  const lobbyTimeRef = useRef<InitialCampaignTimeInput | null>(null);
+  const changeLobbyTime = useCallback((value: InitialCampaignTimeInput | null) => {
+    lobbyTimeRef.current = value;
+  }, []);
+  const selectedHostFinals = useRef<{ scope: string; ids: readonly string[] } | null>(null);
+  const targetHostSeat = useRef<{ scope: string; id: string } | null>(null);
   const connectionRef = useRef<ProjectionConnection | null>(null);
   const enemyInputRef = useRef<JsonObject | null>({});
   const enemyStatsDraftRef = useRef<JsonObject | null>(null);
@@ -2727,6 +2750,23 @@ export function App(): ReactElement {
           // Remove the sheet before sending the navigation intent or freezing the page for back/forward cache.
           projectionVisible = false;
           flushSync(() => {
+            enemyInputRef.current = null;
+            enemyStatsDraftRef.current = null;
+            intelligenceFloorManualFaceRef.current = null;
+            lifecycleEditorRef.current?.clearSecrets();
+            lifecycleEditorRef.current = null;
+            lobbyTimeRef.current = null;
+            targetHostSeat.current = null;
+            selectedHostFinals.current = null;
+            setCampaignDraft(null);
+            setNetworkDraft(null);
+            setGmRequestDraft(null);
+            setCampaignPeerState(null);
+            setNpcControls(null);
+            setNpcInputBuffer(null);
+            setEnemyArtReadPending(false);
+            setCharacterArtReadPending(false);
+            setNetworkImageReadPending(false);
             setActionNotice(null);
             setState(next);
           });
@@ -2785,14 +2825,8 @@ export function App(): ReactElement {
   }, []);
 
   const snapshot = confirmedSnapshot(state);
-  const peerApplicable =
-    snapshot !== null &&
-    (snapshot.formId === 'NET-005' || isCampaignOwnerForm(snapshot.formId)) &&
-    typeof snapshot.projection['networkScopeId'] === 'string' &&
-    (typeof snapshot.projection['requestId'] === 'string' ||
-      typeof snapshot.projection['requestIdOrNull'] === 'string');
   const peerBlocked =
-    peerApplicable &&
+    campaignPeerScope(snapshot) !== null &&
     (campaignPeerState === null ||
       campaignPeerState.connectionState !== 'CONNECTED' ||
       campaignPeerState.formOrNull !== null);
@@ -2836,24 +2870,67 @@ export function App(): ReactElement {
   const correctionCommandActions = new Set<string>(
     Object.values(CORRECTION_COMMANDS).map((v) => v[1]),
   );
-  const lifecycleEditorRef = useRef<CampaignLifecycleEditor | null>(null);
-  const setLifecycleEditor = useCallback((editor: CampaignLifecycleEditor | null) => {
-    lifecycleEditorRef.current = editor;
-  }, []);
-  const takeLifecycleInputs = () => {
-    const editor = lifecycleEditorRef.current;
-    if (editor === null) return {};
-    try {
-      return editor.readInputs();
-    } finally {
-      editor.clearSecrets();
-    }
-  };
-  const lobbyTimeRef = useRef<InitialCampaignTimeInput | null>(null);
-  const changeLobbyTime = useCallback((value: InitialCampaignTimeInput | null) => {
-    lobbyTimeRef.current = value;
-  }, []);
   const layers = snapshot?.layers ?? [];
+  const lobbyActive =
+    snapshot?.formId === 'NET-016' &&
+    snapshot.hostSeat?.hostSeatView === 'ACTIVE' &&
+    snapshot.hostSeat.target.kind === 'GM' &&
+    snapshot.availableActionKeys.includes('NET-016::CTA::006')
+      ? snapshot.hostSeat
+      : null;
+  const lobbyScope =
+    lobbyActive && snapshot
+      ? lobbyActive.receiptId + ':' + snapshot.revisions.projectionRevision
+      : null;
+  const applicantActive =
+    snapshot?.formId === 'NET-017' &&
+    snapshot.hostSeat?.hostSeatView === 'ACTIVE' &&
+    snapshot.hostSeat.target.kind === 'GM' &&
+    snapshot.availableActionKeys.includes('NET-017::CTA::011')
+      ? snapshot.hostSeat
+      : null;
+  const applicantScope =
+    applicantActive && snapshot && applicantActive.applicants?.length
+      ? 'request:' + applicantActive.receiptId + ':' + snapshot.revisions.projectionRevision
+      : null;
+  const libraryScope =
+    snapshot?.formId === 'APP-004' && snapshot.hostSeat?.hostSeatView === 'ACTIVE'
+      ? snapshot.hostSeat.receiptId + ':' + snapshot.revisions.projectionRevision
+      : null;
+  const hostSelection =
+    snapshot?.hostSeat?.hostSeatView === 'ACTIVE'
+      ? snapshot.hostSeat.selectedSourceUuids
+      : undefined;
+  useEffect(() => {
+    if (targetHostSeat.current?.scope !== (lobbyScope ?? applicantScope))
+      targetHostSeat.current = null;
+    if (selectedHostFinals.current?.scope !== libraryScope) selectedHostFinals.current = null;
+  }, [lobbyScope, applicantScope, libraryScope]);
+  if (snapshot?.hostSeat && (snapshot.formId === 'APP-003' || snapshot.formId === 'CMP-009')) {
+    const form = snapshot.hostSeat.hostSeatView === 'MANAGE' ? snapshot : (layers[0] ?? snapshot);
+    return (
+      <>
+        <ConnectionBanner state={state} />
+        <HostSeatPanel
+          key={form.formId + ':' + snapshot.hostSeat.revision}
+          view={snapshot.hostSeat}
+          formId={form.formId}
+          actions={form.availableActionKeys}
+          enabled={interactive}
+          getConnection={() => connectionRef.current}
+        />
+        {snapshot.hostActive ? (
+          <HostSeatPanel
+            formId="PLY-029"
+            view={snapshot.hostActive}
+            actions={[]}
+            enabled={true}
+            getConnection={() => null}
+          />
+        ) : null}
+      </>
+    );
+  }
   if (
     snapshot?.formId === 'APP-003' ||
     (snapshot?.formId === 'APP-004' && snapshot.projection['ordinarySeatView'] === 'LIBRARY')
@@ -2923,12 +3000,66 @@ export function App(): ReactElement {
             disabled={
               !interactive ||
               peerBlocked ||
-              (layers.length > 0 && snapshot.formId !== 'PLY-001') ||
+              (layers.some(
+                (l) => !(l.formId === 'PLY-029' && snapshot.hostSeat?.hostSeatView === 'ACTIVE'),
+              ) &&
+                snapshot.formId !== 'PLY-001') ||
               networkImageReadPending ||
               enemyArtReadPending
             }
           >
             <legend>AtlasForm {snapshot.formId}</legend>
+            {applicantScope !== null && applicantActive?.applicants ? (
+              <label key={applicantScope}>
+                Локальная заявка для передачи
+                <select
+                  defaultValue={
+                    applicantActive.applicants.find(
+                      (a) => a.requestId === snapshot.projection['selectedRequestIdOrNull'],
+                    )?.requestId ?? ''
+                  }
+                  onChange={(e) => {
+                    targetHostSeat.current = { scope: applicantScope, id: e.target.value };
+                  }}
+                >
+                  <option value="">Выберите заявку</option>
+                  {applicantActive.applicants.map((a) => (
+                    <option key={a.requestId} value={a.requestId}>
+                      {a.targetProfileLabel} ({a.targetLocalOwnerId}) · {a.requestId}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {lobbyScope !== null && lobbyActive?.seats ? (
+              <label key={lobbyScope}>
+                Место для передачи
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    targetHostSeat.current = { scope: lobbyScope, id: e.target.value };
+                  }}
+                >
+                  <option value="">Выберите место</option>
+                  {lobbyActive.seats.map((s) => (
+                    <option key={s.localControllerSeatId} value={s.localControllerSeatId}>
+                      Игрок {s.ordinal}: {s.targetProfileLabel} ({s.targetLocalOwnerId})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            {libraryScope !== null && hostSelection !== undefined ? (
+              <OwnedFinalSelection
+                key={libraryScope}
+                library={snapshot.projection as App004Projection}
+                selectedSourceUuids={hostSelection}
+                enabled={interactive && snapshot.availableActionKeys.includes('APP-004::CTA::002')}
+                onChange={(ids) => {
+                  selectedHostFinals.current = { scope: libraryScope, ids };
+                }}
+              />
+            ) : null}
             <NpcInputBufferControls
               buffer={npcInputBuffer}
               connection={() => connectionRef.current}
@@ -3026,6 +3157,13 @@ export function App(): ReactElement {
             ) : null}
             {isCampaignLobbyGmForm(snapshot.formId) ? (
               <CampaignLobbyFields
+                managedReceiptId={
+                  snapshot.hostSeat?.hostSeatView === 'ACTIVE' &&
+                  snapshot.hostSeat.target.kind === 'GM'
+                    ? snapshot.hostSeat.receiptId
+                    : null
+                }
+                setupGm={snapshot.hostSetupGm === true}
                 key={
                   snapshot.formId +
                   ':' +
@@ -3547,7 +3685,9 @@ export function App(): ReactElement {
                 snapshot.formId === 'CHR-025' ||
                 snapshot.formId === 'APP-004' ||
                 (snapshot.formId === 'CHR-001' &&
-                  Object.hasOwn(snapshot.projection, 'identityDraftScope')) ||
+                  (Object.hasOwn(snapshot.projection, 'identityDraftScope') ||
+                    (snapshot.hostSeat?.hostSeatView === 'ACTIVE' &&
+                      snapshot.hostSeat.target.kind === 'CANDIDATE'))) ||
                 isPostSaveForm(snapshot.formId) ||
                 isCampaignCreationForm(snapshot.formId) ||
                 isEnemyLibraryForm(snapshot.formId) ||
@@ -3649,6 +3789,34 @@ export function App(): ReactElement {
                   setActionNotice('Переход не отправлен: соединение ещё не готово.');
                   return;
                 }
+                const finals = selectedHostFinals.current;
+                if (
+                  selection.actionKey === 'NET-017::CTA::011' &&
+                  applicantScope !== null &&
+                  targetHostSeat.current?.scope === applicantScope
+                ) {
+                  const result = connection.submitHostSeatInput({
+                    kind: 'SELECT_APPLICANT',
+                    id: targetHostSeat.current.id,
+                  });
+                  setActionNotice(result.ok ? null : result.detail);
+                  return;
+                }
+                if (selection.actionKey === 'NET-016::CTA::006' && lobbyScope !== null) {
+                  const id =
+                    targetHostSeat.current?.scope === lobbyScope ? targetHostSeat.current.id : '';
+                  const result = connection.submitHostSeatInput({ kind: 'SELECT_SEAT', id });
+                  setActionNotice(result.ok ? null : result.detail);
+                  return;
+                }
+                if (selection.actionKey === 'APP-004::CTA::002' && libraryScope !== null) {
+                  const result = connection.submitHostSeatInput({
+                    kind: 'SELECT_FINALS',
+                    ids: finals?.scope === libraryScope ? finals.ids : (hostSelection ?? []),
+                  });
+                  setActionNotice(result.ok ? null : result.detail);
+                  return;
+                }
                 const result = connection.requestFormAction(
                   selection.actionKey,
                   selection.actionKey === CHR_041_INTELLIGENCE_FLOOR_ACTION_KEY
@@ -3664,6 +3832,16 @@ export function App(): ReactElement {
               }}
             />
           </fieldset>
+          {snapshot.hostSeat?.hostSeatView === 'ACTIVE' ? (
+            <HostSeatPanel
+              key={snapshot.hostSeat.receiptId}
+              formId="PLY-029"
+              view={snapshot.hostSeat}
+              actions={[]}
+              enabled={true}
+              getConnection={() => null}
+            />
+          ) : null}
           {layers.map((layer) =>
             snapshot.formId === 'PLY-001' &&
             (layer.formId === 'PLY-029' || layer.formId === 'PLY-027') ? (

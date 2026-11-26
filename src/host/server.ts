@@ -1,4 +1,17 @@
 import { loadEnemySourceCatalog } from './enemy-catalog.js';
+import { AsyncLocalStorage } from 'node:async_hooks';
+import {
+  readHostLocalCharacterOwner,
+  readHostLocalCharacterCursor,
+  readHostLocalOwnedCharacters,
+  readHostLocalSeatHandoff,
+  recordHostLocalCharacterBirth,
+  saveHostLocalCharacterCursor,
+} from '../persistence/host-local-seat.js';
+import { createHostLocalSeatRuntime, type HostSeatClient } from './host-local-seat-runtime.js';
+import { restoreHostSeatGmForm } from './host-seat-gm-return.js';
+import type { WorkflowCommandCapabilityId } from '../shared/wire-protocol.js';
+import { HOST_OWNER_PROFILE_CREATE, HOST_SEAT_ACK } from '../shared/host-seat.js';
 import { loadEnemyAuthoringSourceCatalog } from './enemy-authoring-catalog.js';
 import { loadNpcAuthoringSourceCatalog } from './npc-catalog.js';
 import { loadNpcArtCatalog } from './npc-art.js';
@@ -569,6 +582,12 @@ interface LibraryRevisionRuntime {
   readonly read: () => number;
 }
 interface NavigationDependencies {
+  readonly candidate?: {
+    readonly targetLocalOwnerId: string;
+    readonly handoffId: string;
+    readonly candidateAckReceiptId: string;
+    readonly stillActive: () => boolean;
+  };
   readonly campaignCreation: ReturnType<typeof createCampaignCreationRuntime>;
   readonly network: ReturnType<typeof createLocalNetworkRuntime>;
   readonly gmNetwork: ReturnType<typeof createGmNetworkRuntime>;
@@ -858,18 +877,35 @@ function app002Navigation(
 }
 
 function app004Navigation(
-  message: FormActionIntentV2Message,
+  message: Pick<FormActionIntentV2Message, 'navigationRequestId'>,
   current: ConfirmedPlayerContext,
   before: RevisionVector,
   dependencies: NavigationDependencies,
+  reason: ProjectionSnapshotV2Message['presentation']['assignment']['reason'] = 'FORM_ACTION',
 ): NavigationSuccess {
-  const after = advanceProjection(before, dependencies.advanceRevisions);
-  const entries = listLocalCharacters(dependencies.database).filter(
-    (entry) =>
-      readLocalCharacterOwner(dependencies.database, entry.localCharacterId)?.ownerDeviceId ===
-      current.deviceId,
-  );
+  const after =
+    reason === 'RECONNECT' ? before : advanceProjection(before, dependencies.advanceRevisions);
+  const candidate = dependencies.candidate;
+  const entries =
+    candidate === undefined
+      ? listLocalCharacters(dependencies.database).filter((entry) =>
+          characterVisibleToOwner(dependencies, current.deviceId, entry.localCharacterId),
+        )
+      : readHostLocalOwnedCharacters(
+          dependencies.database,
+          current.deviceId,
+          candidate.targetLocalOwnerId,
+        ).map((id) => readLocalCharacter(dependencies.database, id));
   const projected = projectApp004(dependencies.catalog, 'player', {
+    ...(candidate === undefined
+      ? {}
+      : {
+          hostLocalOwner: {
+            targetLocalOwnerId: candidate.targetLocalOwnerId,
+            handoffId: candidate.handoffId,
+            candidateAckReceiptId: candidate.candidateAckReceiptId,
+          },
+        }),
     libraryEntries: entries,
     localCharacterLibraryRevision: dependencies.libraryRevision.read(),
     projectionRevision: after.projectionRevision,
@@ -890,7 +926,10 @@ function app004Navigation(
     snapshot: projectionSnapshot(
       message.navigationRequestId,
       {
-        availableActionKeys: APP_004_VERTICAL_ACTION_KEYS,
+        availableActionKeys:
+          candidate === undefined
+            ? APP_004_VERTICAL_ACTION_KEYS
+            : [APP_004_CREATE_CHARACTER_ACTION_KEY, 'APP-004::CTA::002'],
         formId: 'APP-004',
         formType: 'screen',
         roleFilteredPayload: {
@@ -933,8 +972,21 @@ function app004Navigation(
       },
       'player',
       after,
+      reason,
     ),
   };
+}
+
+function characterVisibleToOwner(
+  dependencies: NavigationDependencies,
+  deviceId: string,
+  characterId: string,
+): boolean {
+  return (
+    readLocalCharacterOwner(dependencies.database, characterId)?.ownerDeviceId === deviceId &&
+    readHostLocalCharacterOwner(dependencies.database, deviceId, characterId) ===
+      (dependencies.candidate?.targetLocalOwnerId ?? null)
+  );
 }
 
 function chr001Navigation(
@@ -1021,6 +1073,18 @@ function currentNavigationRevisions(
 
 function postSaveDependencies(dependencies: NavigationDependencies): LocalPostSaveDependencies {
   return {
+    ...(dependencies.candidate === undefined
+      ? {}
+      : {
+          recordScopedRestore(head, formId) {
+            rememberCandidateCharacter(
+              dependencies,
+              head.scope.ownerDeviceId,
+              head.scope.entityId,
+              formId,
+            );
+          },
+        }),
     database: dependencies.database,
     symbiontCatalog: dependencies.symbiontCatalog,
     baseline: dependencies.localCharacterExportBaseline,
@@ -1060,7 +1124,7 @@ function postSaveNavigation(
   connection: ConnectionNavigation,
   dependencies: NavigationDependencies,
   correlationId: string,
-  reason: 'ADDRESSABLE_ROUTE' | 'FORM_ACTION' | 'COMMAND_DESTINATION' | 'RECONNECT',
+  reason: ProjectionSnapshotV2Message['presentation']['assignment']['reason'],
   replayCommandId?: string,
 ): NavigationSuccess {
   const base = projectLocalPostSave(
@@ -1086,6 +1150,32 @@ function postSaveNavigation(
 
 // A delayed legacy reply must not put a replaced local projection back on the wire.
 const ordinaryOnlySockets = new WeakSet<WebSocket>();
+type SeatRuntime = ReturnType<typeof createHostLocalSeatRuntime>;
+type SeatSocket = {
+  readonly runtime: SeatRuntime;
+  readonly client: HostSeatClient;
+  readonly rememberSupported: (ids: readonly WorkflowCommandCapabilityId[]) => void;
+};
+const seatSockets = new WeakMap<WebSocket, SeatSocket>();
+// Notifications may outlive the form and socket grant that subscribed to them.
+const deliveryEpoch = new AsyncLocalStorage<number>();
+
+function bindDelivery<T>(send: (value: T) => void): (value: T) => void {
+  const epoch = deliveryEpoch.getStore();
+  if (epoch === undefined) throw new Error('Cannot bind a delivery outside its socket epoch');
+  // The GM scheduler installs its own work token after this callback is registered.
+  // Retaining only the delivery epoch lets it distinguish its current work from other pending calls.
+  return (value) => deliveryEpoch.run(epoch, send, value);
+}
+
+function currentDelivery(socket: WebSocket): boolean {
+  const binding = seatSockets.get(socket);
+  return (
+    !binding ||
+    (socket.readyState === socket.OPEN &&
+      deliveryEpoch.getStore() === binding.runtime.deliveryEpoch())
+  );
+}
 
 function sendChecked(
   socket: WebSocket,
@@ -1093,7 +1183,8 @@ function sendChecked(
   vocabulary: ProtocolVocabulary,
   allowAfterOrdinaryPurge = false,
 ): void {
-  if (!allowAfterOrdinaryPurge && ordinaryOnlySockets.has(socket)) return;
+  if (!currentDelivery(socket) || (!allowAfterOrdinaryPurge && ordinaryOnlySockets.has(socket)))
+    return;
   const encoded = encodeHostMessage(message, vocabulary);
   if (!encoded.ok) {
     throw new Error(`host produced an invalid wire v1 message: ${JSON.stringify(encoded.refusal)}`);
@@ -1106,9 +1197,16 @@ function sendCheckedV2(
   message: HostToClientV2Message,
   vocabulary: WireV2Vocabulary,
   fromOrdinaryRuntime = false,
+  fromHostSeat = false,
 ): void {
-  if (!fromOrdinaryRuntime && ordinaryOnlySockets.has(socket)) return;
-  const encoded = encodeHostMessageV2(message, vocabulary);
+  if (!currentDelivery(socket) || (!fromOrdinaryRuntime && ordinaryOnlySockets.has(socket))) return;
+  const binding = seatSockets.get(socket);
+  const outbound =
+    !fromHostSeat && binding && message.messageType === 'projection.snapshot'
+      ? binding.runtime.decorate(binding.client, message)
+      : message;
+  if (outbound === null) return;
+  const encoded = encodeHostMessageV2(outbound, vocabulary);
   if (!encoded.ok) {
     throw new Error(`host produced an invalid wire v2 message: ${JSON.stringify(encoded.refusal)}`);
   }
@@ -1121,12 +1219,77 @@ function sendCheckedV3(
   vocabulary: WireV3Vocabulary,
   fromOrdinaryRuntime = false,
 ): void {
-  if (!fromOrdinaryRuntime && ordinaryOnlySockets.has(socket)) return;
+  if (!currentDelivery(socket) || (!fromOrdinaryRuntime && ordinaryOnlySockets.has(socket))) return;
+  let followup: ProjectionSnapshotV2Message | undefined;
+  const binding = seatSockets.get(socket);
+  if (
+    binding?.runtime.enabled() &&
+    (message.messageType === 'character.identity-draft.result' ||
+      message.messageType === 'network.gm-request-draft.result' ||
+      message.messageType === 'network.draft.result' ||
+      message.messageType === 'campaign.draft.result')
+  ) {
+    const native = projectionSnapshot(
+      message.draftUpdateId,
+      message.presentation.base,
+      message.projectionRole,
+      message.revisions,
+      'FORM_ACTION',
+      message.presentation.layers,
+    );
+    const decorated = binding.runtime.decorate(binding.client, native);
+    if (!decorated) return;
+    // Draft receipts have a closed native layer vocabulary. Publish the separately
+    // negotiated assignment immediately after settling the exact receipt.
+    followup = decorated;
+  }
   const encoded = encodeHostMessageV3(message, vocabulary);
   if (!encoded.ok) {
     throw new Error(`host produced an invalid wire v3 message: ${JSON.stringify(encoded.refusal)}`);
   }
   socket.send(encoded.text);
+  if (followup) sendCheckedV2(socket, followup, vocabulary, fromOrdinaryRuntime, true);
+}
+
+function rememberCandidateCharacter(
+  dependencies: NavigationDependencies,
+  deviceId: string,
+  character: string | null,
+  formId: PresentedBaseForm['formId'],
+  postSaveScopeId?: string,
+) {
+  const candidate = dependencies.candidate;
+  if (!candidate) throw new Error('candidate cursor has no grant');
+  if (character === null && formId !== 'APP-004') return;
+  const stored = readHostLocalCharacterCursor(
+    dependencies.database,
+    deviceId,
+    candidate.targetLocalOwnerId,
+  );
+  if (
+    stored === null
+      ? character === null
+      : stored.localCharacterId === character &&
+        stored.formId === formId &&
+        stored.postSaveScopeId === postSaveScopeId
+  )
+    return;
+  const state = readHostLocalSeatHandoff(dependencies.database, deviceId);
+  saveHostLocalCharacterCursor(
+    dependencies.database,
+    deviceId,
+    {
+      commandId: 'host-seat-cursor/' + candidate.handoffId + '/' + String(state.revision),
+      expectedRevision: state.revision,
+      activeProof: state.activeProof,
+      localCharacterId: character,
+      formId,
+      ...(postSaveScopeId === undefined ? {} : { postSaveScopeId }),
+    },
+    () => {
+      if (!candidate.stillActive()) throw new Error('host-local cursor grant changed');
+    },
+  );
 }
 
 function adoptNavigationContext(
@@ -1152,7 +1315,16 @@ function adoptNavigationContext(
   connection.networkExitAssignment = null;
   connection.activeLayer = null;
   const restoredCursor = next.restoredPostSaveCursor;
-  if (next.postSaveReplayCommandId !== undefined) {
+  const candidate = dependencies.candidate;
+  if (candidate !== undefined && next.postSaveReplayCommandId === undefined) {
+    rememberCandidateCharacter(
+      dependencies,
+      next.deviceId,
+      next.entityLocalCharacterId,
+      next.formId,
+      next.postSaveScopeId,
+    );
+  } else if (next.postSaveReplayCommandId !== undefined) {
     // Delivering an older receipt must not replace the newer durable navigation cursor.
   } else if (
     restoredCursor !== undefined &&
@@ -2370,7 +2542,7 @@ function handleAddressableRoute(
       binding?.parameterIndex !== 0 ||
       typeof id !== 'string' ||
       message.bindings.length !== 1 ||
-      readLocalCharacterOwner(dependencies.database, id)?.ownerDeviceId !== libraryCurrent.deviceId
+      !characterVisibleToOwner(dependencies, libraryCurrent.deviceId, id)
     ) {
       finish(addressableRouteRefusal(message, { code: 'INVALID_BINDINGS' }, revisions));
       return;
@@ -3914,6 +4086,12 @@ function knownCommandById(
     dependencies.symbiontCatalog,
   );
   if (durableCommand === null) return undefined;
+  const owner = readHostLocalCharacterOwner(
+    dependencies.database,
+    loadDeviceId(dependencies.database),
+    durableCommand.durableCheckpoint.localCharacter.localCharacterId,
+  );
+  if (owner !== (dependencies.candidate?.targetLocalOwnerId ?? null)) return undefined;
   const entry = {
     durableCharacterId: durableCommand.durableCheckpoint.localCharacter.localCharacterId,
     request: durableCommand.request,
@@ -3971,6 +4149,21 @@ function sendCreationWizardDestination(
   correlationId: string,
   reason: 'COMMAND_DESTINATION' | 'RECONNECT',
 ): void {
+  sendCheckedV2(
+    socket,
+    creationWizardDestination(checkpoint, dependencies, connection, correlationId, reason),
+    dependencies.vocabulary,
+  );
+}
+
+function creationWizardDestination(
+  checkpoint: DurableCreationWizardCheckpoint,
+  dependencies: NavigationDependencies,
+  connection: ConnectionNavigation,
+  correlationId: string,
+  reason: ProjectionSnapshotV2Message['presentation']['assignment']['reason'],
+  skillPresentation?: typeof CHR_015_FORM_ID,
+): ProjectionSnapshotV2Message {
   if (checkpoint.localCharacter.lifecycleState === 'FINAL') {
     const current = creationWizardContext(connection, dependencies, checkpoint);
     if (!confirmedPlayerContext(current, dependencies))
@@ -3993,37 +4186,34 @@ function sendCreationWizardDestination(
       reason,
     );
     adoptNavigationContext(connection, dependencies, success.nextContext);
-    sendCheckedV2(socket, success.snapshot, dependencies.vocabulary);
-    return;
+    return success.snapshot;
   }
   const profileLayer =
     checkpoint.symbiontPresentationStage?.formId === 'CHR-031'
       ? projectChr031(checkpoint)
       : undefined;
-  sendCheckedV2(
-    socket,
-    projectionSnapshot(
-      correlationId,
-      creationWizardBase(
-        checkpoint,
-        creationWizardCapabilities(connection.executableWorkflowCommandIds),
-        dependencies.skillStageCatalog,
-        dependencies.symbiontCatalog,
-        dependencies.symbiontMediaCatalog,
-        dependencies.creationDecisionConsequenceCatalog,
-        dependencies.creationSkillCatalog,
-        dependencies.armorBundleCatalog,
-        dependencies.startingWeaponCatalog,
-      ),
-      'player',
-      currentCreationWizardRevisions(checkpoint),
-      reason,
-      profileLayer === undefined ? [] : [profileLayer],
+  const snapshot = projectionSnapshot(
+    correlationId,
+    creationWizardBase(
+      checkpoint,
+      creationWizardCapabilities(connection.executableWorkflowCommandIds),
+      dependencies.skillStageCatalog,
+      dependencies.symbiontCatalog,
+      dependencies.symbiontMediaCatalog,
+      dependencies.creationDecisionConsequenceCatalog,
+      dependencies.creationSkillCatalog,
+      dependencies.armorBundleCatalog,
+      dependencies.startingWeaponCatalog,
+      skillPresentation,
     ),
-    dependencies.vocabulary,
+    'player',
+    currentCreationWizardRevisions(checkpoint),
+    reason,
+    profileLayer === undefined ? [] : [profileLayer],
   );
   connection.activeLayer =
     profileLayer === undefined ? null : { dialogContext: null, presented: profileLayer };
+  return snapshot;
 }
 
 function handleArchivedExportCommand(
@@ -4259,6 +4449,25 @@ function handleCommandRequest(
     message.commandId,
     loadDeviceId(dependencies.database),
   );
+  if (
+    priorPostSave !== null &&
+    !characterVisibleToOwner(
+      dependencies,
+      loadDeviceId(dependencies.database),
+      priorPostSave.head.scope.entityId,
+    )
+  ) {
+    sendChecked(
+      socket,
+      commandRefusal(
+        message.commandId,
+        { code: 'GUARD_REJECTED' },
+        currentNavigationRevisions(connection, dependencies),
+      ),
+      dependencies.vocabulary,
+    );
+    return;
+  }
   if (
     priorPostSave !== null ||
     (message.payload as JsonObject)['stage'] === 'LOCAL_CHARACTER_POST_SAVE'
@@ -5780,11 +5989,40 @@ function handleCommandRequest(
   }
   let durableCheckpoint: DurableCreationWizardCheckpoint;
   try {
+    const candidate = dependencies.candidate;
     const identity = commitIdentityCheckpoint(dependencies.database, request, receiptId, {
       bindOwnerToDeviceId: current.deviceId,
       ...(current.variantInitializationProof === undefined
         ? {}
         : { variantProof: current.variantInitializationProof }),
+      ...(candidate === undefined
+        ? {}
+        : {
+            recordHostLocalBirth: (checkpoint) => {
+              const state = readHostLocalSeatHandoff(dependencies.database, current.deviceId);
+              recordHostLocalCharacterBirth(
+                dependencies.database,
+                current.deviceId,
+                {
+                  commandId: 'host-seat-character-birth/' + request.commandId,
+                  expectedRevision: state.revision,
+                  activeProof: state.activeProof,
+                  candidateAckReceiptId: candidate.candidateAckReceiptId,
+                  localCharacterId: request.payload.characterDraftId,
+                  checkpointId: checkpoint.checkpointId,
+                },
+                (source) => {
+                  if (
+                    !candidate.stillActive() ||
+                    source.active?.kind !== 'CANDIDATE' ||
+                    source.active.profile.targetLocalOwnerId !== candidate.targetLocalOwnerId
+                  )
+                    throw new Error('host-local candidate grant changed before character birth');
+                },
+              );
+              return undefined;
+            },
+          }),
     });
     durableCheckpoint = loadCreationWizardCheckpoint(
       dependencies.database,
@@ -6548,6 +6786,45 @@ async function handleFrame(
   }
   const source = rawDataText(data);
   const routed = async (message: LocalNetworkClientMessage) => {
+    const binding = seatSockets.get(socket);
+    if (binding) {
+      if ('supportedWorkflowCommandIds' in message)
+        binding.rememberSupported(message.supportedWorkflowCommandIds);
+      if (await binding.runtime.handle(binding.client, message)) return true;
+      const authority = binding.runtime.authority(binding.client);
+      if (!currentDelivery(socket)) return true;
+      if (authority.role === 'CANDIDATE' && authority.networkScopeIdOrNull === null) {
+        if (
+          (message.messageType === 'navigation.form-action' &&
+            (message.sourceFormId.startsWith('CHR-') ||
+              ((message.sourceFormId === 'APP-009' || message.sourceFormId === 'APP-010') &&
+                connection.current?.formId === message.sourceFormId &&
+                connection.current.postSaveScopeId !== undefined) ||
+              (message.sourceFormId === 'APP-004' &&
+                message.actionKey === APP_004_CREATE_CHARACTER_ACTION_KEY))) ||
+          message.messageType === 'navigation.addressable-route' ||
+          message.messageType === 'character.identity-draft.replace' ||
+          message.messageType === 'command.request'
+        )
+          return false;
+      } else if (authority.role === 'PLAYER' || authority.role === 'CANDIDATE') {
+        if (await handleNetworkMessage(socket, message, dependencies, connection)) return true;
+      } else if (authority.role === 'GM') {
+        if (
+          (await handleGmNetworkMessage(socket, message, dependencies, connection)) ||
+          (await handleCampaignMessage(socket, message, dependencies, connection))
+        )
+          return true;
+      }
+      if (authority.role !== 'LEGACY') {
+        sendProtocolRefusal(socket, dependencies.vocabulary, {
+          code: 'UNRECOGNIZED',
+          path: '$.hostSeatContext',
+          value: null,
+        });
+        return true;
+      }
+    }
     if (dependencies.network.ordinaryLocked(connection.network)) {
       const gmLocalContextId =
         connection.campaign.gmLocalContextId ??
@@ -6610,11 +6887,15 @@ async function handleGmNetworkMessage(
   dependencies: NavigationDependencies,
   connection: ConnectionNavigation,
 ): Promise<boolean> {
-  return dependencies.gmNetwork.handle(message, connection.campaign, (result) => {
-    if (result.protocolVersion === 3) sendCheckedV3(socket, result, dependencies.vocabulary);
-    else if (result.protocolVersion === 2) sendCheckedV2(socket, result, dependencies.vocabulary);
-    else sendChecked(socket, result, dependencies.vocabulary);
-  });
+  return dependencies.gmNetwork.handle(
+    message,
+    connection.campaign,
+    bindDelivery((result: CampaignHostMessage) => {
+      if (result.protocolVersion === 3) sendCheckedV3(socket, result, dependencies.vocabulary);
+      else if (result.protocolVersion === 2) sendCheckedV2(socket, result, dependencies.vocabulary);
+      else sendChecked(socket, result, dependencies.vocabulary);
+    }),
+  );
 }
 
 async function handleNetworkMessage(
@@ -6743,14 +7024,15 @@ async function handleNetworkMessage(
         return navigation.snapshot;
       },
     },
-    (result: LocalNetworkHostMessage) => {
+    bindDelivery((result: LocalNetworkHostMessage) => {
+      if (!currentDelivery(socket)) return;
       if (dependencies.network.ordinaryLocked(connection.network)) ordinaryOnlySockets.add(socket);
       if (result.protocolVersion === 3)
         sendCheckedV3(socket, result, dependencies.vocabulary, true);
       else if (result.protocolVersion === 2)
         sendCheckedV2(socket, result, dependencies.vocabulary, true);
       else sendChecked(socket, result, dependencies.vocabulary, true);
-    },
+    }),
   );
   if (handled) {
     connection.executableWorkflowCommandIds = new Set(
@@ -6841,12 +7123,14 @@ async function handleCampaignMessage(
       else sendChecked(socket, result, dependencies.vocabulary);
     },
   );
-  if (handled)
-    dependencies.gmNetwork.watch(connection.campaign, (result) => {
+  if (handled) {
+    const onGmNotice = bindDelivery((result: CampaignHostMessage) => {
       if (result.protocolVersion === 3) sendCheckedV3(socket, result, dependencies.vocabulary);
       else if (result.protocolVersion === 2) sendCheckedV2(socket, result, dependencies.vocabulary);
       else sendChecked(socket, result, dependencies.vocabulary);
     });
+    dependencies.gmNetwork.watch(connection.campaign, onGmNotice);
+  }
   return handled;
 }
 
@@ -7093,7 +7377,8 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
       receipt: (c, id) => gmNetwork.receipt(c, id),
     },
   });
-  const gmNetwork = createGmNetworkRuntime({
+  const gmNetwork: ReturnType<typeof createGmNetworkRuntime> = createGmNetworkRuntime({
+    managesHostLocalGm: (scope): boolean => hostSeat.managesGmOrigin(scope),
     enemyCatalog,
     enemyAuthoring,
     npc,
@@ -7106,6 +7391,29 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
     campaignPresentation: campaignCreation.project,
   });
   const commandJournal: CommandJournal = new Map();
+  const hostSeat = createHostLocalSeatRuntime({
+    db: config.database,
+    network: localNetwork,
+    readApplicant: (origin, id) => gmNetwork.hostSeatApplicant(origin, id),
+    readScene: (origin) => gmNetwork.hostSeatScene(origin),
+    heldNetworkConfiguration: (campaignId) => campaignNetwork.heldNetworkConfiguration(campaignId),
+    conflictingOperationPending: (campaignId) => {
+      const gm = gmScheduler.pendingCounts(campaignId, gmScheduler.currentToken(campaignId));
+      return (
+        gm.queuedCommandCount +
+          gm.executingCommandCount +
+          campaignNetwork.operationCounts(campaignId).pendingOperationCount >
+        0
+      );
+    },
+  });
+  const ownerSessions = new Map<
+    string,
+    Pick<
+      NavigationDependencies,
+      'identityDraft' | 'identitySessions' | 'addressableJournal' | 'journal' | 'libraryRevision'
+    > & { commandJournal: CommandJournal }
+  >();
   const dependencies: NavigationDependencies = {
     network: localNetwork,
     campaignCreation,
@@ -7149,26 +7457,39 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
   await app.register(websocket, { options: { server: campaignNetwork.localUpgradeServer } });
 
   app.get('/state', { websocket: true }, (socket, request) => {
+    const trustedTransport = () =>
+      !request.raw.socket.destroyed &&
+      isTrustedLocalMasterConnection({
+        remoteAddress: request.raw.socket.remoteAddress,
+        localAddress: request.raw.socket.localAddress,
+        origin: request.headers.origin,
+        listener: readShellListener(),
+      });
+    let supported: readonly WorkflowCommandCapabilityId[] = [];
+    function authority() {
+      return hostSeat.authority(client);
+    }
+    function gmTrusted() {
+      if (!trustedTransport()) return false;
+      const role = authority().role;
+      return role === 'LEGACY' || role === 'GM';
+    }
     const connection: ConnectionNavigation = {
       network: {
         networkScopeId: null,
         contextId: null,
         executableWorkflowCommandIds: [],
-        trusted: () => connection.campaign.trusted(),
+        trusted: () => {
+          if (!trustedTransport()) return false;
+          const role = authority().role;
+          return role === 'LEGACY' || role === 'CANDIDATE' || role === 'PLAYER';
+        },
         transportClosed: () => socket.readyState !== socket.OPEN || request.raw.socket.destroyed,
       },
       campaign: {
         gmLocalContextId: null,
         executableCreate: false,
-        trusted: () =>
-          request.raw.socket !== undefined &&
-          !request.raw.socket.destroyed &&
-          isTrustedLocalMasterConnection({
-            remoteAddress: request.raw.socket.remoteAddress,
-            localAddress: request.raw.socket.localAddress,
-            origin: request.headers.origin,
-            listener: readShellListener(),
-          }),
+        trusted: gmTrusted,
       },
       activeLayer: null,
       current: null,
@@ -7176,50 +7497,334 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
       executableWorkflowCommandIds: new Set(),
       sessionEstablished: false,
     };
-    let frames = Promise.resolve();
-    socket.once('close', () => dependencies.network.disconnect(connection.network));
-    socket.on('message', (data: RawData, isBinary: boolean) => {
-      frames = frames
-        .then(async () => {
-          if (!connection.campaign.trusted()) {
-            sendProtocolRefusal(socket, dependencies.vocabulary, {
-              code: 'UNRECOGNIZED',
-              path: '$.localAppConnection',
-              value: null,
-            });
-            socket.close(1008, 'local app connection required');
-            return;
-          }
-          const previousContext = connection.current;
-          await handleFrame(socket, data, isBinary, dependencies, commandJournal, connection);
-          if (
-            // A refusal keeps its existing subscription. Rechecking identity would report the same reset twice.
-            connection.current !== previousContext &&
-            connection.network.networkScopeId === null &&
-            connection.campaign.gmLocalContextId === null &&
-            connection.current !== null &&
-            confirmedPlayerContext(connection.current, dependencies)
-          ) {
-            dependencies.network.observeLocalShell(connection.network, (notice) => {
+    function scopedNavigation(): { nav: NavigationDependencies; commands: CommandJournal } {
+      const grant = authority();
+      if (grant.role !== 'CANDIDATE') return { nav: dependencies, commands: commandJournal };
+      const owner = grant.targetLocalOwnerId;
+      let session = ownerSessions.get(owner);
+      if (session === undefined) {
+        session = {
+          identityDraft: createIdentityDraftRuntime(new Set(LOCAL_CHARACTER_PORTRAIT_ASSET_KEYS)),
+          identitySessions: new Map(),
+          addressableJournal: new Map(),
+          journal: new Map(),
+          libraryRevision: createLibraryRevisionRuntime(),
+          commandJournal: new Map(),
+        };
+        ownerSessions.set(owner, session);
+      }
+      const epoch = hostSeat.deliveryEpoch();
+      return {
+        nav: {
+          ...dependencies,
+          ...session,
+          candidate: {
+            targetLocalOwnerId: owner,
+            handoffId: grant.handoffId,
+            candidateAckReceiptId: grant.candidateAckReceiptId,
+            stillActive: () =>
+              trustedTransport() &&
+              epoch === hostSeat.deliveryEpoch() &&
+              authority().role === 'CANDIDATE',
+          },
+        },
+        commands: session.commandJournal,
+      };
+    }
+    const client: HostSeatClient = {
+      campaign: connection.campaign,
+      network: connection.network,
+      trusted: trustedTransport,
+      characterContextId: () => connection.current?.contextId ?? null,
+      replayReceipts(role, ids) {
+        const grant = authority();
+        if (!trustedTransport() || grant.role !== role) return [];
+        const receipts: CommandReceipt[] = [];
+        for (const id of ids) {
+          if (grant.role === 'GM') {
+            if (connection.campaign.gmLocalContextId !== grant.gmContextId) continue;
+            const saved = campaignCreation.receipt(connection.campaign, id);
+            if (saved && saved.result.campaignId === grant.campaignId) receipts.push(saved);
+            else {
+              const receipt = gmNetwork.receipt(connection.campaign, id);
+              if (receipt) receipts.push(receipt);
+            }
+          } else if (grant.role === 'CANDIDATE') {
+            const { nav, commands } = scopedNavigation();
+            const device = loadDeviceId(config.database);
+            const prior = readPostSaveCommandById(config.database, id, device);
+            if (
+              prior !== null &&
+              prior.head.scope.ownerContext === 'PLAYER_LOCAL' &&
+              characterVisibleToOwner(nav, device, prior.head.scope.entityId)
+            ) {
+              receipts.push(prior.command.receipt as unknown as CommandReceipt);
+            } else {
+              const saved = knownCommandById(id, commands, nav);
               if (
-                notice.protocolVersion !== 2 ||
-                notice.messageType !== 'projection.snapshot' ||
-                notice.presentation.base.roleFilteredPayload['ordinarySeatView'] !== 'WAITING'
+                saved?.terminal.messageType === 'command.result' &&
+                saved.durableCharacterId !== undefined &&
+                characterVisibleToOwner(nav, device, saved.durableCharacterId)
               )
-                return;
-              ordinaryOnlySockets.add(socket);
-              connection.current = null;
-              connection.activeLayer = null;
-              connection.networkExitAssignment = null;
-              sendCheckedV2(socket, notice, dependencies.vocabulary, true);
+                receipts.push(saved.terminal.receipt);
+            }
+          }
+        }
+        return receipts;
+      },
+      send: (message) =>
+        deliveryEpoch.run(hostSeat.deliveryEpoch(), () => {
+          if (socket.readyState !== socket.OPEN) return;
+          if (message.protocolVersion === 3) sendCheckedV3(socket, message, vocabulary, true);
+          else if (message.protocolVersion === 2)
+            sendCheckedV2(socket, message, vocabulary, true, true);
+          else sendChecked(socket, message, vocabulary, true);
+        }),
+      revoke(scope) {
+        ordinaryOnlySockets.delete(socket);
+        if (scope === 'HANDOFF') ownerSessions.clear();
+        gmNetwork.unwatch(connection.campaign);
+        localNetwork.disconnect(connection.network);
+        connection.network.contextId = null;
+        connection.network.networkScopeId = null;
+        connection.network.executableWorkflowCommandIds = [];
+        connection.campaign.gmLocalContextId = null;
+        connection.campaign.executableCreate = false;
+        connection.campaign.executableReview = [];
+        connection.activeLayer = null;
+        connection.current = null;
+        connection.networkExitAssignment = null;
+        connection.executableWorkflowCommandIds = new Set();
+        connection.sessionEstablished = false;
+      },
+      capabilities(role) {
+        let ids: readonly WorkflowCommandCapabilityId[] = [];
+        if (role === 'GM') {
+          campaignCreation.negotiate(connection.campaign, supported);
+          ids = connection.campaign.executableReview ?? [];
+        } else if (role !== null) {
+          ids = supported.filter(
+            (id) =>
+              (NETWORK_LOCAL_SUPPORTED_WORKFLOW_IDS as readonly string[]).includes(id) &&
+              (role !== 'CANDIDATE' || id !== 'UI-CMD-CHAR-VARIANT-CREATE'),
+          );
+        }
+        const offered = new Set(ids);
+        if (supported.includes(HOST_SEAT_ACK)) offered.add(HOST_SEAT_ACK);
+        if (role === 'GM' && supported.includes(HOST_OWNER_PROFILE_CREATE))
+          offered.add(HOST_OWNER_PROFILE_CREATE);
+        const allowed = Array.from(offered).filter((id): id is WorkflowCommandId =>
+          vocabulary.isWorkflowCommandId(id),
+        );
+        connection.executableWorkflowCommandIds = new Set(allowed);
+        connection.network.executableWorkflowCommandIds = allowed;
+        return allowed;
+      },
+      async restoreGm(origin, formId, correlationId, reason) {
+        const device = loadDeviceId(config.database);
+        const cursor = readCampaignCreationCursor(config.database, origin.gmContextId);
+        if (
+          !gmTrusted() ||
+          cursor.targetId !== origin.campaignId ||
+          readCampaignOwnerBinding(config.database, origin.gmContextId, origin.campaignId)
+            .ownerDeviceId !== device
+        )
+          throw new Error('host-local GM return campaign is unavailable');
+        connection.campaign.gmLocalContextId = origin.gmContextId;
+        connection.sessionEstablished = true;
+        client.capabilities('GM');
+        gmNetwork.refreshConnectionPresentation(connection.campaign);
+        const initial = await campaignCreation.snapshot(connection.campaign, correlationId, reason);
+        const result = await restoreHostSeatGmForm(
+          initial,
+          origin,
+          formId,
+          correlationId,
+          reason,
+          async (intent) => {
+            let target: ProjectionSnapshotV2Message | undefined;
+            await gmNetwork.handle(intent, connection.campaign, (message) => {
+              if (
+                message.protocolVersion === 2 &&
+                message.messageType === 'projection.snapshot' &&
+                message.presentation.assignment.correlationId === intent.navigationRequestId
+              )
+                target = message;
             });
-          } else if (
-            connection.campaign.gmLocalContextId !== null &&
-            connection.network.networkScopeId === null &&
-            !dependencies.network.ordinaryParticipant(connection.network)
-          )
-            dependencies.network.disconnect(connection.network);
-        })
+            if (target === undefined) throw new Error('GM hand-back navigation was refused');
+            return target;
+          },
+        );
+        const epoch = hostSeat.deliveryEpoch();
+        gmNetwork.watch(connection.campaign, (message) => {
+          if (epoch === hostSeat.deliveryEpoch() && gmTrusted()) {
+            deliveryEpoch.run(epoch, () => {
+              if (message.protocolVersion === 2) sendCheckedV2(socket, message, vocabulary);
+              else if (message.protocolVersion === 3) sendCheckedV3(socket, message, vocabulary);
+              else sendChecked(socket, message, vocabulary);
+            });
+          }
+        });
+        return result;
+      },
+      openOwnedLibrary(ownerId, correlationId, reason) {
+        const { nav } = scopedNavigation();
+        if (nav.candidate?.targetLocalOwnerId !== ownerId)
+          throw new Error('candidate library grant is unavailable');
+        client.capabilities('CANDIDATE');
+        const deviceId = loadDeviceId(config.database);
+        const cached = nav.identitySessions.get(deviceId);
+        const contextId = readHostLocalSeatHandoff(
+          config.database,
+          deviceId,
+        ).candidateContextIdOrNull;
+        if (!contextId || (cached?.contextId && cached.contextId !== contextId))
+          throw new Error('candidate context does not match the signed grant');
+        const player = {
+          contextId,
+          deviceId,
+          entityLocalCharacterId: null,
+          entityRevisions: null,
+          formId: 'APP-004' as const,
+          identityDraftScope: null,
+        };
+        connection.sessionEstablished = true;
+        if (reason === 'RECONNECT') {
+          if (cached?.identityDraftScope) {
+            const draft = nav.identityDraft.readScope(cached.identityDraftScope);
+            if (draft !== null) {
+              adoptNavigationContext(connection, nav, cached);
+              return Promise.resolve(
+                projectionSnapshot(
+                  correlationId,
+                  identityDraftBase(
+                    cached.identityDraftScope,
+                    draft.draftRevision,
+                    draft.values,
+                    connection.executableWorkflowCommandIds.has(
+                      IDENTITY_CHECKPOINT_WORKFLOW_COMMAND_ID,
+                    ),
+                  ),
+                  'player',
+                  checkedRevisions(config.readRevisions()),
+                  reason,
+                ),
+              );
+            }
+          }
+          const saved = readHostLocalCharacterCursor(config.database, deviceId, ownerId);
+          if (saved !== null) {
+            if (!characterVisibleToOwner(nav, deviceId, saved.localCharacterId))
+              throw new Error('candidate checkpoint owner changed');
+            const data = postSaveDependencies(nav);
+            connection.current = player;
+            if (saved.postSaveScopeId !== undefined) {
+              const head = loadPlayerPostSave(data, saved.postSaveScopeId);
+              if (
+                head.scope.entityId !== saved.localCharacterId ||
+                head.scope.ownerDeviceId !== deviceId
+              )
+                throw new Error('candidate post-save binding changed');
+              const dest = postSaveNavigation(head, player, connection, nav, correlationId, reason);
+              adoptNavigationContext(connection, nav, dest.nextContext);
+              return Promise.resolve(dest.snapshot);
+            }
+            const checkpoint = data.loadCheckpoint(saved.localCharacterId);
+            const skillPresentation =
+              saved.formId === CHR_015_FORM_ID ? CHR_015_FORM_ID : undefined;
+            adoptNavigationContext(
+              connection,
+              nav,
+              creationWizardContext(connection, nav, checkpoint, skillPresentation),
+            );
+            return Promise.resolve(
+              creationWizardDestination(
+                checkpoint,
+                nav,
+                connection,
+                correlationId,
+                reason,
+                skillPresentation,
+              ),
+            );
+          }
+        }
+        const destination = app004Navigation(
+          { navigationRequestId: correlationId },
+          player,
+          checkedRevisions(config.readRevisions()),
+          nav,
+          reason,
+        );
+        adoptNavigationContext(connection, nav, destination.nextContext);
+        return Promise.resolve(destination.snapshot);
+      },
+    };
+    seatSockets.set(socket, {
+      runtime: hostSeat,
+      client,
+      rememberSupported: (ids) => {
+        supported = ids;
+      },
+    });
+    let frames = Promise.resolve();
+    socket.once('close', () => {
+      hostSeat.forget(client);
+      gmNetwork.unwatch(connection.campaign);
+      dependencies.network.disconnect(connection.network);
+    });
+    socket.on('message', (data: RawData, isBinary: boolean) => {
+      const epoch = hostSeat.deliveryEpoch();
+      frames = frames
+        .then(() =>
+          deliveryEpoch.run(epoch, async () => {
+            if (!currentDelivery(socket)) return;
+            if (!trustedTransport()) {
+              sendProtocolRefusal(socket, dependencies.vocabulary, {
+                code: 'UNRECOGNIZED',
+                path: '$.localAppConnection',
+                value: null,
+              });
+              socket.close(1008, 'local app connection required');
+              return;
+            }
+            const previousContext = connection.current;
+            const { nav, commands } = scopedNavigation();
+            await handleFrame(socket, data, isBinary, nav, commands, connection);
+            if (!currentDelivery(socket) || authority().role !== 'LEGACY') return;
+            if (
+              // A refusal keeps its existing subscription. Rechecking identity would report the same reset twice.
+              connection.current !== previousContext &&
+              connection.network.networkScopeId === null &&
+              connection.campaign.gmLocalContextId === null &&
+              connection.current !== null &&
+              confirmedPlayerContext(connection.current, dependencies)
+            ) {
+              dependencies.network.observeLocalShell(
+                connection.network,
+                bindDelivery((notice: LocalNetworkHostMessage) => {
+                  if (!currentDelivery(socket)) return;
+                  if (
+                    notice.protocolVersion !== 2 ||
+                    notice.messageType !== 'projection.snapshot' ||
+                    notice.presentation.base.roleFilteredPayload['ordinarySeatView'] !== 'WAITING'
+                  )
+                    return;
+                  ordinaryOnlySockets.add(socket);
+                  connection.current = null;
+                  connection.activeLayer = null;
+                  connection.networkExitAssignment = null;
+                  sendCheckedV2(socket, notice, dependencies.vocabulary, true);
+                }),
+              );
+            } else if (
+              connection.campaign.gmLocalContextId !== null &&
+              connection.network.networkScopeId === null &&
+              !dependencies.network.ordinaryParticipant(connection.network)
+            )
+              dependencies.network.disconnect(connection.network);
+          }),
+        )
         .catch((error: unknown) => {
           config.onFrameError(error);
           socket.close(1011, 'host frame processing failed');
@@ -7260,6 +7865,14 @@ export async function createHost(config: HostServerConfig): Promise<FastifyInsta
         return;
       }
       try {
+        if (hostSeat.enabled()) {
+          const authorization = request.headers.authorization ?? '';
+          const bearer = /^Bearer ([0-9a-f]{64})$/u.exec(authorization)?.[1];
+          if (bearer === undefined || !hostSeat.mayReadGmArt(request.params.contextId, bearer)) {
+            await reply.code(403).send({ error: 'LOCAL_GM_ONLY' });
+            return;
+          }
+        }
         const art = campaignCreation.readCampaignArt(
           request.params.contextId,
           request.params.checksum,

@@ -31,6 +31,7 @@ import {
   type CampaignPrivateOwnerValidator,
 } from './campaign-creation.js';
 import {
+  readGmRequestReviewEventsInTransaction,
   readGmRequestReviewSource,
   type GmRequestReviewSource,
   type HostedRequestReviewCurrent,
@@ -407,7 +408,7 @@ function readInTransaction(
     (d) => d.requestRevision === request.payload.requestRevision,
   );
   if (accepted?.afterRequestStatus !== 'IN_REVIEW') return s.fail();
-  const views = readGmRequestReviewViewStateInTransaction(db, source.scope).events;
+  const views = readGmRequestReviewEventsInTransaction(db, source);
   if (
     !views.some(
       (event) =>

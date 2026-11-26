@@ -49,6 +49,7 @@ import {
 import type { SymbiontCatalog } from '../domain/index.js';
 
 export interface LocalPostSaveDependencies {
+  readonly recordScopedRestore?: (head: PostSaveHead, formId: FormId) => void;
   readonly database: Database.Database;
   readonly symbiontCatalog: SymbiontCatalog;
   readonly baseline: LocalCharacterExportBaseline;
@@ -854,7 +855,8 @@ export function commitLocalPostSave(
           checkpointSha256: checkpoint.checkpoint.snapshotSha256,
           resumeFormId: nextFormId,
         };
-        writePostSaveCursor(d.database, head.scope, request.commandId);
+        if (d.recordScopedRestore) d.recordScopedRestore(head, nextFormId);
+        else writePostSaveCursor(d.database, head.scope, request.commandId);
       } else if (p.variant === 'SAVE_VALID_DRAFT') {
         const view = deriveCreationFinalizationView(checkpoint, { catalog: d.symbiontCatalog });
         if (

@@ -1,7 +1,9 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
+import { campaignPeaceSceneValue } from '../../src/shared/campaign-lobby.js';
 import type { OrdinarySeatControlV3Message } from '../../src/shared/ordinary-seat.js';
 import type {
   CommandRefusalMessage,
+  CommandReplayMessage,
   CommandResultMessage,
   JsonObject,
   JsonValue,
@@ -25,11 +27,21 @@ export const atlasControl = (page: Page, key: string) =>
 export const networkForm = (page: Page, id: string) => page.locator(`[data-atlas-form-id="${id}"]`);
 const action = (page: Page, key: string) => atlasControl(page, key).click();
 
-export async function createNetworkCampaign(page: Page, baseURL: string) {
+export async function createNetworkCampaign(page: Page, baseURL: string, artwork?: Buffer) {
   await page.goto(baseURL);
   await action(page, 'APP-001::CTA::002');
   await action(page, 'APP-011::CTA::006');
   await page.getByLabel('Название кампании', { exact: true }).fill('Два независимых устройства');
+  if (artwork) {
+    await page.getByLabel('Изображение кампании PNG или JPEG', { exact: true }).setInputFiles({
+      name: 'campaign.png',
+      mimeType: 'image/png',
+      buffer: artwork,
+    });
+    await expect(
+      page.getByRole('img', { name: 'Изображение кампании', exact: true }),
+    ).toBeVisible();
+  }
   await action(page, 'CMP-001::CTA::001');
   await page.getByLabel('Вместимость активных персонажей', { exact: true }).fill('3');
   const loopback = page
@@ -65,10 +77,27 @@ interface ReviewEvent {
   form?: string;
   reason?: string;
   receipt?: string;
+  lifecycleState?: CommandResultMessage['lifecycleState'] | CommandReplayMessage['lifecycleState'];
   proposal?: { batchId: string; checksum: string; revision: number };
   receivedAt?: number;
   clock?: JsonValue;
+  startScene?: { campaignId: string; sceneId: string; includedIds: readonly string[] };
+  campaignStatus?: JsonValue;
+  peace?: {
+    campaign: JsonValue;
+    scene: JsonValue;
+    scope: JsonValue;
+    owner: JsonValue;
+    seat: JsonValue;
+    character: JsonValue;
+    context: JsonValue;
+    projectionRole: ProjectionSnapshotV2Message['projectionRole'];
+  };
+  retry?: { command: string | null; scope: string; context: string };
   peer?: {
+    attempt: JsonValue;
+    context: string;
+    campaign: string;
     state: CampaignPeerStateV3Message['connectionState'];
     outcome: CampaignPeerStateV3Message['retryOutcome'];
     diagnostic: CampaignPeerStateV3Message['diagnosticOrNull'];
@@ -118,13 +147,23 @@ export function watchAdmissionWire(page: Page): GmReviewMonitor {
           id: request.requestId,
           action: request.operation,
           receivedAt: Date.now(),
+          ...(request.operation === 'RETRY'
+            ? {
+                retry: {
+                  command: request.commandIdOrNull,
+                  scope: request.networkScopeId,
+                  context: request.contextId,
+                },
+              }
+            : {}),
         });
         return;
       }
       if (
         text.includes('"messageType":"command.request"') &&
         (text.includes('"UI-CMD-ADMISSION-GM-ACCEPT"') ||
-          text.includes('"UI-CMD-CAMPAIGN-INITIAL-TIME-SET"'))
+          text.includes('"UI-CMD-CAMPAIGN-INITIAL-TIME-SET"') ||
+          text.includes('"UI-CMD-CAMPAIGN-START"'))
       ) {
         const request = JSON.parse(text) as WorkflowCommandRequestMessage;
         events.push({
@@ -178,6 +217,9 @@ export function watchAdmissionWire(page: Page): GmReviewMonitor {
           receivedAt: Date.now(),
           ...(f === null ? {} : { form: f.formId }),
           peer: {
+            attempt: f?.fields['commandId'] ?? null,
+            context: message.contextId,
+            campaign: message.campaignId,
             scope: message.networkScopeId,
             owner: message.deviceId,
             seat: message.controllerSeat,
@@ -195,18 +237,33 @@ export function watchAdmissionWire(page: Page): GmReviewMonitor {
         (text.includes('"messageType":"command.result"') ||
           text.includes('"messageType":"command.replay"')) &&
         (text.includes('"UI-CMD-ADMISSION-GM-ACCEPT"') ||
-          text.includes('"UI-CMD-CAMPAIGN-INITIAL-TIME-SET"'))
+          text.includes('"UI-CMD-CAMPAIGN-INITIAL-TIME-SET"') ||
+          text.includes('"UI-CMD-CAMPAIGN-START"'))
       ) {
-        const response = JSON.parse(text) as CommandResultMessage;
+        const response = JSON.parse(text) as CommandResultMessage | CommandReplayMessage;
         const { commandId, receiptId, result } = response.receipt;
+        const scene =
+          result['workflowCommandId'] === 'UI-CMD-CAMPAIGN-START'
+            ? campaignPeaceSceneValue(result['scene'])
+            : null;
         events.push({
           socket,
           type: response.messageType,
           id: commandId,
           receipt: receiptId,
+          lifecycleState: response.lifecycleState,
           receivedAt: Date.now(),
           ...(result['workflowCommandId'] === 'UI-CMD-CAMPAIGN-INITIAL-TIME-SET'
             ? { clock: result['initialCampaignTime'] ?? null }
+            : {}),
+          ...(scene
+            ? {
+                startScene: {
+                  campaignId: scene.campaignId,
+                  sceneId: scene.sceneId,
+                  includedIds: scene.includedCopies.map((copy) => copy.campaignCharacterId),
+                },
+              }
             : {}),
           ...proposalIdentity(
             result['admissionBatchId'],
@@ -232,7 +289,15 @@ export function watchAdmissionWire(page: Page): GmReviewMonitor {
         text.includes('"protocolVersion":2')
       ) {
         const response = JSON.parse(text) as ProjectionSnapshotV2Message;
-        const active = response.presentation.layers.at(-1) ?? response.presentation.base;
+        // PLY-029 identifies the acknowledged owner. Native review navigation still
+        // targets the underlying screen or modal (for example NET-019 or GM-019).
+        const active =
+          response.presentation.layers.findLast(
+            (layer) =>
+              layer.formId !== 'PLY-029' || layer.roleFilteredPayload['hostSeatView'] !== 'ACTIVE',
+          ) ?? response.presentation.base;
+        const base = response.presentation.base;
+        const payload = base.roleFilteredPayload;
         const body = active.roleFilteredPayload;
         const lobby = body['lobby'] as JsonObject | undefined;
         const proposal =
@@ -255,6 +320,23 @@ export function watchAdmissionWire(page: Page): GmReviewMonitor {
             : active.formId === 'NET-006'
               ? { clock: lobby?.['initialCampaignTimeOrNull'] ?? null }
               : {}),
+          ...(base.formId === 'GM-001'
+            ? { campaignStatus: payload['campaignStatus'] ?? null }
+            : {}),
+          ...(base.formId === 'PLY-001' && payload['projectionVariant'] === 'PEACE_SNAPSHOT'
+            ? {
+                peace: {
+                  campaign: payload['campaignId'] ?? null,
+                  scene: payload['sceneId'] ?? null,
+                  scope: payload['networkScopeId'] ?? null,
+                  owner: payload['deviceId'] ?? null,
+                  context: payload['contextId'] ?? null,
+                  projectionRole: response.projectionRole,
+                  seat: payload['controllerSeat'] ?? null,
+                  character: payload['campaignCharacterId'] ?? null,
+                },
+              }
+            : {}),
           ...proposal,
         });
         return;

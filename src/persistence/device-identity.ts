@@ -33,7 +33,7 @@ const deviceIdFrom = (value: unknown, source: string): DeviceId => {
   return value as DeviceId;
 };
 
-const readDeviceIdentityState = (database: Database.Database): DeviceIdentityState => {
+export const readDeviceIdentityState = (database: Database.Database): DeviceIdentityState => {
   const rows = database
     .prepare<[], DeviceIdentityRow>(
       `SELECT identity_slot, device_id, initialized

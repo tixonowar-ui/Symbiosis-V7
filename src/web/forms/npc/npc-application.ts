@@ -387,7 +387,9 @@ export class NpcBrowserSession {
   #projection: NpcGmProjection | null = null;
   #pending: {
     readonly request: NpcTechnicalRequest;
-    readonly source: NpcGmProjection;
+    readonly source: Pick<NpcGmProjection, 'contextId' | 'campaignId'>;
+    readonly selectionUnchanged: boolean;
+    readonly fromLocal: boolean;
     result: Exclude<NpcTechnicalResponse, NpcTechnicalRefusal> | null;
   } | null = null;
   #refusal: string | null = null;
@@ -429,10 +431,15 @@ export class NpcBrowserSession {
     if (key !== this.bindingKey) return;
     this.#busyKey = busy ? key : null;
   }
-  suspend(): void {
+  suspend(hidePrivateScreen = false): void {
     this.#connected = false;
     this.#busyKey = null;
     this.art.setProjection(null);
+    if (hidePrivateScreen) {
+      this.#local = null;
+      this.#projection = null;
+      this.#refusal = null;
+    }
   }
   dispose(): void {
     this.#local = null;
@@ -636,7 +643,18 @@ export class NpcBrowserSession {
       request.expectedAttemptRevision !== p.attemptOrNull.attemptRevision
     )
       throw new NpcArtSessionError();
-    this.#pending = { request, source: p, result: null };
+    const selectionUnchanged =
+      request.messageType === 'network.npc-selection.replace' &&
+      (request.sourceFormId === 'NPC-001'
+        ? p.formId === 'NPC-001' && p.content.selectedNpcUuidOrNull === request.npcUuidOrNull
+        : p.formId === 'NPC-007' && p.content.selectedVersionOrNull === request.version);
+    this.#pending = {
+      request,
+      source: { contextId: p.contextId, campaignId: p.campaignId },
+      selectionUnchanged,
+      fromLocal,
+      result: null,
+    };
     this.#refusal = null;
     return request;
   }
@@ -661,14 +679,7 @@ export class NpcBrowserSession {
       this.#refusal = `Изменение НПС отклонено: ${message.refusal.code}.`;
       return 'REFUSAL';
     }
-    const selectionUnchanged =
-      r.messageType === 'network.npc-selection.replace' &&
-      (r.sourceFormId === 'NPC-001'
-        ? pending.source.formId === 'NPC-001' &&
-          pending.source.content.selectedNpcUuidOrNull === r.npcUuidOrNull
-        : pending.source.formId === 'NPC-007' &&
-          pending.source.content.selectedVersionOrNull === r.version);
-    const increment = selectionUnchanged ? 0 : 1;
+    const increment = pending.selectionUnchanged ? 0 : 1;
     if (
       message.appliedRevisions.stateRevision !== r.expectedRevisions.stateRevision + increment ||
       message.appliedRevisions.projectionRevision !==
@@ -736,7 +747,7 @@ export class NpcBrowserSession {
     if (
       this.#local !== null &&
       r.messageType === 'network.npc-editor.replace' &&
-      sameNpcData(this.#local.source, pending.source) &&
+      pending.fromLocal &&
       sameNpcData(this.#local.edit.values, r.values)
     )
       this.#local = null;

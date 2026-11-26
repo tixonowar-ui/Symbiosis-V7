@@ -230,13 +230,13 @@ export interface App004Projection extends JsonObject {
   readonly campaignAuthority: false;
   readonly draftCharacterIds: readonly string[];
   readonly finalCharacterIds: readonly string[];
-  readonly handoffIdOrNull: null;
-  readonly handoffReceiptIdOrNull: null;
-  readonly launchContext: 'PLAYER_MENU';
+  readonly handoffIdOrNull: string | null;
+  readonly handoffReceiptIdOrNull: string | null;
+  readonly launchContext: 'PLAYER_MENU' | 'HOST_LOCAL_CANDIDATE';
   readonly localCharacterLibraryRevision: number;
-  readonly localOwnerIdOrNull: null;
+  readonly localOwnerIdOrNull: string | null;
   readonly projectionRevision: number;
-  readonly returnContext: 'PLAYER_MENU';
+  readonly returnContext: 'PLAYER_MENU' | 'HOST_LOCAL_CANDIDATE';
   readonly stateRevision: number;
 }
 
@@ -246,6 +246,11 @@ export interface App004LibraryEntry {
 }
 
 export interface App004ProjectionValues {
+  readonly hostLocalOwner?: {
+    readonly targetLocalOwnerId: string;
+    readonly handoffId: string;
+    readonly candidateAckReceiptId: string;
+  };
   readonly libraryEntries: readonly App004LibraryEntry[];
   readonly localCharacterLibraryRevision: number;
   readonly projectionRevision: number;
@@ -928,13 +933,13 @@ export function projectApp004(
       campaignAuthority: false,
       draftCharacterIds: buckets.draftCharacterIds,
       finalCharacterIds: buckets.finalCharacterIds,
-      handoffIdOrNull: null,
-      handoffReceiptIdOrNull: null,
-      launchContext: 'PLAYER_MENU',
+      handoffIdOrNull: values.hostLocalOwner?.handoffId ?? null,
+      handoffReceiptIdOrNull: values.hostLocalOwner?.candidateAckReceiptId ?? null,
+      launchContext: values.hostLocalOwner ? 'HOST_LOCAL_CANDIDATE' : 'PLAYER_MENU',
       localCharacterLibraryRevision: values.localCharacterLibraryRevision,
-      localOwnerIdOrNull: null,
+      localOwnerIdOrNull: values.hostLocalOwner?.targetLocalOwnerId ?? null,
       projectionRevision: values.projectionRevision,
-      returnContext: 'PLAYER_MENU',
+      returnContext: values.hostLocalOwner ? 'HOST_LOCAL_CANDIDATE' : 'PLAYER_MENU',
       stateRevision: values.stateRevision,
     },
   };

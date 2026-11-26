@@ -24,6 +24,7 @@ import {
   type OrdinarySeatBinding,
 } from '../persistence/local-seat-handoff.js';
 import { NetworkApplicationStoreError } from '../persistence/network-local-application.js';
+import { hostLocalSeatPresentAtStartup } from '../persistence/host-local-seat.js';
 import { readOrdinarySceneRoster } from '../persistence/local-seat-roster.js';
 import { APP_004_ROUTE } from './projections/app.js';
 import type { createOrdinaryCandidateLibrary } from './ordinary-candidate-library.js';
@@ -224,7 +225,9 @@ interface Dependencies {
 export function createOrdinarySeatRuntime(dependencies: Dependencies) {
   const clients = new Map<LocalNetworkConnection, Delivery>();
   // This host is the sole journal writer. Read SQLite again on every process start.
-  let journalExists = ordinaryHandoffPresentAtStartup(dependencies.db);
+  let journalExists =
+    ordinaryHandoffPresentAtStartup(dependencies.db) &&
+    !hostLocalSeatPresentAtStartup(dependencies.db);
   function forget(connection: LocalNetworkConnection) {
     clients.delete(connection);
   }
@@ -1100,6 +1103,13 @@ export function createOrdinarySeatRuntime(dependencies: Dependencies) {
     decorate,
     observe,
     locked,
+    hostLocalSetupCommitted() {
+      // The two contexts share one signed journal. A committed host setup revokes
+      // an earlier ordinary grant even when the network runtime stays open.
+      if (journalExists && !hostLocalSeatPresentAtStartup(dependencies.db)) unavailable();
+      journalExists = false;
+      clients.clear();
+    },
     forget,
     ownerPublication,
     observeLocalShell: (connection: LocalNetworkConnection, send: Send) => {

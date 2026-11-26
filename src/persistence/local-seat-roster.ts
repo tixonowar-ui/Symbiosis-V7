@@ -7,6 +7,7 @@ import {
   type LocalAdmissionRead,
 } from './local-campaign-admission.js';
 import { networkApplicationStorage as s } from './network-local-application.js';
+import { readHostLocalCharacterOwner, readHostLocalScopeOwner } from './host-local-seat.js';
 
 export interface OrdinarySeatBinding {
   readonly localControllerSeatId: string;
@@ -30,6 +31,7 @@ export function admittedOrdinarySeats(
   db: Database.Database,
   owner: string,
   inspect?: (binding: OrdinarySeatBinding, admission: LocalAdmissionRead) => void,
+  hostLocal = false,
 ) {
   const rows = db
     .prepare<[string], { network_scope_id: string }>(
@@ -54,8 +56,12 @@ export function admittedOrdinarySeats(
     for (const extra of admission.additionalTabs) provenExtras.add(extra.tabId);
     const receipt = admission.receiptOrNull;
     if (receipt?.decision !== 'ACCEPT' || admission.returnedOrNull !== null) continue;
+    const sameInstallation = admission.record.hostIdentity.ownerDeviceId === owner;
+    const profileOwnerId = sameInstallation
+      ? readHostLocalScopeOwner(db, owner, tab.networkScopeId)
+      : null;
     if (
-      admission.record.hostIdentity.ownerDeviceId === owner ||
+      (sameInstallation && !profileOwnerId) ||
       receipt.requestOwnerDeviceId !== owner ||
       receipt.copies.length !== admission.additionalTabs.length + 1
     )
@@ -73,6 +79,8 @@ export function admittedOrdinarySeats(
         controller.localControllerSeatId !== bound.tabId ||
         controller.campaignCharacterId !== copy.campaignCharacterId ||
         diff?.campaignCharacterIdOrNull !== copy.campaignCharacterId ||
+        (profileOwnerId !== null &&
+          readHostLocalCharacterOwner(db, owner, diff.sourceUuid) !== profileOwnerId) ||
         !tabs.some(
           (t) => t.tab.tabId === bound.tabId && t.tab.networkScopeId === bound.networkScopeId,
         ) ||
@@ -90,6 +98,7 @@ export function admittedOrdinarySeats(
         campaignCharacterId: copy.campaignCharacterId,
         admissionReceiptId: receipt.receiptId,
       };
+      if (sameInstallation !== hostLocal) continue;
       inspect?.(binding, admission);
       result.push({ binding, diff });
     }
@@ -102,6 +111,20 @@ export function admittedOrdinarySeats(
   )
     return s.fail();
   return result;
+}
+
+/** The original SUBMIT tab supplies the profile for all of its admitted child tabs. */
+export function readHostLocalRoster(db: Database.Database, owner: string, campaignId: string) {
+  return s.read(db, owner, () =>
+    admittedOrdinarySeats(db, owner, undefined, true)
+      .filter(({ binding }) => binding.campaignId === campaignId)
+      .map(({ binding, diff }) => ({
+        binding,
+        diff,
+        profileOwnerId:
+          readHostLocalCharacterOwner(db, owner, diff.sourceUuid) ?? s.fail('FOREIGN_OWNER'),
+      })),
+  );
 }
 
 export function readOrdinarySceneRoster(

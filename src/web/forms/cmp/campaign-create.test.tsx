@@ -18,6 +18,7 @@ import type {
 import { ADMISSION_GM_WORKFLOW_IDS } from '@shared/campaign-admission-presentation.js';
 import { CAMPAIGN_LIFECYCLE_WORKFLOW_IDS } from '@shared/campaign-lifecycle.js';
 import { NPC_WORKFLOW_COMMAND_IDS } from '@shared/npc-command.js';
+import { HOST_OWNER_PROFILE_CREATE, HOST_SEAT_ACK } from '@shared/host-seat.js';
 import { App } from '../../app.js';
 import {
   connectProjection,
@@ -52,6 +53,7 @@ const CAPABILITIES = [
   'UI-CMD-DEVICE-REQUEST-REJECT',
   ...ADMISSION_GM_WORKFLOW_IDS,
 ] as const;
+const HOST_GM_CAPABILITIES = [...CAPABILITIES, HOST_SEAT_ACK, HOST_OWNER_PROFILE_CREATE];
 const common = { gmLocalContextId: CONTEXT, hostDeviceId: DEVICE, masterAuthorityRevision: 0 };
 const draft = {
   ...common,
@@ -319,6 +321,7 @@ async function harness(
   p = formId === 'APP-001' ? shell : projections[formId],
   revisions = ZERO,
   configureStorage?: () => void,
+  capabilities?: readonly string[],
 ) {
   stubTransport(formId !== 'APP-001');
   configureStorage?.();
@@ -344,7 +347,7 @@ async function harness(
   connections.push(connection);
   await new Promise((r) => setTimeout(r, 0));
   const socket = Socket.instances.at(-1)!;
-  reconnect(socket, formId, p, revisions);
+  reconnect(socket, formId, p, revisions, capabilities);
   return { connection, socket, states, drafts };
 }
 
@@ -692,37 +695,42 @@ describe('campaign draft transport', () => {
     expect(lastFrame<{ messageType: string }>(h.socket).messageType).toBe('navigation.form-action');
     expect(h.drafts.at(-1)?.dirty).toBe(false);
   });
-  it('replays an unacknowledged nonsecret update exactly after fresh GM resume without lowering its current view', async () => {
-    const h = await harness('CMP-001');
-    vi.useFakeTimers();
-    h.connection.replaceCampaignDraft({
-      variant: 'METADATA',
-      values: { ...metadata, title: 'Новый заголовок' },
-    });
-    await vi.advanceTimersByTimeAsync(250);
-    const original = h.socket.sent.at(-1)!;
-    h.socket.serverClose();
-    expect(h.connection.reconnect()).toEqual({ ok: true });
-    const resumed = Socket.instances.at(-1)!;
-    reconnect(
-      resumed,
-      'CMP-001',
-      { ...projections['CMP-001'], title: 'Поздний заголовок', draftRevision: 4 },
-      { ...ZERO, stateRevision: 4, projectionRevision: 6 },
-    );
-    expect(resumed.sent.at(-1)).toBe(original);
-    const request = JSON.parse(original) as CampaignDraftReplaceV3Message;
-    const p = { ...projections['CMP-001'], title: 'Поздний заголовок', draftRevision: 4 };
-    resumed.message({
-      ...draftResult(request, p),
-      draftRevision: 4,
-      revisions: { ...ZERO, stateRevision: 4, projectionRevision: 6 },
-    });
-    expect(h.states.at(-1)).toMatchObject({
-      kind: 'ready',
-      snapshot: { projection: { title: 'Поздний заголовок' } },
-    });
-  });
+  it.each([false, true])(
+    'replays an unacknowledged nonsecret update exactly after fresh GM resume without lowering its current view (host handoff %s)',
+    async (hostHandoff) => {
+      const capabilities = hostHandoff ? HOST_GM_CAPABILITIES : CAPABILITIES;
+      const h = await harness('CMP-001', projections['CMP-001'], ZERO, undefined, capabilities);
+      vi.useFakeTimers();
+      h.connection.replaceCampaignDraft({
+        variant: 'METADATA',
+        values: { ...metadata, title: 'Новый заголовок' },
+      });
+      await vi.advanceTimersByTimeAsync(250);
+      const original = h.socket.sent.at(-1)!;
+      h.socket.serverClose();
+      expect(h.connection.reconnect()).toEqual({ ok: true });
+      const resumed = Socket.instances.at(-1)!;
+      reconnect(
+        resumed,
+        'CMP-001',
+        { ...projections['CMP-001'], title: 'Поздний заголовок', draftRevision: 4 },
+        { ...ZERO, stateRevision: 4, projectionRevision: 6 },
+        capabilities,
+      );
+      expect(resumed.sent.at(-1)).toBe(original);
+      const request = JSON.parse(original) as CampaignDraftReplaceV3Message;
+      const p = { ...projections['CMP-001'], title: 'Поздний заголовок', draftRevision: 4 };
+      resumed.message({
+        ...draftResult(request, p),
+        draftRevision: 4,
+        revisions: { ...ZERO, stateRevision: 4, projectionRevision: 6 },
+      });
+      expect(h.states.at(-1)).toMatchObject({
+        kind: 'ready',
+        snapshot: { projection: { title: 'Поздний заголовок' } },
+      });
+    },
+  );
   it('checks exact owner, draft namespace, role and actions on resumed projections', async () => {
     for (const mutation of [
       (s: ReturnType<typeof snapshot>) => {
@@ -829,6 +837,65 @@ describe('campaign draft transport', () => {
     reconnect(resumed, 'CMP-003', projections['CMP-003']);
     expect(resumed.sent).toHaveLength(1);
     expect(resumed.sent.join('')).not.toContain(secret);
+  });
+  it('withdraws the secret from a host-capable GM and never resends it after the same GM resumes', async () => {
+    const h = await harness(
+      'CMP-003',
+      projections['CMP-003'],
+      ZERO,
+      undefined,
+      HOST_GM_CAPABILITIES,
+    );
+    vi.useFakeTimers();
+    const secret = 'private-master-secret';
+    h.connection.replaceCampaignDraft({
+      variant: 'SECRET',
+      values: { masterTransferPassword: secret, masterTransferPasswordConfirmation: secret },
+    });
+    await vi.advanceTimersByTimeAsync(250);
+    expect(lastFrame<CampaignDraftReplaceV3Message>(h.socket)).toMatchObject({
+      messageType: 'campaign.draft.replace',
+      variant: 'SECRET',
+      values: { masterTransferPassword: secret },
+    });
+    h.socket.serverClose();
+    expect(h.states.at(-1)).toMatchObject({ kind: 'disconnected', snapshot: null });
+    expect(h.connection.reconnect()).toEqual({ ok: true });
+    const resumed = Socket.instances.at(-1)!;
+    reconnect(resumed, 'CMP-003', projections['CMP-003'], ZERO, HOST_GM_CAPABILITIES);
+    expect(h.states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId: 'CMP-003' } });
+    expect(h.drafts.at(-1)).toMatchObject({ pending: false, dirty: false });
+    expect(resumed.sent).toHaveLength(1);
+    expect(resumed.sent.join('')).not.toContain(secret);
+  });
+  it('returns a resumed host-capable campaign menu to the ordinary shell after draft cancellation', async () => {
+    const h = await harness(
+      'APP-011',
+      menu,
+      { ...ZERO, projectionRevision: 2 },
+      undefined,
+      HOST_GM_CAPABILITIES,
+    );
+    expect(h.states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId: 'APP-011' } });
+    expect(h.connection.requestFormAction('APP-011::CTA::001')).toEqual({ ok: true });
+    const nav = lastFrame<{ navigationRequestId: string }>(h.socket);
+    const shellRevisions = { ...ZERO, projectionRevision: 3 };
+    h.socket.message(
+      snapshot('APP-001', shell, shellRevisions, nav.navigationRequestId, 'FORM_ACTION'),
+    );
+    expect(h.states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { formId: 'APP-001', executableWorkflowCommandIds: [HOST_SEAT_ACK] },
+    });
+    expect(window.sessionStorage.getItem(GM_CONTEXT_STORAGE_KEY)).toBeNull();
+    const publicSocket = Socket.instances.at(-1)!;
+    expect(publicSocket).not.toBe(h.socket);
+    reconnect(publicSocket, 'APP-001', shell, shellRevisions, [HOST_SEAT_ACK]);
+    expect(lastFrame(publicSocket)).toMatchObject({ messageType: 'session.reconnect' });
+    expect(h.states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { formId: 'APP-001', executableWorkflowCommandIds: [HOST_SEAT_ACK] },
+    });
   });
   it.each([
     [0, false],
@@ -1126,6 +1193,53 @@ describe('campaign creation receipt and UI', () => {
     render(1);
     expect(container.querySelector<HTMLInputElement>('input')?.value).toBe('');
     expect(container.textContent).not.toContain('temporary-secret');
+  });
+  it('withdraws the ordinary GM password input from the DOM on transport loss', async ({
+    onTestFinished,
+  }) => {
+    const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+    const visible = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    onTestFinished(() => {
+      focus.mockRestore();
+      visible.mockRestore();
+    });
+    stubTransport();
+    const container = document.createElement('div');
+    const root = createRoot(container);
+    document.body.append(container);
+    roots.push({ root, container });
+    await act(async () => {
+      root.render(<App />);
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    const socket = Socket.instances.at(-1)!;
+    const resumeSecret = (active: Socket) =>
+      reconnect(active, 'CMP-003', projections['CMP-003'], ZERO, HOST_GM_CAPABILITIES);
+    act(() => resumeSecret(socket));
+    const selector = 'input[aria-label="Секрет передачи мастера"]';
+    const input = container.querySelector<HTMLInputElement>(selector)!;
+    const secret = 'пароль только в форме';
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(
+        input,
+        secret,
+      );
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    expect(input.value).toBe(secret);
+    act(() => socket.serverClose());
+    expect(input.isConnected).toBe(false);
+    expect(container.querySelector(selector)).toBeNull();
+    const reconnectButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Переподключиться',
+    );
+    expect(reconnectButton).toBeDefined();
+    act(() => reconnectButton!.click());
+    const restored = Socket.instances.at(-1)!;
+    expect(restored).not.toBe(socket);
+    act(() => resumeSecret(restored));
+    expect(container.querySelector<HTMLInputElement>(selector)?.value).toBe('');
+    expect(restored.sent.join('')).not.toContain(secret);
   });
   it('uses the actual app renderer without raw Atlas metadata or GM context IDs', async () => {
     stubTransport();

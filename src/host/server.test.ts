@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from 'node:crypto';
 import { once } from 'node:events';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -36,12 +37,17 @@ import type {
 } from '@shared/index.js';
 
 import { openPersistenceDatabase } from '../persistence/database.js';
+import { openHostLocalSeatSetup } from '../persistence/host-local-seat.js';
 import {
   bootstrapDeviceIdentity,
+  createLocalGmContext,
+  ensureLocalGmProfile,
   loadDeviceId,
   resetDeviceIdentity,
 } from '../persistence/index.js';
 import type { RevisionImpact } from '../persistence/index.js';
+import { startHostApplication } from './entry-point.js';
+import { initializeNetworkInstallation } from './network-installation.js';
 import { loadProtocolVocabulary } from './protocol-vocabulary.js';
 import { loadAppProjectionCatalog, projectApp001Bootstrap } from './projections/app.js';
 import type { App001Projection } from './projections/app.js';
@@ -392,6 +398,144 @@ describe('configured Fastify and ws host shell', () => {
     } finally {
       await uninitializedHost.close();
       uninitializedDatabase.close();
+    }
+  });
+
+  it('bootstraps APP-001 on a reset installation with the previous signed host seat still on disk', async () => {
+    const dataDirectory = await mkdtemp(join(tmpdir(), 'symbiosis-reset-host-seat-'));
+    const path = join(dataDirectory, 'symbiosis-v7.sqlite');
+    const gmLocalContextId = randomUUID();
+    const masterProfileId = randomUUID();
+    const campaignId = randomUUID();
+    const setupCommandId = randomUUID();
+    const deliveryKey = '7'.repeat(64);
+    const setupProof = createHash('sha256').update(deliveryKey).digest('hex');
+    const allow = () => undefined;
+    try {
+      const previous = openPersistenceDatabase(path);
+      let previousDeviceId: string;
+      try {
+        previousDeviceId = bootstrapDeviceIdentity(previous);
+        initializeNetworkInstallation(previous);
+        ensureLocalGmProfile(previous, { ownerDeviceId: previousDeviceId, masterProfileId }, allow);
+        createLocalGmContext(
+          previous,
+          { ownerDeviceId: previousDeviceId, masterProfileId, gmLocalContextId },
+          allow,
+        );
+        openHostLocalSeatSetup(
+          previous,
+          previousDeviceId,
+          {
+            commandId: setupCommandId,
+            expectedRevision: 0,
+            activeProof: null,
+            origin: {
+              gmContextId: gmLocalContextId,
+              campaignId,
+              returnFormId: 'CMP-009',
+              gmDeliveryProof: setupProof,
+            },
+            setupProof,
+          },
+          allow,
+        );
+        resetDeviceIdentity(previous, allow);
+      } finally {
+        previous.close();
+      }
+      const host = await startHostApplication({
+        dataDirectory,
+        interface: '127.0.0.1',
+        port: 0,
+        projectRoot: PROJECT_ROOT,
+        staticRoot,
+      });
+      try {
+        expect(host.deviceId).not.toBe(previousDeviceId);
+        const origin = new URL(host.address).origin;
+        const socket = new WebSocket(origin.replace(/^http/u, 'ws') + '/state', { origin });
+        try {
+          await once(socket, 'open');
+          const staleSeat = receiveSettledFrames(socket, 1);
+          socket.send(
+            JSON.stringify({
+              protocolVersion: 3,
+              messageType: 'host.seat.control',
+              operation: 'RESUME',
+              requestId: 'previous-seat',
+              deliveryKeyOrNull: deliveryKey,
+              supportedWorkflowCommandIds: [],
+              unacknowledgedCommandIds: [],
+            }),
+          );
+          expect((await staleSeat).map((raw) => hostMessageV2(raw, vocabulary))).toMatchObject([
+            {
+              messageType: 'navigation.form-action.refusal',
+              navigationRequestId: 'previous-seat',
+              refusal: { code: 'NAVIGATION_UNAVAILABLE' },
+            },
+          ]);
+          const staleGm = receiveSettledFrames(socket, 1);
+          socket.send(
+            JSON.stringify({
+              protocolVersion: 3,
+              messageType: 'campaign.local-context.resume',
+              gmLocalContextId,
+              reconnectRequestId: 'previous-gm',
+              knownRevisions: CLIENT_REVISIONS,
+              supportedWorkflowCommandIds: [],
+              unacknowledgedCommandIds: [],
+            }),
+          );
+          expect((await staleGm).map((raw) => hostMessage(raw, vocabulary))).toEqual([
+            {
+              protocolVersion: 1,
+              messageType: 'protocol.refusal',
+              relatedCommandId: null,
+              refusal: { code: 'UNRECOGNIZED', path: '$.campaignContext', value: null },
+            },
+          ]);
+          const fresh = receiveSettledFrames(socket, 2);
+          socket.send(clientTextV2(reconnectV2(host.deviceId), vocabulary));
+          const frames = await fresh;
+          expect(frames.map((raw) => hostMessageV2(raw, vocabulary))).toMatchObject([
+            { messageType: 'session.reconnect.capabilities', executableWorkflowCommandIds: [] },
+            {
+              messageType: 'projection.snapshot',
+              projectionRole: null,
+              presentation: {
+                base: { formId: 'APP-001', roleFilteredPayload: app001Bootstrap },
+                layers: [],
+              },
+            },
+          ]);
+          for (const id of [
+            previousDeviceId,
+            gmLocalContextId,
+            masterProfileId,
+            campaignId,
+            setupProof,
+            deliveryKey,
+          ]) {
+            expect(frames.join('\n')).not.toContain(id);
+          }
+        } finally {
+          socket.terminate();
+        }
+      } finally {
+        await host.close();
+      }
+      const reopened = openPersistenceDatabase(path);
+      try {
+        expect(
+          reopened.prepare('SELECT owner_device_id, command_id FROM local_seat_handoff_head').all(),
+        ).toEqual([{ owner_device_id: previousDeviceId, command_id: setupCommandId }]);
+      } finally {
+        reopened.close();
+      }
+    } finally {
+      await rm(dataDirectory, { recursive: true, force: true });
     }
   });
 

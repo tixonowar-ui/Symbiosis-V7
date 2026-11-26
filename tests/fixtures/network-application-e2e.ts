@@ -241,13 +241,14 @@ export async function createNetworkBrowserProcess(finalCount: number) {
               .prepare<
                 [],
                 {
+                  campaign_id: string;
                   campaign_character_id: string;
                   local_controller_seat_id: string;
                   owner_device_id: string;
                   input_lane_id: string;
                 }
               >(
-                'SELECT campaign_character_id,local_controller_seat_id,owner_device_id,input_lane_id FROM campaign_admission_controller ORDER BY rowid',
+                'SELECT campaign_id,campaign_character_id,local_controller_seat_id,owner_device_id,input_lane_id FROM campaign_admission_controller ORDER BY rowid',
               )
               .all(),
             events: db
@@ -370,6 +371,32 @@ export async function createNetworkBrowserScenario(browser: Browser, finalCount:
       player,
       masterPage,
       playerPage,
+      close: (originalError?: unknown) => disposeNetworkResources(resources, originalError),
+    };
+  } catch (error) {
+    await disposeNetworkResources(resources, error);
+    throw error;
+  }
+}
+
+export async function createHostLocalBrowserScenario(browser: Browser, finalCount: number) {
+  const resources: (() => Promise<unknown>)[] = [];
+  try {
+    const host = await createNetworkBrowserProcess(finalCount);
+    resources.unshift(() => host.close());
+    const openPage = async () => {
+      const context = await browser.newContext();
+      resources.unshift(() => context.close());
+      const page = await context.newPage();
+      page.setDefaultTimeout(host.operationTimeoutMs);
+      return page;
+    };
+    const master = await openPage();
+    const participant = await openPage();
+    return {
+      host,
+      master,
+      participant,
       close: (originalError?: unknown) => disposeNetworkResources(resources, originalError),
     };
   } catch (error) {

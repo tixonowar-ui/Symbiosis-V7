@@ -1,3 +1,9 @@
+import { BroadcastChannel } from 'node:worker_threads';
+import {
+  createEnemyCatalogSelectionClientFixture,
+  ORDINARY_ENEMY_GM_CAPABILITIES,
+  type InitialEnemyCampaign,
+} from '../../../../tests/fixtures/custom-monster-client.js';
 import { createHash } from 'node:crypto';
 import { enemyLibraryActions, type EnemyLibraryProjection } from '@shared/enemy-library.js';
 import { enemyVersionEditorValue } from '@shared/enemy-version-editor.js';
@@ -235,12 +241,14 @@ afterEach(() => {
   connections.splice(0).forEach((connection) => connection.disconnect());
   Socket.instances = [];
   window.sessionStorage.clear();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
 });
 function frame(
   p: EnemyAuthoringProjection | EnemyLibraryProjection,
   reason: string,
   correlationId: string,
+  campaign?: InitialEnemyCampaign,
 ) {
   return {
     messageType: 'projection.snapshot',
@@ -260,7 +268,17 @@ function frame(
         routeBindings: [{ parameterIndex: 0, source: 'inherited', value: p.campaignId }],
         availableActionKeys:
           p.kind === 'SYSTEM_LIBRARY' ? enemyLibraryActions(p) : enemyAuthoringActions(p),
-        roleFilteredPayload: p,
+        roleFilteredPayload: campaign
+          ? {
+              ...p,
+              currentCampaignLifecycle: {
+                ...campaign,
+                stateRevision: p.stateRevision,
+                projectionRevision: p.projectionRevision,
+                actorVisibilityRevision: p.actorVisibilityRevision,
+              },
+            }
+          : p,
       },
       layers: [],
     },
@@ -269,6 +287,7 @@ function frame(
 async function connect(
   p: EnemyAuthoringProjection | EnemyLibraryProjection = fixture(),
   ownerDeviceId = id(4),
+  campaign?: InitialEnemyCampaign,
 ) {
   vi.stubGlobal('crypto', {
     getRandomValues: (values: Uint32Array) => {
@@ -295,20 +314,31 @@ async function connect(
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   const socket = Socket.instances.at(-1)!;
   socket.open();
-  const request = JSON.parse(socket.sent[0]!) as { reconnectRequestId: string };
+  const request = JSON.parse(socket.sent[0]!) as {
+    reconnectRequestId: string;
+    supportedWorkflowCommandIds: string[];
+  };
+  if (campaign)
+    expect(request.supportedWorkflowCommandIds).toEqual(
+      expect.arrayContaining([...ORDINARY_ENEMY_GM_CAPABILITIES]),
+    );
   socket.message({
     messageType: 'session.reconnect.capabilities',
     protocolVersion: 2,
     reconnectRequestId: request.reconnectRequestId,
-    executableWorkflowCommandIds: ENEMY_AUTHORING_WORKFLOWS,
+    executableWorkflowCommandIds: campaign
+      ? ORDINARY_ENEMY_GM_CAPABILITIES
+      : ENEMY_AUTHORING_WORKFLOWS,
     revisions: {
       stateRevision: p.stateRevision,
       projectionRevision: p.projectionRevision,
       actorVisibilityRevision: p.actorVisibilityRevision,
     },
   });
-  socket.message(frame(p, 'RECONNECT', request.reconnectRequestId));
-  expect(states.at(-1)).toMatchObject({ kind: 'ready', snapshot: { formId: p.formId } });
+  socket.message(frame(p, 'RECONNECT', request.reconnectRequestId, campaign));
+  const connected = states.at(-1);
+  if (connected?.kind === 'protocol-error') throw new Error(connected.detail);
+  expect(connected).toMatchObject({ kind: 'ready', snapshot: { formId: p.formId } });
   return { states, socket, connection };
 }
 it('ENM-020 renders an explicitly absent N+1 confirmation without adding a plan or accepting a summary object', () => {
@@ -1382,6 +1412,78 @@ it('ENM-017 renders legacy bonuses without invented payments and rejects a contr
       snapshot: { formId: 'ENM-017' },
     });
     expect(states.filter((state) => state.kind === 'ready').at(-1)).toEqual(priorReady);
+  }
+}, 60_000);
+
+it('keeps the ordinary GM enemy catalog read-only until manual reconnect restores the confirmed selection', async ({
+  onTestFinished,
+}) => {
+  vi.stubGlobal('BroadcastChannel', BroadcastChannel);
+  const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+  const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+  const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+  onTestFinished(() => {
+    focus.mockRestore();
+    hidden.mockRestore();
+    visibility.mockRestore();
+  });
+  const {
+    before: source,
+    after: updated,
+    selected,
+    ownerDeviceId,
+    campaign,
+  } = await createEnemyCatalogSelectionClientFixture();
+  for (const ackDelivered of [false, true]) {
+    const { connection, socket, states } = await connect(source, ownerDeviceId, campaign);
+    expect(connection.selectEnemyLibrary(source.activeTab, selected, null)).toEqual({ ok: true });
+    const operation = w.jsonObject(JSON.parse(socket.sent.at(-1)!), '$.select');
+    expect(operation).toMatchObject({
+      messageType: 'network.enemy-selection.replace',
+      selectionOrNull: selected,
+    });
+    if (ackDelivered)
+      socket.message({
+        messageType: 'network.enemy-selection.result',
+        protocolVersion: 3,
+        operationId: operation['operationId'],
+      });
+    vi.useFakeTimers();
+    socket.close();
+    socket.onclose?.call(socket as unknown as WebSocket, new CloseEvent('close', { code: 1012 }));
+    expect(states.at(-1)).toMatchObject({
+      kind: 'disconnected',
+      snapshot: { formId: 'ENM-001', projection: source },
+    });
+    expect(connection.selectEnemyLibrary(source.activeTab, selected, null).ok).toBe(false);
+    await vi.advanceTimersByTimeAsync(1100);
+    expect(Socket.instances.at(-1)).toBe(socket);
+    expect(connection.reconnect()).toEqual({ ok: true });
+    const fresh = Socket.instances.at(-1)!;
+    fresh.open();
+    const request = w.jsonObject(JSON.parse(fresh.sent[0]!), '$.resume');
+    expect(request).toMatchObject({
+      messageType: 'campaign.local-context.resume',
+      gmLocalContextId: source.contextId,
+      unacknowledgedCommandIds: [],
+    });
+    const id = w.string(request['reconnectRequestId'], '$.reconnectRequestId');
+    const destination = frame(updated, 'RECONNECT', id, campaign);
+    fresh.message({
+      protocolVersion: 2,
+      messageType: 'session.reconnect.capabilities',
+      reconnectRequestId: id,
+      executableWorkflowCommandIds: ORDINARY_ENEMY_GM_CAPABILITIES,
+      revisions: destination.revisions,
+    });
+    fresh.message(destination);
+    expect(states.at(-1)).toMatchObject({
+      kind: 'ready',
+      snapshot: { formId: 'ENM-001', projection: updated },
+    });
+    expect(fresh.sent).toHaveLength(1);
+    connection.disconnect();
+    vi.useRealTimers();
   }
 }, 60_000);
 

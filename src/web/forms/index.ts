@@ -21,6 +21,7 @@ import {
 
 export const LOCAL_SEAT_COMPONENTS = [
   'PLY-027',
+  'PLY-028',
   'PLY-029',
   'PLY-030',
 ] as const satisfies readonly FormId[];
@@ -39,6 +40,7 @@ export const IMPLEMENTED_FORM_IDS = [
   ...APP_FORM_IDS,
   ...CHR_FORM_IDS,
   ...CMP_CREATE_FORM_IDS,
+  'CMP-009',
   ...NETWORK_APPLICATION_FORM_IDS,
   'NET-017',
 ] as const;
@@ -56,6 +58,7 @@ export type ImplementedFormId =
   | AppFormId
   | ChrFormId
   | (typeof CMP_CREATE_FORM_IDS)[number]
+  | 'CMP-009'
   | NetworkApplicationFormId
   | 'NET-017';
 export type SupportedPresentationFormId =
@@ -84,6 +87,7 @@ export type SupportedPresentationFormId =
   | 'CMP-004'
   | 'CMP-005'
   | 'CMP-006'
+  | 'CMP-009'
   | 'CHR-001'
   | 'CHR-002'
   | 'CHR-003'
@@ -147,6 +151,7 @@ const SUPPORTED = new Set<FormId>([
   'CMP-004',
   'CMP-005',
   'CMP-006',
+  'CMP-009',
   'CHR-001',
   'CHR-002',
   'CHR-003',

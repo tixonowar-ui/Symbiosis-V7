@@ -1,5 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import assert from 'node:assert/strict';
+import { CAMPAIGN_CREATE_COMMAND_ID } from '../../src/shared/campaign-creation.js';
+import { CAMPAIGN_LIFECYCLE_WORKFLOW_IDS } from '../../src/shared/campaign-lifecycle.js';
+import { NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS } from '../../src/shared/device-admission.js';
+import { ADMISSION_GM_WORKFLOW_IDS } from '../../src/shared/campaign-admission-presentation.js';
+import { HOST_OWNER_PROFILE_CREATE, HOST_SEAT_ACK } from '../../src/shared/host-seat.js';
+import { NPC_WORKFLOW_COMMAND_IDS } from '../../src/shared/npc-command.js';
+import { enemyLibraryProjectionValue } from '../../src/shared/enemy-library.js';
 import { createEnemyLibraryFixture } from './enemy-library.js';
 import { loadLocalCharacterExportBaseline } from '../../src/host/local-character-export.js';
 import { loadNpcAuthoringSourceCatalog } from '../../src/host/npc-catalog.js';
@@ -8,15 +15,88 @@ import { loadEnemyAuthoringSourceCatalog } from '../../src/host/enemy-authoring-
 import { createEnemyAuthoringApplication } from '../../src/host/enemy-authoring-application.js';
 import { customMonsterProjectionValue } from '../../src/shared/custom-monster-presentation.js';
 import {
+  ENEMY_AUTHORING_WORKFLOWS,
   enemyVersionIdentityValue,
   type EnemyPatchStage,
 } from '../../src/shared/enemy-authoring.js';
-import type { JsonObject } from '../../src/shared/wire-protocol.js';
+import type { CommandReceipt, JsonObject } from '../../src/shared/wire-protocol.js';
 import { createEnemyLibraryApplication } from '../../src/host/enemy-library-application.js';
 import { validateEnemyAuthoringSource } from '../../src/host/enemy-authoring-application.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { resolve } from 'node:path';
+
+/** The GM role's executable subset returned by campaign.local-context.resume. */
+export const ORDINARY_ENEMY_GM_CAPABILITIES = [
+  CAMPAIGN_CREATE_COMMAND_ID,
+  HOST_SEAT_ACK,
+  HOST_OWNER_PROFILE_CREATE,
+  ...ENEMY_AUTHORING_WORKFLOWS,
+  ...NPC_WORKFLOW_COMMAND_IDS,
+  ...NETWORK_GM_REQUEST_REVIEW_WORKFLOW_IDS,
+  ...ADMISSION_GM_WORKFLOW_IDS,
+  ...CAMPAIGN_LIFECYCLE_WORKFLOW_IDS,
+  'UI-CMD-CAMPAIGN-INITIAL-TIME-SET',
+  'UI-CMD-CAMPAIGN-START',
+] as const;
+
+function initialEnemyCampaign(f: ReturnType<typeof createEnemyLibraryFixture>) {
+  const { currentCampaign, scope } = f.readCurrent();
+  // Selection and enemy authoring only advance the GM view. No campaign settings or Start event exists.
+  assert.equal(currentCampaign.stateRevision, 0);
+  assert.equal(currentCampaign.status, 'PAUSED');
+  assert.equal(currentCampaign.firstStartCompleted, false);
+  return {
+    contextId: scope.gmLocalContextId,
+    campaignId: scope.campaignId,
+    campaignRevision: currentCampaign.stateRevision,
+    settingsRevision: 0,
+    campaignStatus: currentCampaign.status,
+    firstStartCompleted: currentCampaign.firstStartCompleted,
+    pauseReasonOrNull: null,
+  };
+}
+export type InitialEnemyCampaign = ReturnType<typeof initialEnemyCampaign>;
+
+export async function createEnemyCatalogSelectionClientFixture() {
+  const baseline = await loadLocalCharacterExportBaseline(process.cwd());
+  const catalog = loadEnemySourceCatalog(process.cwd(), baseline);
+  const f = createEnemyLibraryFixture(catalog, baseline);
+  try {
+    const lib = f.app();
+    const project = () => enemyLibraryProjectionValue(lib.project().base.roleFilteredPayload);
+    const before = project();
+    assert.equal(before.activeTab, 'SENTIENT_ENEMIES');
+    assert.equal(before.selectedOrNull, null);
+    const template = before.systemTemplates[0];
+    assert(template);
+    const { origin, templateId, artAssetKey, catalogVersion } = template;
+    const selected = { origin, templateId, artAssetKey, catalogVersion };
+    lib.select({
+      messageType: 'network.enemy-selection.replace',
+      protocolVersion: 3,
+      operationId: randomUUID(),
+      contextId: before.contextId,
+      campaignId: before.campaignId,
+      sourceFormId: 'ENM-001',
+      expectedRevisions: lib.project().revisions,
+      activeTab: before.activeTab,
+      selectionOrNull: selected,
+      userSelectionOrNull: null,
+    });
+    const after = project();
+    assert.deepEqual(after.selectedOrNull, selected);
+    return {
+      before,
+      after,
+      selected,
+      campaign: initialEnemyCampaign(f),
+      ownerDeviceId: f.scope.ownerDeviceId,
+    };
+  } finally {
+    f.close();
+  }
+}
 
 /** Actual host/SQLite/source DTOs, detached before closing. This does not claim a network boundary. */
 export async function createCustomMonsterClientFixture(
@@ -202,6 +282,8 @@ export async function createCustomMonsterClientFixture(
     });
     const full = project();
     let savedOrNull: ReturnType<typeof customMonsterProjectionValue> | null = null;
+    let commitReceiptOrNull: CommandReceipt | null = null;
+    const commitCampaignOrNull = options.captureSavedV1 ? initialEnemyCampaign(f) : null;
     if (options.captureSavedV1 === true || statRollSnapshots !== null) {
       const current = f.readCurrent().viewOrNull,
         attempt = current?.enemyAuthoring?.attemptOrNull;
@@ -225,6 +307,7 @@ export async function createCustomMonsterClientFixture(
         },
       };
       const original = app().command(request);
+      commitReceiptOrNull = original.receipt;
       const bytes = f.db.serialize();
       savedOrNull = project();
       assert.equal(savedOrNull.formId, 'ENM-020');
@@ -322,6 +405,8 @@ export async function createCustomMonsterClientFixture(
       acquired,
       full,
       savedOrNull,
+      commitReceiptOrNull,
+      commitCampaignOrNull,
       statRollSnapshots,
       ownerDeviceId: f.scope.ownerDeviceId,
     };

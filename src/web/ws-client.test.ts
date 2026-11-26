@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   decodeClientMessage,
   decodeClientMessageV2,
+  decodeClientMessageV3,
+  decodeHostMessage,
   encodeClientMessage,
   encodeHostMessage,
   encodeHostMessageV2,
@@ -21,6 +23,12 @@ import type {
 } from '@shared/index.js';
 
 import { connectProjection, WEB_PROTOCOL_VOCABULARY } from './ws-client.js';
+import {
+  HOST_DELIVERY_STORAGE,
+  readHostDelivery,
+  writeHostDelivery,
+} from './forms/ply/host-seat-client.js';
+import { HOST_SEAT_ACK, hostSeatControlValue } from '@shared/host-seat.js';
 import type {
   AdvisorSkillSelectionDraft,
   CharacterSkillSelectionDraft,
@@ -255,6 +263,467 @@ function checkedHostTextV2(message: HostToClientV2Message): string {
   return encoded.text;
 }
 
+describe('host computer recipient bootstrap', () => {
+  it.each([
+    'confirmed',
+    'forged recipient',
+    'committed reply lost',
+    'undelivered ACK',
+    'different curtain',
+    'changed original signature',
+    'background revocation',
+    'leaked GM applicant list',
+    'identity edit',
+    'identity foreign scope',
+    'identity changed promotion',
+  ])('keeps a fresh projection private until the correct key resumes it (%s)', async (scenario) => {
+    const forged = scenario === 'forged recipient';
+    const owner = '00000000-0000-4000-8000-000000000001',
+      handoff = '00000000-0000-4000-8000-000000000002',
+      receiptId = '00000000-0000-4000-8000-000000000003';
+    const actual = {
+      kind: 'CANDIDATE',
+      targetLocalOwnerId: owner,
+      targetProfileLabel: 'Выбранный профиль',
+    } as const;
+    const revisions = (n: number) => ({
+      stateRevision: n,
+      actorVisibilityRevision: n,
+      projectionRevision: n,
+    });
+    vi.stubGlobal('WebSocket', DecoderFakeWebSocket);
+    vi.stubGlobal('fetch', () =>
+      Promise.resolve(
+        new Response(JSON.stringify({ deviceId: '123e4567-e89b-42d3-a456-426614174000' })),
+      ),
+    );
+    writeHostDelivery({ kind: 'NEUTRAL' });
+    const states: WebClientState[] = [];
+    const connection = connectProjection((s) => states.push(s));
+    decoderConnections.push(connection);
+    try {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+      const socket = DecoderFakeWebSocket.instances.at(-1)!;
+      socket.open();
+      const resume = hostSeatControlValue(JSON.parse(socket.sent[0]!));
+      if (resume.operation !== 'RESUME') throw new Error('expected bootstrap resume');
+      expect(resume.deliveryKeyOrNull).toBeNull();
+      const pair = (
+        ws: DecoderFakeWebSocket,
+        id: string,
+        n: number,
+        snapshot: Omit<
+          ProjectionSnapshotV2Message,
+          'revisions' | 'protocolVersion' | 'messageType'
+        >,
+      ) => {
+        ws.message(
+          checkedHostTextV2({
+            protocolVersion: 2,
+            messageType: 'session.reconnect.capabilities',
+            reconnectRequestId: id,
+            executableWorkflowCommandIds: [HOST_SEAT_ACK, 'UI-CMD-CHAR-WIZARD-CHECKPOINT'],
+            revisions: revisions(n),
+          }),
+        );
+        ws.message(
+          checkedHostTextV2({
+            protocolVersion: 2,
+            messageType: 'projection.snapshot',
+            revisions: revisions(n),
+            ...snapshot,
+          }),
+        );
+      };
+      const showCurtain = (
+        ws: DecoderFakeWebSocket,
+        correlationId: string,
+        signedReturnContext = 'signed-original',
+        handoffId = handoff,
+        revision = 3,
+      ) =>
+        pair(ws, correlationId, revision, {
+          projectionRole: 'player',
+          presentation: {
+            assignment: { reason: 'RECONNECT', correlationId },
+            base: {
+              formId: 'APP-003',
+              routeTemplate: '/local/app-003',
+              formType: 'screen',
+              routeBindings: [],
+              availableActionKeys: [],
+              roleFilteredPayload: { hostSeatView: 'WAITING', revision },
+            },
+            layers: [
+              {
+                formId: 'PLY-030',
+                formType: 'component',
+                routeTemplate: '@component/ply-030',
+                routeBindings: [],
+                availableActionKeys: ['PLY-030::CTA::004'],
+                roleFilteredPayload: {
+                  hostSeatView: 'CURTAIN',
+                  revision,
+                  handoffId,
+                  target: actual,
+                  decision: 'ACTIVATE_TARGET',
+                  signedReturnContext,
+                },
+              },
+            ],
+          },
+        });
+      showCurtain(socket, resume.requestId);
+      expect(states.at(-1)?.kind).toBe('ready');
+      expect(socket.sent).toHaveLength(1);
+      expect(connection.requestFormAction('PLY-030::CTA::004').ok).toBe(true);
+      const pending = readHostDelivery();
+      if (pending?.kind !== 'ACK') throw new Error('Pending ACK missing');
+      const terminal = checkedHostText({
+        protocolVersion: 1,
+        lifecycleState: 'COMMITTED',
+        messageType: 'command.result',
+        receipt: {
+          commandId: pending.request.commandId,
+          receiptId,
+          revisions: revisions(4),
+          result: { receiptId, handoffId: handoff, decision: 'ACTIVATE_TARGET' },
+        },
+      });
+      if (
+        scenario === 'confirmed' ||
+        scenario === 'background revocation' ||
+        forged ||
+        scenario.startsWith('identity')
+      )
+        socket.message(terminal);
+      else {
+        socket.serverClose(1006, 'ACK transmission interrupted');
+        expect(connection.reconnect().ok).toBe(true);
+      }
+      const fresh = DecoderFakeWebSocket.instances.at(-1)!;
+      expect(fresh).not.toBe(socket);
+      fresh.open();
+      const next = hostSeatControlValue(JSON.parse(fresh.sent[0]!));
+      if (next.operation !== 'RESUME') throw new Error('expected new recipient bootstrap');
+      expect(next.deliveryKeyOrNull).toBe(pending.key);
+      expect(next.supportedWorkflowCommandIds).toContain('UI-CMD-CHAR-WIZARD-CHECKPOINT');
+      const stateCount = states.length;
+      socket.message(terminal);
+      expect(states).toHaveLength(stateCount);
+      if (scenario === 'changed original signature') {
+        showCurtain(fresh, next.requestId, 'changed original binding');
+        expect(states.at(-1)).toMatchObject({ kind: 'protocol-error', snapshot: null });
+        expect(fresh.sent.some((frame) => frame === socket.sent[1])).toBe(false);
+        return;
+      }
+      if (scenario === 'undelivered ACK' || scenario === 'different curtain') {
+        const changed = scenario === 'different curtain';
+        showCurtain(
+          fresh,
+          next.requestId,
+          changed ? 'new signed context' : 'signed-original',
+          changed ? receiptId : handoff,
+          changed ? 5 : 3,
+        );
+        expect(states.at(-1)).toMatchObject({
+          kind: 'ready',
+          snapshot: { hostSeat: { hostSeatView: 'CURTAIN' } },
+        });
+        if (changed) expect(fresh.sent).toHaveLength(1);
+        else expect(fresh.sent.slice(1)).toEqual([socket.sent[1]]);
+        return;
+      }
+      const active = {
+        hostSeatView: 'ACTIVE',
+        selectedSourceUuids: [],
+        ...(scenario === 'leaked GM applicant list'
+          ? {
+              applicants: [
+                {
+                  targetLocalOwnerId: owner,
+                  targetProfileLabel: 'Другой кандидат',
+                  requestId: handoff,
+                },
+              ],
+            }
+          : {}),
+        revision: 4,
+        target: forged ? { ...actual, targetLocalOwnerId: receiptId } : actual,
+        receiptId,
+        contextId: owner,
+        networkScopeIdOrNull: null,
+      };
+      const library = {
+        projectionRole: 'player',
+        presentation: {
+          assignment: { reason: 'RECONNECT', correlationId: next.requestId },
+          base: {
+            formId: 'APP-004',
+            formType: 'screen',
+            routeTemplate: '/player/characters',
+            routeBindings: [],
+            availableActionKeys: ['APP-004::CTA::001', 'APP-004::CTA::002'],
+            roleFilteredPayload: {
+              campaignAuthority: false,
+              libraryEntries: [],
+              draftCharacterIds: [],
+              finalCharacterIds: [],
+              localCharacterLibraryRevision: 0,
+              stateRevision: 4,
+              projectionRevision: 4,
+              launchContext: 'HOST_LOCAL_CANDIDATE',
+              returnContext: 'HOST_LOCAL_CANDIDATE',
+              localOwnerIdOrNull: active.target.targetLocalOwnerId,
+              handoffIdOrNull: handoff,
+              handoffReceiptIdOrNull: receiptId,
+            },
+          },
+          layers: [
+            {
+              formId: 'PLY-029',
+              formType: 'component',
+              routeTemplate: '@component/ply-029',
+              routeBindings: [],
+              availableActionKeys: [],
+              roleFilteredPayload: active,
+            },
+          ],
+        },
+      } as const;
+      pair(fresh, next.requestId, 4, library);
+      if (scenario === 'committed reply lost') {
+        expect(fresh.sent.slice(1)).toEqual([socket.sent[1]]);
+        expect(states.at(-1)?.kind).not.toBe('ready');
+        expect(
+          states.slice(stateCount).some((s) => 'snapshot' in s && s.snapshot?.formId === 'APP-004'),
+        ).toBe(false);
+        const terminalMessage = decodeHostMessage(terminal, WEB_PROTOCOL_VOCABULARY);
+        if (!terminalMessage.ok || terminalMessage.value.messageType !== 'command.result')
+          throw new Error('missing source receipt');
+        fresh.message(decoderTerminalText(terminalMessage.value.receipt, true));
+        const confirmed = DecoderFakeWebSocket.instances.at(-1)!;
+        expect(confirmed).not.toBe(fresh);
+        confirmed.open();
+        const resume = hostSeatControlValue(JSON.parse(confirmed.sent[0]!));
+        if (resume.operation !== 'RESUME') throw new Error('expected confirmed holder bootstrap');
+        expect(resume.deliveryKeyOrNull).toBe(pending.key);
+        pair(confirmed, resume.requestId, 4, {
+          ...library,
+          presentation: {
+            ...library.presentation,
+            assignment: { reason: 'RECONNECT', correlationId: resume.requestId },
+          },
+        });
+      }
+      expect(states.at(-1)).toMatchObject(
+        forged || scenario === 'leaked GM applicant list'
+          ? { kind: 'protocol-error', snapshot: null }
+          : {
+              kind: 'ready',
+              snapshot: { formId: 'APP-004', layers: [], hostSeat: { receiptId, target: actual } },
+            },
+      );
+      expect(sessionStorage.getItem(HOST_DELIVERY_STORAGE)).not.toContain(
+        actual.targetProfileLabel,
+      );
+      if (scenario.startsWith('identity')) {
+        expect(connection.requestFormAction('APP-004::CTA::001').ok).toBe(true);
+        const nav = decodeClientMessageV2(fresh.sent.at(-1)!, WEB_PROTOCOL_VOCABULARY);
+        if (!nav.ok || nav.value.messageType !== 'navigation.form-action')
+          throw new Error('expected character creation');
+        const initial = {
+          characterDraftId: CHARACTER_DRAFT_ID,
+          wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+          commandId: null,
+          anatomyProfile: 'STANDARD_HUMANOID',
+          massApprovalStatus: 'PENDING_GM',
+          draftRevision: 0,
+          name: null,
+          sex: null,
+          age: null,
+          massKg: null,
+          description: null,
+          artAssetKeyOrLocalFile: null,
+        };
+        const badge = {
+          formId: 'PLY-029',
+          formType: 'component',
+          routeTemplate: '@component/ply-029',
+          routeBindings: [],
+          availableActionKeys: [],
+          roleFilteredPayload: {
+            hostSeatView: 'ACTIVE',
+            target: actual,
+            contextId: owner,
+            receiptId,
+            revision: 4,
+            networkScopeIdOrNull: null,
+          },
+        } as const;
+        const initialRevisions = { ...revisions(4), projectionRevision: 5 };
+        fresh.message(
+          checkedHostTextV2({
+            protocolVersion: 2,
+            messageType: 'projection.snapshot',
+            projectionRole: 'player',
+            revisions: initialRevisions,
+            presentation: {
+              assignment: { reason: 'FORM_ACTION', correlationId: nav.value.navigationRequestId },
+              base: projectionBase('CHR-001', initial, ['CHR-001::CTA::002']),
+              layers: [badge],
+            },
+          }),
+        );
+        expect(states.at(-1)).toMatchObject({
+          kind: 'ready',
+          snapshot: { formId: 'CHR-001', hostSeat: { contextId: owner, receiptId } },
+        });
+        const values = {
+          name: 'Имя кандидата',
+          age: 29,
+          sex: 'FEMALE',
+          massKg: 62,
+          description: null,
+          artAssetKeyOrLocalFile: null,
+        } as const;
+        expect(connection.replaceIdentityDraft(values).ok).toBe(true);
+        const parsed = decodeClientMessageV3(fresh.sent.at(-1)!, WEB_PROTOCOL_VOCABULARY);
+        if (!parsed.ok || parsed.value.messageType !== 'character.identity-draft.replace')
+          throw new Error('expected native identity edit');
+        const edit = parsed.value;
+        expect(edit).toMatchObject({
+          scope: {
+            contextId: owner,
+            characterDraftId: CHARACTER_DRAFT_ID,
+            wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+          },
+          values,
+        });
+        const edited = {
+          ...initial,
+          ...values,
+          draftRevision: 1,
+          identityDraftScope: {
+            ...edit.scope,
+            contextId: scenario === 'identity foreign scope' ? handoff : owner,
+          },
+        };
+        const editedBase = projectionBase('CHR-001', edited, [
+          'CHR-001::CTA::001',
+          'CHR-001::CTA::002',
+        ]);
+        const editedRevisions = { ...initialRevisions, projectionRevision: 6 };
+        fresh.message(
+          JSON.stringify({
+            protocolVersion: 3,
+            messageType: 'character.identity-draft.result',
+            draftUpdateId: edit.draftUpdateId,
+            scope: edit.scope,
+            draftRevision: 1,
+            revisions: editedRevisions,
+            projectionRole: 'player',
+            presentation: { base: editedBase, layers: [] },
+          }),
+        );
+        if (scenario === 'identity foreign scope') {
+          expect(states.at(-1)).toMatchObject({ kind: 'protocol-error', snapshot: null });
+          return;
+        }
+        expect(states.at(-1)).toMatchObject({
+          kind: 'ready',
+          snapshot: { formId: 'CHR-001', hostSeat: { contextId: owner } },
+        });
+        expect(connection.requestFormAction('CHR-001::CTA::001').ok).toBe(false);
+        fresh.message(
+          checkedHostTextV2({
+            protocolVersion: 2,
+            messageType: 'projection.snapshot',
+            projectionRole: 'player',
+            revisions: editedRevisions,
+            presentation: {
+              assignment: { reason: 'FORM_ACTION', correlationId: edit.draftUpdateId },
+              base:
+                scenario === 'identity changed promotion'
+                  ? { ...editedBase, roleFilteredPayload: { ...edited, name: 'Другая запись' } }
+                  : editedBase,
+              layers: [badge],
+            },
+          }),
+        );
+        if (scenario === 'identity changed promotion') {
+          expect(states.at(-1)).toMatchObject({ kind: 'protocol-error', snapshot: null });
+          return;
+        }
+        expect(states.at(-1)).toMatchObject({
+          kind: 'ready',
+          snapshot: {
+            formId: 'CHR-001',
+            revisions: editedRevisions,
+            projection: { draftRevision: 1, name: values.name },
+            hostSeat: { contextId: owner, receiptId },
+          },
+        });
+        expect(connection.requestFormAction('CHR-001::CTA::001').ok).toBe(true);
+        expect(decoderCommand(fresh)).toMatchObject({
+          workflowCommandId: 'UI-CMD-CHAR-WIZARD-CHECKPOINT',
+          expectedRevisions: editedRevisions,
+        });
+      }
+      if (scenario === 'background revocation') {
+        const blocked = {
+          formId: 'APP-003',
+          routeTemplate: '/local/app-003',
+          formType: 'screen',
+          routeBindings: [],
+          availableActionKeys: [],
+          roleFilteredPayload: { hostSeatView: 'WAITING', revision: 5 },
+        } as const;
+        fresh.message(
+          checkedHostTextV2({
+            messageType: 'projection.snapshot',
+            protocolVersion: 2,
+            revisions: revisions(5),
+            projectionRole: 'player',
+            presentation: {
+              assignment: { reason: 'HOST_SYSTEM_EVENT', correlationId: 'host-takeover' },
+              base: blocked,
+              layers: [],
+            },
+          }),
+        );
+        expect(states.at(-1)).toMatchObject({ kind: 'awaiting-snapshot', localHandoff: true });
+        expect(readHostDelivery()).toEqual({ kind: 'NEUTRAL' });
+        const isolated = DecoderFakeWebSocket.instances.at(-1)!;
+        expect(isolated).not.toBe(fresh);
+        isolated.open();
+        const neutral = hostSeatControlValue(JSON.parse(isolated.sent[0]!));
+        if (neutral.operation !== 'RESUME') throw new Error('expected neutral bootstrap');
+        expect(neutral.deliveryKeyOrNull).toBeNull();
+        const statesBefore = states.length;
+        fresh.message(terminal);
+        expect(states).toHaveLength(statesBefore);
+        pair(isolated, neutral.requestId, 5, {
+          projectionRole: 'player',
+          presentation: {
+            assignment: { correlationId: neutral.requestId, reason: 'RECONNECT' },
+            base: blocked,
+            layers: [],
+          },
+        });
+        expect(states.at(-1)).toMatchObject({
+          kind: 'ready',
+          snapshot: { formId: 'APP-003', hostSeat: { hostSeatView: 'WAITING' } },
+        });
+        expect(JSON.stringify(states.at(-1))).not.toContain(actual.targetProfileLabel);
+        expect(JSON.stringify(states.at(-1))).not.toContain(owner);
+      }
+    } finally {
+      sessionStorage.removeItem(HOST_DELIVERY_STORAGE);
+    }
+  });
+});
+
 function checkedHostText(message: HostToClientMessage): string {
   const encoded = encodeHostMessage(message, WEB_PROTOCOL_VOCABULARY);
   if (!encoded.ok) throw new Error(`invalid host fixture: ${JSON.stringify(encoded.refusal)}`);
@@ -357,6 +826,99 @@ const DECODER_CHR_013_PROJECTION = {
   },
   wizardCheckpointId: WIZARD_CHECKPOINT_ID,
 } as const;
+
+describe('skill eligibility checkpoint', () => {
+  it.each(['confirmed', 'replay', 'foreign stats', 'changed eligibility', 'extra CTA'])(
+    'binds CHR-012 to the authoritative skill catalog (%s)',
+    async (mode) => {
+      const source = {
+        baseStats: DECODER_SKILL_STATS,
+        characterDraftId: CHARACTER_DRAFT_ID,
+        classModifiersOrNull: null,
+        commandId: null,
+        draftRevision: 8,
+        mandatoryClassSkillOrNull: null,
+        raceModifiers: [],
+        skillStageStats: DECODER_SKILL_STATS,
+        symbiontModifiersExcluded: true,
+        wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+      };
+      const h = await connectDecoderFixture(
+        'CHR-012',
+        source,
+        mode === 'extra CTA' ? ['CHR-012::CTA::001', 'CHR-012::CTA::002'] : undefined,
+      );
+      if (mode === 'extra CTA') {
+        expect(h.states.at(-1)?.kind).toBe('protocol-error');
+        return;
+      }
+      expect(h.connection.requestFormAction('CHR-012::CTA::001')).toEqual({ ok: true });
+      const request = decoderCommand(h.socket);
+      expect(request.payload).toEqual({
+        stage: 'SKILLS',
+        sourceFormId: 'CHR-012',
+        draftRevision: 8,
+        characterDraftId: CHARACTER_DRAFT_ID,
+        wizardCheckpointId: WIZARD_CHECKPOINT_ID,
+      });
+      const revisions = { ...REVISIONS, stateRevision: 1, projectionRevision: 1 };
+      const receipt = {
+        commandId: request.commandId,
+        receiptId: 'eligibility-receipt',
+        revisions,
+        result: {
+          stage: 'SKILLS',
+          sourceFormId: 'CHR-012',
+          nextFormId: 'CHR-013',
+          raceCode: 'FREE',
+          classCodeOrNull: null,
+          characterDraftId: CHARACTER_DRAFT_ID,
+          checkpointOwnerId: CHARACTER_DRAFT_ID,
+          checkpointId: WIZARD_CHECKPOINT_ID,
+          checkpointRevision: 8,
+          draftRevision: 9,
+          branchCacheHash: DECODER_EMPTY_BRANCH_CACHE_HASH,
+          branchUuid: 'eligibility-branch',
+          skillStageStats:
+            mode === 'foreign stats' ? { ...DECODER_SKILL_STATS, I: 2 } : DECODER_SKILL_STATS,
+          eligibleSkillIds:
+            mode === 'changed eligibility'
+              ? DECODER_ELIGIBLE_SKILL_IDS.slice(1)
+              : DECODER_ELIGIBLE_SKILL_IDS,
+          mandatoryClassSkillOrNull: null,
+          requiredSlotCount: 2,
+          racialFreeSkills: [],
+        },
+      };
+      if (mode === 'replay')
+        reconnectDecoderFixture(h, 'CHR-013', DECODER_CHR_013_PROJECTION, revisions, receipt);
+      else {
+        h.socket.message(decoderTerminalText(receipt));
+        if (mode === 'foreign stats') {
+          expect(h.states.at(-1)?.kind).toBe('protocol-error');
+          return;
+        }
+        h.socket.message(
+          decoderSnapshotText(
+            'CHR-013',
+            DECODER_CHR_013_PROJECTION,
+            { reason: 'COMMAND_DESTINATION', correlationId: request.commandId },
+            revisions,
+          ),
+        );
+      }
+      if (mode === 'changed eligibility') expect(h.states.at(-1)?.kind).toBe('protocol-error');
+      else
+        expect(h.states.at(-1)).toMatchObject({
+          kind: 'ready',
+          snapshot: {
+            formId: 'CHR-013',
+            projection: { eligibleSkillIds: DECODER_ELIGIBLE_SKILL_IDS },
+          },
+        });
+    },
+  );
+});
 
 function decoderSelectionValidation(requiredSlotCount: number, usedSlotCount: number) {
   if (usedSlotCount < requiredSlotCount) {
@@ -899,6 +1461,7 @@ type DecoderFormId =
   | 'CHR-001'
   | 'CHR-002'
   | 'CHR-010'
+  | 'CHR-012'
   | 'CHR-013'
   | 'CHR-015'
   | 'CHR-016'
@@ -926,6 +1489,8 @@ function defaultDecoderActions(formId: DecoderFormId, projection: JsonObject): D
       return ['CHR-016::CTA::003', 'CHR-016::CTA::004'];
     case 'CHR-013':
       return ['CHR-013::CTA::001', 'CHR-013::CTA::002'];
+    case 'CHR-012':
+      return ['CHR-012::CTA::001'];
     case 'CHR-015':
       return projection['selectionCheckpoint'] === 'EXACT'
         ? []

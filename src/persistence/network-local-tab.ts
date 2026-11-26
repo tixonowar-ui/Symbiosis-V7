@@ -311,7 +311,8 @@ function applicationEntry(
     nav['messageType'] !== 'navigation.form-action' ||
     nav['protocolVersion'] !== 2 ||
     !(sourceFinalUuidOrNull === null
-      ? nav['sourceFormId'] === 'APP-002' && nav['actionKey'] === 'APP-002::CTA::003'
+      ? (nav['sourceFormId'] === 'APP-002' && nav['actionKey'] === 'APP-002::CTA::003') ||
+        (nav['sourceFormId'] === 'APP-003' && nav['actionKey'] === 'APP-003::CTA::009')
       : nav['sourceFormId'] === 'CHR-040' && nav['actionKey'] === 'CHR-040::CTA::002')
   )
     return fail(code);
@@ -1197,8 +1198,20 @@ export function commitLocalNetworkTabEntry(
   readonlyGuard: LocalNetworkTabEntryGuard,
 ): StoredLocalNetworkTabEntry {
   if (db.inTransaction) return fail('INVALID_INPUT');
+  return writeTabEntry(db, value, readonlyGuard, false);
+}
+function writeTabEntry(
+  db: Database.Database,
+  value: LocalNetworkTabEntryInput,
+  readonlyGuard: LocalNetworkTabEntryGuard,
+  hostProfile: boolean,
+): StoredLocalNetworkTabEntry {
   return safe(() => {
     const request = input(value, 'INVALID_INPUT');
+    const nav = request.applicationEntry
+      ? (JSON.parse(request.applicationEntry.clientRequestJson) as Row)
+      : null;
+    if ((nav?.['sourceFormId'] === 'APP-003') !== hostProfile) return fail('INVALID_INPUT');
     if (request.admissionEntry !== undefined) return fail('INVALID_INPUT');
     return db
       .transaction(() => {
@@ -1297,6 +1310,14 @@ export function commitLocalNetworkTabClose(
   readonlyGuard: LocalNetworkTabEntryGuard,
 ): StoredLocalNetworkTabClose {
   if (db.inTransaction) return fail('INVALID_INPUT');
+  return writeTabClose(db, value, readonlyGuard);
+}
+
+function writeTabClose(
+  db: Database.Database,
+  value: LocalNetworkTabCloseInput,
+  readonlyGuard: LocalNetworkTabEntryGuard,
+): StoredLocalNetworkTabClose {
   return safe(() => {
     const request = closeInput(value, 'INVALID_INPUT');
     return db
@@ -1423,6 +1444,18 @@ export function commitLocalNetworkTabClose(
 
 /** Internal companions for one owner admission transaction; they never select a new tab. */
 export const localAdmissionTabStorage = {
+  hostCandidateClose(db: Database.Database, value: LocalNetworkTabCloseInput) {
+    if (!db.inTransaction) return fail('INVALID_INPUT');
+    return writeTabClose(db, value, () => undefined);
+  },
+  hostEntry(
+    db: Database.Database,
+    value: LocalNetworkTabEntryInput,
+    guard: LocalNetworkTabEntryGuard,
+  ) {
+    if (!db.inTransaction) return fail('INVALID_INPUT');
+    return writeTabEntry(db, value, guard, true);
+  },
   /** The owning journal immediately replays the completed history before its final guard. */
   writeApplicationState(
     this: void,
@@ -1524,12 +1557,13 @@ export const localAdmissionTabStorage = {
     device: string,
     additional: number,
     verifiedOriginal: LocalNetworkTab,
+    verifiedPointer: LocalNetworkTab | null,
   ): void {
     if (!db.inTransaction || !Number.isSafeInteger(additional) || additional < 0)
       return fail('INVALID_INPUT');
     requireSchema(db);
     owner(db, device);
-    if (!same(readActiveTab(db, device, false), verifiedOriginal)) return fail('SOURCE_CHANGED');
+    if (!same(readActiveTab(db, device, false), verifiedPointer)) return fail('SOURCE_CHANGED');
     const live = ownedScopes(db, device).filter((scope) => {
       const current = tabState(
         db,

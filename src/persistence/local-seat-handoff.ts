@@ -1,13 +1,7 @@
-import {
-  createPrivateKey,
-  createPublicKey,
-  randomUUID,
-  sign,
-  verify,
-  type KeyObject,
-} from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
-import { readDeviceInstallationIdentity } from './network-installation-identity.js';
+import { readDeviceIdentityState } from './device-identity.js';
+import { appendSeatEvent, readSeatEvents } from './seat-event-journal.js';
 import { readAppliedMigrationVersion } from './migrations/index.js';
 import {
   networkApplicationStorage as s,
@@ -182,33 +176,6 @@ function commandValue(raw: unknown): OrdinarySeatCommand {
     recipientProof: s.hash(row['recipientProof']),
   };
 }
-function keyMaterial(db: Database.Database, owner: string) {
-  return readDeviceInstallationIdentity(db, owner) ?? s.fail('OWNER_UNAVAILABLE');
-}
-function publicKey(db: Database.Database, owner: string): KeyObject {
-  const key = createPublicKey({
-    key: Buffer.from(keyMaterial(db, owner).publicKeySpkiBase64, 'base64'),
-    format: 'der',
-    type: 'spki',
-  });
-  return key.asymmetricKeyType === 'ed25519' ? key : s.fail();
-}
-/** Domain separation prevents use of an ordinary handoff signature as a network handshake. */
-function transcript(body: EventBody): Buffer {
-  return Buffer.from(
-    s.canonical({ purpose: 'SYMBIOSIS_LOCAL_SEAT_TAB_SWITCH_V1', returnFormId: 'PLY-001', body }),
-    'utf8',
-  );
-}
-function signBody(db: Database.Database, owner: string, body: EventBody) {
-  const key = createPrivateKey({
-    key: Buffer.from(keyMaterial(db, owner).privateKeyPkcs8Base64, 'base64'),
-    format: 'der',
-    type: 'pkcs8',
-  });
-  if (key.asymmetricKeyType !== 'ed25519') return s.fail();
-  return sign(null, transcript(body), key).toString('base64');
-}
 function assertCurrentCommand(ledger: Ledger, c: OrdinarySeatCommand): void {
   const state = ledger.state;
   if (c.expectedRevision !== state.revision) return s.fail('STALE_REVISION');
@@ -322,10 +289,8 @@ function advance(ledger: Ledger, body: EventBody, signature: string, digest: str
   ledger.last = body;
   ledger.digest = digest;
 }
-type Row = Record<string, unknown>;
 
-/** Startup can precede device identity bootstrap. Never infer an empty journal from just its head. */
-export function ordinaryHandoffPresentAtStartup(db: Database.Database): boolean {
+function handoffJournalPresent(db: Database.Database, currentDeviceOnly: boolean): boolean {
   return s.safe(() => {
     const probe = () => {
       const objects = db
@@ -348,11 +313,28 @@ export function ordinaryHandoffPresentAtStartup(db: Database.Database): boolean 
         )
         .get();
       if (!row || row.orphan) return s.fail();
-      return Boolean(row.present);
+      if (!row.present || !currentDeviceOnly) return Boolean(row.present);
+      // A reset preserves the old installation's signed records. Only a head for
+      // the assigned device can take over its normal bootstrap and reconnect path.
+      const identity = readDeviceIdentityState(db);
+      if (identity.status === 'uninitialized') return false;
+      return (
+        db
+          .prepare('SELECT 1 FROM local_seat_handoff_head WHERE owner_device_id = ?')
+          .get(identity.deviceId) !== undefined
+      );
     };
     return db.inTransaction ? probe() : db.transaction(probe).deferred();
   });
 }
+
+/** Storage readers must still authenticate their caller when only an old installation has records. */
+export const seatHandoffJournalPresent = (db: Database.Database): boolean =>
+  handoffJournalPresent(db, false);
+
+/** Startup can precede device bootstrap. Only the current device can resume its handoff. */
+export const ordinaryHandoffPresentAtStartup = (db: Database.Database): boolean =>
+  handoffJournalPresent(db, true);
 
 function history(db: Database.Database, owner: string, searchCommandId?: string) {
   const ledger: Ledger = {
@@ -362,50 +344,26 @@ function history(db: Database.Database, owner: string, searchCommandId?: string)
     last: null,
     digest: null,
   };
-  const rows = db.prepare<[string], Row>(
-    'SELECT * FROM local_seat_handoff_event WHERE owner_device_id=? ORDER BY revision',
-  );
-  let key: KeyObject | undefined;
   let found: EventBody | null = null;
-  for (const row of rows.iterate(owner)) {
-    key ??= publicKey(db, owner);
-    const stored = s.object(s.checked(row), ['body', 'signature']);
-    const body = s.object(stored['body'], [
-      'ownerDeviceId',
-      'previousSha256',
-      'command',
-      'receipt',
-      'target',
-      'sourceOrNull',
-    ]) as unknown as EventBody;
-    const signature = s.text(stored['signature']);
-    const encoded = Buffer.from(signature, 'base64');
-    if (
-      body.ownerDeviceId !== owner ||
-      row['revision'] !== body.receipt.revision ||
-      row['command_id'] !== body.receipt.commandId ||
-      row['receipt_id'] !== body.receipt.receiptId ||
-      row['kind'] !== body.receipt.kind ||
-      row['handoff_id'] !== body.receipt.handoffId ||
-      encoded.length !== 64 ||
-      encoded.toString('base64') !== signature ||
-      !verify(null, transcript(body), key, encoded)
-    )
-      return s.fail();
-    advance(ledger, body, signature, s.hash(row['record_sha256']));
+  for (const event of readSeatEvents(db, owner)) {
+    if ('hostLocal' in event.body) {
+      if (event.body.command.commandId === searchCommandId) return s.fail('IDEMPOTENCY_CONFLICT');
+      ledger.state = {
+        revision: event.body.receipt.revision,
+        activeSeatIdOrNull: null,
+        rosterOrNull: null,
+        pendingOrNull: null,
+      };
+      ledger.activeProofOrNull = null;
+      ledger.activation = null;
+      ledger.last = null;
+      ledger.digest = event.digest;
+      continue;
+    }
+    const body = event.body as EventBody;
+    advance(ledger, body, event.signature, event.digest);
     if (body.command.commandId === searchCommandId) found = body;
   }
-  const head = db
-    .prepare<[string], Row>('SELECT * FROM local_seat_handoff_head WHERE owner_device_id=?')
-    .get(owner);
-  if (
-    ledger.last === null
-      ? head !== undefined
-      : head?.['revision'] !== ledger.state.revision ||
-        head['command_id'] !== ledger.last.command.commandId ||
-        head['record_sha256'] !== ledger.digest
-  )
-    return s.fail();
   return { ledger, found };
 }
 export function readOrdinarySeatRoster(
@@ -513,29 +471,9 @@ export function commitOrdinarySeatHandoff(
           sourceOrNull,
           previousSha256: ledger.digest,
         };
-        const signature = signBody(db, ownerDeviceId, body);
-        const json = s.canonical({ body, signature }),
-          digest = s.sha(json);
+        const { signature, digest } = appendSeatEvent(db, body);
         advance(ledger, body, signature, digest);
-        const before = s.changes(db);
-        db.prepare(
-          'INSERT INTO local_seat_handoff_event(owner_device_id,revision,command_id,receipt_id,kind,handoff_id,record_json,record_sha256) VALUES(?,?,?,?,?,?,?,?)',
-        ).run(
-          ownerDeviceId,
-          r.revision,
-          c.commandId,
-          r.receiptId,
-          c.kind,
-          r.handoffId,
-          json,
-          digest,
-        );
-        db.prepare(
-          `INSERT INTO local_seat_handoff_head VALUES(?,?,?,?)
-      ON CONFLICT(owner_device_id) DO UPDATE SET revision=excluded.revision,command_id=excluded.command_id,record_sha256=excluded.record_sha256`,
-        ).run(ownerDeviceId, r.revision, c.commandId, digest);
-        if (s.changes(db) !== before + 2 || !s.same(history(db, ownerDeviceId).ledger, ledger))
-          return s.fail('SOURCE_CHANGED');
+        if (!s.same(history(db, ownerDeviceId).ledger, ledger)) return s.fail('SOURCE_CHANGED');
         return { receipt: r, replayed: false };
       })
       .immediate(),

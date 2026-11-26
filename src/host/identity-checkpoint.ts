@@ -616,6 +616,7 @@ export function commitIdentityCheckpoint(
   options?: {
     readonly bindOwnerToDeviceId: string;
     readonly variantProof?: VariantInitializationProof;
+    readonly recordHostLocalBirth?: (checkpoint: LocalCharacterCheckpoint) => undefined;
   },
 ): DurableIdentityCheckpoint {
   if (typeof receiptId !== 'string' || receiptId.length === 0) {
@@ -668,7 +669,7 @@ export function commitIdentityCheckpoint(
           characterDraftId,
           wizardCheckpointId,
           (create) => create('DRAFT', JSON.stringify(durablePayload)),
-          options === undefined ? undefined : { bindOwnerToDeviceId: options.bindOwnerToDeviceId },
+          options,
         )
       : initializeVariantCharacterCheckpoint(
           database,

@@ -28,6 +28,7 @@ import {
   type LocalCharacterExportBaseline,
 } from './local-character-export.js';
 import { metadataForFinal, type LocalPostSaveDependencies } from './local-character-post-save.js';
+import { readHostLocalCharacterOwner } from '../persistence/host-local-seat.js';
 
 export interface AdmissionCandidateLimits {
   readonly maxWitnessBytes: number;
@@ -413,13 +414,17 @@ export function prepareOwnedFinalAdmissionCandidate(
   ownerDeviceId: string,
   sourceUuid: string,
   limits: AdmissionCandidateLimits,
+  targetLocalOwnerId: string | null = null,
 ): PreparedOwnedFinalAdmissionCandidate {
   const maximum = limit(limits);
   assertText(ownerDeviceId, 'ownerDeviceId');
   assertText(sourceUuid, 'sourceUuid');
   return checked('NOT_OWNED_FINAL', 'source', () => {
     const read = (): PreparedOwnedFinalAdmissionCandidate => {
-      if (loadDeviceId(d.database) !== ownerDeviceId)
+      if (
+        loadDeviceId(d.database) !== ownerDeviceId ||
+        readHostLocalCharacterOwner(d.database, ownerDeviceId, sourceUuid) !== targetLocalOwnerId
+      )
         return fail('NOT_OWNED_FINAL', 'ownerDeviceId');
       const owner = assertLocalCharacterOwnedByDevice(d.database, sourceUuid, ownerDeviceId);
       const localCharacter = readLocalCharacter(d.database, sourceUuid);
@@ -461,6 +466,7 @@ export function prepareOwnedFinalAdmissionCandidate(
       const { candidate: result } = derive(w, metadata.values, metadata.revision, d.baseline);
       if (
         loadDeviceId(d.database) !== ownerDeviceId ||
+        readHostLocalCharacterOwner(d.database, ownerDeviceId, sourceUuid) !== targetLocalOwnerId ||
         !isDeepStrictEqual(
           assertLocalCharacterOwnedByDevice(d.database, sourceUuid, ownerDeviceId),
           owner,
