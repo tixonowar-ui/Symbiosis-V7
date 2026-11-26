@@ -53,6 +53,7 @@ const patchNames = [
   '288',
   '249',
   '297',
+  '300',
 ] as const;
 // The B0 seal is recorded in the frozen atlas-v1.5.checksums.sha256 manifest.
 const releaseSeals = [
@@ -79,6 +80,7 @@ const releaseSeals = [
   BASELINE_LINEAGE_SEALS.enemyVersionConfigurationAtlas,
   BASELINE_LINEAGE_SEALS.localOwnerBindingAtlas,
   BASELINE_LINEAGE_SEALS.hostLocalLobbyAtlas,
+  BASELINE_LINEAGE_SEALS.ownerLibraryReentryAtlas,
 ] as const;
 const digest = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
 const digests = (bytes: FixtureAtlasBytes): Record<string, string> =>

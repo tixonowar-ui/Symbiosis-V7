@@ -41,7 +41,8 @@ export type BaselineFixtureRelease =
   | 'B16'
   | 'B17'
   | 'B18'
-  | 'B19';
+  | 'B19'
+  | 'B20';
 const sourceRoot = fileURLToPath(new URL('../../', import.meta.url));
 const patchPath = fileURLToPath(new URL('./atlas-177-lineage.patch', import.meta.url));
 const admissionPatchPath = fileURLToPath(new URL('./atlas-199-lineage.patch', import.meta.url));
@@ -73,6 +74,9 @@ const localOwnerBindingPatchPath = fileURLToPath(
 );
 const hostLocalLobbyPatchPath = fileURLToPath(
   new URL('./atlas-297-lineage.patch', import.meta.url),
+);
+const ownerLibraryReentryPatchPath = fileURLToPath(
+  new URL('./atlas-300-lineage.patch', import.meta.url),
 );
 const historicalManifest = readFileSync(
   new URL('../../src/host/baselines/atlas-v1.5.checksums.sha256', import.meta.url),
@@ -119,6 +123,7 @@ export const BASELINE_FIXTURE_IDS = {
   B17: BASELINE_LINEAGE_SEALS.enemyVersionConfigurationBaselineVersion,
   B18: BASELINE_LINEAGE_SEALS.localOwnerBindingBaselineVersion,
   B19: BASELINE_LINEAGE_SEALS.hostLocalLobbyBaselineVersion,
+  B20: BASELINE_LINEAGE_SEALS.ownerLibraryReentryBaselineVersion,
 } as const;
 const releaseAtlas = {
   B0: historicalAtlas,
@@ -141,6 +146,7 @@ const releaseAtlas = {
   B17: BASELINE_LINEAGE_SEALS.enemyVersionConfigurationAtlas,
   B18: BASELINE_LINEAGE_SEALS.localOwnerBindingAtlas,
   B19: BASELINE_LINEAGE_SEALS.hostLocalLobbyAtlas,
+  B20: BASELINE_LINEAGE_SEALS.ownerLibraryReentryAtlas,
 } as const;
 
 export function baselineFixtureManifest(release: BaselineFixtureRelease): Buffer {
@@ -166,7 +172,8 @@ export function baselineFixtureManifest(release: BaselineFixtureRelease): Buffer
     release === 'B16' ||
     release === 'B17' ||
     release === 'B18' ||
-    release === 'B19'
+    release === 'B19' ||
+    release === 'B20'
   ) {
     const entries = text.trimEnd().split('\n');
     entries.push(
@@ -211,6 +218,7 @@ export function applyBaselineFixtureRelease(
     'B17',
     'B18',
     'B19',
+    'B20',
   ] as const;
   // These private bytes cannot change during the synchronous release lookup.
   // Hash each once instead of rehashing the same JSON for every older release.
@@ -242,6 +250,7 @@ export function applyBaselineFixtureRelease(
         readFileSync(enemyVersionConfigurationPatchPath),
         readFileSync(localOwnerBindingPatchPath),
         readFileSync(hostLocalLobbyPatchPath),
+        readFileSync(ownerLibraryReentryPatchPath),
       ]),
     );
   const patchSha256 = patchSeal();
@@ -319,7 +328,9 @@ export function applyBaselineFixtureRelease(
                                               ? enemyVersionConfigurationPatchPath
                                               : edge === 17
                                                 ? localOwnerBindingPatchPath
-                                                : hostLocalLobbyPatchPath,
+                                                : edge === 18
+                                                  ? hostLocalLobbyPatchPath
+                                                  : ownerLibraryReentryPatchPath,
           ),
           reverse,
         );
@@ -369,7 +380,8 @@ export function applyBaselineFixtureRelease(
       release === 'B16' ||
       release === 'B17' ||
       release === 'B18' ||
-      release === 'B19'
+      release === 'B19' ||
+      release === 'B20'
     ) {
       const supplied = readFileSync(join(sourceRoot, 'artifacts', path));
       assert.equal(sha(supplied), digest, 'supplied GM source bytes differ');
@@ -380,7 +392,7 @@ export function applyBaselineFixtureRelease(
   writeFileSync(join(projectRoot, 'artifacts/CHECKSUMS.sha256'), baselineFixtureManifest(release));
 }
 
-/** Exact B0–B19 sources use nineteen reviewed Atlas patches and the three sealed B5–B19 art paths. */
+/** Exact B0–B20 sources use twenty reviewed Atlas patches and the three sealed B5–B20 art paths. */
 export function createBaselineLineageFixture(release: BaselineFixtureRelease = 'B0') {
   const directory = mkdtempSync(join(tmpdir(), 'symbiosis-baseline-lineage-'));
   const projectRoot = join(directory, 'project');

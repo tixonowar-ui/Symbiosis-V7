@@ -5029,8 +5029,9 @@
       "Loading/empty/error/conflict/connection-lost/reconnect не приводят к частичному commit.",
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
-      "Назначение реализовано буквально: Локальный device-shell draft выбирает 0–3 кандидатов/мест без выдачи authority; ordinary device продолжает в NET-003, host provisional player обязательно проходит PLY-030 и обычный admission.",
-      "Для выбранного режима проверяются только его входные поля до соответствующего действия. Поля результата появляются после успешной команды. Обычные и fresh-пути валидируют собственные поля; неперечисленный OperationID недоступен."
+      "Назначение реализовано буквально: Локальный device-shell draft выбирает 0–3 кандидатов/мест без выдачи authority; ordinary device продолжает в NET-003, на host выдаче проекции владельца предшествует подтверждение PLY-030. Для входа в кампанию нужен обычный admission; просмотр собственных FINAL и подписанный возврат к мастеру допускаются без SUBMIT.",
+      "Для выбранного режима проверяются только его входные поля до соответствующего действия. Поля результата появляются после успешной команды. Обычные и fresh-пути валидируют собственные поля; неперечисленный OperationID недоступен.",
+      "В нейтральном выборе доступность APP-003::CTA::015 сообщает один факт о выбранном профиле. При нуле неназначенных листов подходящий профиль получает новую адресованную передачу."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -5044,7 +5045,7 @@
         "Идемпотентный повтор того же commandId с тем же payload возвращает прежний результат.",
         "Разрешённые atlas workflow commands этой формы: UI-CMD-LOCAL-OWNER-PROFILE-CREATE, UI-CMD-LOCAL-OWNER-BIND-FINALS.",
         "Исполняемых профильных OperationID нет; изменение состояния допускается только через перечисленные atlas workflow commands.",
-        "Разрешённые видимые действия/CTA именно этой формы: Добавить кандидата из локальной библиотеки; Убрать кандидата из draft; Продолжить на обычном устройстве; Передать host локальному кандидату через privacy curtain; Оставить ноль локальных player seats; Вернуться к управлению клиентами мастера; Передать устройство для выбора неназначенных листов; Привязать выбранных персонажей локальному владельцу; Продолжить подключение с листами этого профиля; Отменить передачу до привязки; Создать профиль с указанной меткой; Выбрать существующий профиль по идентификатору; Передать устройство для создания нового персонажа; Вернуть устройство мастеру."
+        "Разрешённые видимые действия/CTA именно этой формы: Добавить кандидата из локальной библиотеки; Убрать кандидата из draft; Продолжить на обычном устройстве; Передать host локальному кандидату через privacy curtain; Оставить ноль локальных player seats; Вернуться к управлению клиентами мастера; Передать устройство для выбора неназначенных листов; Привязать выбранных персонажей локальному владельцу; Продолжить подключение с листами этого профиля; Отменить передачу до привязки; Создать профиль с указанной меткой; Выбрать существующий профиль по идентификатору; Передать устройство для создания нового персонажа; Вернуть устройство мастеру; Передать устройство владельцу сохранённой библиотеки."
       ],
       "availabilityContract": {
         "authoritativeSource": {
@@ -5223,7 +5224,7 @@
             "consent/masterPredicate state",
             "game time/local context"
           ],
-          "guard": "projectionRole=GM; activeRole=GM; isHostDevice=true; 1<=selectedCandidateIds count<=3; provisional local owner selected; GM projection erased before PLY-030; no player campaign authority",
+          "guard": "projectionRole=GM; activeRole=GM; isHostDevice=true; 1<=selectedCandidateIds count<=3; provisional local owner selected; GM projection erased before PLY-030; no player campaign authority The separate signed APP-003::CTA::003 path requires the current GM on this host, exact selected provisional profile and its already selected owner-safe batch of 1..3 distinct current FINAL. Recheck each exact sourceUuid against current membership for that profile, the signed source/return, revisions and addressed delivery; erase the GM projection and require the current explicit target ACK. Retain the original signed dispatch.",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -5708,7 +5709,7 @@
             "targetLocalOwnerId",
             "targetHandoffReceiptId"
           ],
-          "guard": "PLAYER, fresh target ACK current and targetLocalOwnerId matches this profile; own APP-004 or pre-submit NET-003 signed return to APP-003; SUBMIT has not committed; no in-flight command; preserve profile, checkpoints and FINAL. TARGET_OWNER_ADMISSION fresh branch only: zero to three (0..3) currently selected own FINAL, including the empty library; exact acknowledged profile and its current signed bootstrap return. The separate APP-003::CTA::009 still requires 1..3 distinct current own FINAL. No selector, grant-based admission, request or seat authority. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+          "guard": "For the B19 fresh bootstrap return: PLAYER, fresh target ACK current and targetLocalOwnerId matches this profile; own APP-004 or pre-submit NET-003 signed return to APP-003; SUBMIT has not committed; no in-flight command; preserve profile, checkpoints and FINAL. TARGET_OWNER_ADMISSION fresh branch only: zero to three (0..3) currently selected own FINAL, including the empty library; exact acknowledged profile and its current signed bootstrap return. The separate APP-003::CTA::009 still requires 1..3 distinct current own FINAL. No selector, grant-based admission, request or seat authority. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain. For EXISTING_OWNER_LIBRARY require current signed target ACK, exact profile and permitted own selection of 0..3 FINAL, including zero, after APP-004::CTA::002. No submitted or in-flight SUBMIT, unknown outcome or unsafe boundary. Purge the owner projection, issue the exact signed GM return in campaign B; only PLY-030::CTA::006 with RETURN_INITIATOR restores CMP-009. No new membership, continuation or application.",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -5724,6 +5725,51 @@
           "label": "Вернуть устройство мастеру",
           "recomputeTriggers": [
             "signed source, destination, request or authority changes",
+            "stateRevision/projectionRevision"
+          ],
+          "targetFormId": "PLY-030",
+          "whenGuardFalse": "OMIT_FROM_PLAYER_OR_EFFECTIVE_CONTROLLER_PAYLOAD_DOM_A11Y_HOTKEY_CACHE"
+        },
+        {
+          "actionKey": "APP-003::CTA::015",
+          "authoritativeSource": {
+            "abilityIds": [],
+            "operationIds": [],
+            "ruleIds": [],
+            "service": "SERVER_ROUTE_AND_GUARD_EVALUATOR",
+            "workflowCommandIds": []
+          },
+          "availabilityInputs": [
+            "installationId",
+            "deviceId",
+            "campaignId",
+            "gmLocalContextId",
+            "targetLocalOwnerId",
+            "targetProfileLabel",
+            "currentOwnedFinalExists",
+            "pendingContinuationIdOrNull",
+            "safeBoundary",
+            "priorProjectionErased",
+            "stateRevision",
+            "projectionRevision"
+          ],
+          "guard": "EXISTING_OWNER_LIBRARY; explicit exact profile selection in signed NEUTRAL_PROFILE_SETUP after CMP-009::CTA::005; same current trusted installation/device; at least one current immutable FINAL owned by this profile through recorded creation or BIND, including zero unassigned FINAL; no pending continuation for this profile in this campaign. Single current GM of campaign B, verified release/completion of campaign A on a campaign change, safe boundary, current revisions, no unresolved operation or outstanding curtain. Sign a fresh HOST_LOCAL_CANDIDATE handoffId and return context for campaign B, erase prior private data and subscriptions before PLY-030. No BIND, membership change, continuation, admission, copy, tab or controller.",
+          "hiddenReasonDiagnostic": {
+            "audience": "GM_QA_ONLY",
+            "channel": "actionAvailabilityTrace",
+            "fields": [
+              "actionKey",
+              "failedPredicate",
+              "sourceRuleOrGuard",
+              "evaluatedRevision"
+            ],
+            "playerProjection": "ABSENT"
+          },
+          "kind": "normative",
+          "label": "Передать устройство владельцу сохранённой библиотеки",
+          "recomputeTriggers": [
+            "exact selected profile, active membership or current campaign continuation changes",
+            "campaign/GM context, signed boundary or delivery changes",
             "stateRevision/projectionRevision"
           ],
           "targetFormId": "PLY-030",
@@ -5753,7 +5799,8 @@
         "Создать профиль с указанной меткой",
         "Выбрать существующий профиль по идентификатору",
         "Передать устройство для создания нового персонажа",
-        "Вернуть устройство мастеру"
+        "Вернуть устройство мастеру",
+        "Передать устройство владельцу сохранённой библиотеки"
       ],
       "workflowCommandAvailability": [
         {
@@ -5850,17 +5897,17 @@
       "нет конфликтующей незавершённой операции",
       "Владелец устройства выбирает точный профиль либо вводит метку и явно создаёт профиль. Обе адресные завесы показывают targetProfileLabel вместе с targetLocalOwnerId. На подтверждении рядом с этой парой перечислены выбранные листы; передача меняет будущий доступ к библиотеке. Экран GM и нейтральное продолжение показывают только служебные данные назначения.",
       "Одна транзакция повторно проверяет текущий подписанный контекст селектора, прежнюю квитанцию ACK, installationId/deviceId, точный профиль и метку, ревизии и весь набор из 1–3 разных неназначенных immutable FINAL по sourceUuid, finalSnapshotVersion, metadataRevision и candidateSnapshotChecksum (исходный descriptor.sourceChecksum). При успехе для всего набора сохраняются membership, grantId, bindingReceiptId и pendingContinuationId. UUID, байты FINAL и создания, исходные ревизии, device provenance и игровой журнал сохраняются. Конфликт любой строки, иной адресат, другая установка, устаревший контекст, четвертая или повторная строка дают zero write для всего набора. Undo/reassign отсутствуют.",
-      "Для специальных branch учитывается только соответствующий allowlist globalContracts.localOwnerBinding.modeActions. Профили до передачи содержат исключительно метку и точный ID; полный список FINAL отдельного владельца появляется лишь после его действующего ACK.",
+      "Для специальных branch учитывается только соответствующий allowlist globalContracts.localOwnerBinding.modeActions. Профили до передачи содержат исключительно метку и точный ID; полный список FINAL отдельного владельца появляется лишь после его действующего ACK. Только доступность ::015 для явно выбранного ID раскрывает один факт о наличии подходящего FINAL. Профильные строки остальных адресатов не получают индикаторов, имён, UUID, количества или листов.",
       "На обычном device-null пути перед выбором и передачей в NET-003 повторно проверяется отсутствие persistent membership для каждого sourceUuid. После binding выбор этого оригинала требует его exact acknowledged owner."
     ],
     "id": "APP-003",
     "inputOwner": "active controllerSeat/GM context according to roles",
     "origin": "v1.1-base-catalog",
     "projection": {
-      "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat. NEUTRAL_PROFILE_SETUP показывает только постоянные метки и ID профилей; SELECTOR_BIND_CONFIRM доступен только подтверждённому селектору, показывает его точный выбор, targetProfileLabel + targetLocalOwnerId и последствия для доступа.",
+      "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat. В NEUTRAL_PROFILE_SETUP список записей профилей содержит только постоянные метки и ID. Только после явного выбора ID доступность действия ::015 сообщает единственный факт о подходящем FINAL выбранного профиля; у прочих строк нет индикаторов принадлежности; SELECTOR_BIND_CONFIRM доступен только подтверждённому селектору, показывает его точный выбор, targetProfileLabel + targetLocalOwnerId и последствия для доступа.",
       "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
     },
-    "purpose": "Локальный device-shell draft выбирает 0–3 кандидатов/мест без выдачи authority; ordinary device продолжает в NET-003, host provisional player обязательно проходит PLY-030 и обычный admission.",
+    "purpose": "Локальный device-shell draft выбирает 0–3 кандидатов/мест без выдачи authority; ordinary device продолжает в NET-003, на host выдаче проекции владельца предшествует подтверждение PLY-030. Для входа в кампанию нужен обычный admission; просмотр собственных FINAL и подписанный возврат к мастеру допускаются без SUBMIT.",
     "qaScenarioIds": [
       "QA-FORM-APP-003",
       "QA-CHANGE-APP-003",
@@ -5870,7 +5917,10 @@
       "QA-LOCAL-OWNER-ADMISSION",
       "QA-WORKFLOW-UI-CMD-LOCAL-OWNER-PROFILE-CREATE",
       "QA-WORKFLOW-UI-CMD-LOCAL-OWNER-BIND-FINALS",
-      "QA-HOST-LOCAL-HANDOFF-PRE-SUBMIT"
+      "QA-HOST-LOCAL-HANDOFF-PRE-SUBMIT",
+      "QA-LOCAL-OWNER-REENTRY-LIFETIME",
+      "QA-LOCAL-OWNER-REENTRY-CONFLICT",
+      "QA-LOCAL-OWNER-REENTRY-PRIVACY"
     ],
     "references": {
       "abilityIds": [],
@@ -5916,9 +5966,9 @@
       "campaignCapacityOrUnknown",
       "nextContext=ORDINARY_CONNECT|HOST_PROVISIONAL|ZERO_SEATS",
       "draftRevision",
-      "NEUTRAL_PROFILE_SETUP input: installationId, deviceId, signedReturnContext. Existing profile selection needs its exact ID and label; create takes the entered targetProfileLabel and returns a new targetLocalOwnerId. Cancel needs neither.",
+      "NEUTRAL_PROFILE_SETUP input: installationId, deviceId, signedReturnContext. Existing profile selection needs its exact ID and label; create takes the entered targetProfileLabel and returns a new targetLocalOwnerId. Cancel needs neither. EXISTING_OWNER_LIBRARY availability is one bit for the explicitly selected profile; no names, UUIDs, counts or private sheets.",
       "SELECTOR_BIND_CONFIRM input: binding.envelopeFields and selectedFinals[{sourceUuid,finalSnapshotVersion,metadataRevision,candidateSnapshotChecksum}]. Only on commit: bindingReceiptId, grantId, pendingContinuationId.",
-      "TARGET_OWNER_ADMISSION input: current target ACK and exact owned subset. Existing-membership and fresh paths use their own confirmed owner scope; no prior binding receipt is required. Before SUBMIT, the signed fresh-profile return accepts 0..3 selected own FINAL, including zero. Only the admission CTA requires 1..3.",
+      "TARGET_OWNER_ADMISSION input: current target ACK and exact owned subset. Existing-membership and fresh paths use their own confirmed owner scope; no prior binding receipt is required. Before SUBMIT, the signed fresh-profile return accepts 0..3 selected own FINAL, including zero. Only the admission CTA requires 1..3. The same 0..3 range for a pre-submit return applies to a current signed EXISTING_OWNER_LIBRARY in this campaign; the original BIND/continuation path retains its own guards.",
       "HOST_LOCAL_HANDOFF pre-SUBMIT only: current fresh profile ACK, signed bootstrap GM return, no submitted request; request/admission/copy IDs do not exist yet."
     ],
     "roles": [
@@ -5929,10 +5979,10 @@
     "states": {
       "FOURTH_REJECTED": "Fourth candidate is omitted before seat creation.",
       "HOST_PROVISIONAL_READY": "One to three candidates require privacy handoff and still have no player authority.",
-      "NEUTRAL_PROFILE_SETUP": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions",
+      "NEUTRAL_PROFILE_SETUP": "trusted host; signed neutral profile setup; prior projection erased; only durable profile label and exact ID; current revisions В нейтральной APP-003 видны метка и ID профиля. Доступность действия сообщает единственный дополнительный факт: у выбранного профиля есть подходящий FINAL. Число, имена, UUID и листы остаются закрыты до ACK.",
       "ORDINARY_1_TO_3_READY": "One to three candidates can continue to NET-003 without GM projection.",
       "SELECTOR_BIND_CONFIRM": "signed selector context and selectorHandoffReceiptId current; exact durable targetLocalOwnerId + targetProfileLabel; 1..3 distinct unassigned immutable FINAL from this installation and device; exact sourceUuid/finalSnapshotVersion/metadataRevision/candidateSnapshotChecksum and selectionRevision",
-      "TARGET_OWNER_ADMISSION": "isHostDevice=true; current HOST_LOCAL_CANDIDATE ACK identifies exact target owner. APP-003::CTA::009 requires 1..3 distinct permitted own FINAL at the current revisions for ordinary #171/#172 admission. Only a fresh acknowledged profile with its current signed bootstrap GM return before SUBMIT may enter with 0..3 selected own FINAL to use APP-003::CTA::014. No in-flight command, pre-submit grant or seat. Selector and grant-based admission have no such return.",
+      "TARGET_OWNER_ADMISSION": "isHostDevice=true; exact current HOST_LOCAL_CANDIDATE target ACK; APP-003::CTA::009 requires 1..3 distinct permitted own FINAL at current revisions. Before SUBMIT, APP-003::CTA::014 accepts 0..3 own FINAL only for the fresh signed bootstrap return or for an acknowledged EXISTING_OWNER_LIBRARY with its current signed return to the sole GM of this campaign. Neither the DEVICE_LIBRARY_SELECTOR nor the primary BIND/continuation admission obtains this return. No committed or in-flight SUBMIT, unknown outcome or unresolved operation.",
       "ZERO_SEATS": "Valid empty local shell; no character authority or submit CTA.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
@@ -5963,7 +6013,7 @@
       },
       {
         "from": "APP-004",
-        "guard": "projectionRole=PLAYER; active local owner confirmed; each subflow carries ownerContext=PLAYER_LOCAL plus signed origin/return and never serializes GM_IMPORT_CANDIDATE or GM_ARCHIVE_EXPORT data.",
+        "guard": "projectionRole=PLAYER; active local owner confirmed; each subflow carries ownerContext=PLAYER_LOCAL plus signed origin/return and never serializes GM_IMPORT_CANDIDATE or GM_ARCHIVE_EXPORT data. For an acknowledged EXISTING_OWNER_LIBRARY, return from the owner library with 0..3 selected own FINAL to APP-003. Only the separate admission CTA needs 1..3.",
         "kind": "subflow",
         "trigger": "J-LOCAL-LIBRARY::LIBRARY_OPERATIONS::open"
       },
@@ -6018,7 +6068,7 @@
         "trigger": "Продолжить на обычном устройстве"
       },
       {
-        "guard": "projectionRole=GM; activeRole=GM; isHostDevice=true; 1<=selectedCandidateIds count<=3; provisional local owner selected; GM projection erased before PLY-030; no player campaign authority",
+        "guard": "projectionRole=GM; activeRole=GM; isHostDevice=true; 1<=selectedCandidateIds count<=3; provisional local owner selected; GM projection erased before PLY-030; no player campaign authority The separate signed APP-003::CTA::003 path requires the current GM on this host, exact selected provisional profile and its already selected owner-safe batch of 1..3 distinct current FINAL. Recheck each exact sourceUuid against current membership for that profile, the signed source/return, revisions and addressed delivery; erase the GM projection and require the current explicit target ACK. Retain the original signed dispatch.",
         "kind": "normative",
         "to": "PLY-030",
         "trigger": "Передать host локальному кандидату через privacy curtain"
@@ -6084,10 +6134,16 @@
         "trigger": "Передать устройство для создания нового персонажа"
       },
       {
-        "guard": "PLAYER, fresh target ACK current and targetLocalOwnerId matches this profile; own APP-004 or pre-submit NET-003 signed return to APP-003; SUBMIT has not committed; no in-flight command; preserve profile, checkpoints and FINAL. TARGET_OWNER_ADMISSION fresh branch only: zero to three (0..3) currently selected own FINAL, including the empty library; exact acknowledged profile and its current signed bootstrap return. The separate APP-003::CTA::009 still requires 1..3 distinct current own FINAL. No selector, grant-based admission, request or seat authority. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+        "guard": "For the B19 fresh bootstrap return: PLAYER, fresh target ACK current and targetLocalOwnerId matches this profile; own APP-004 or pre-submit NET-003 signed return to APP-003; SUBMIT has not committed; no in-flight command; preserve profile, checkpoints and FINAL. TARGET_OWNER_ADMISSION fresh branch only: zero to three (0..3) currently selected own FINAL, including the empty library; exact acknowledged profile and its current signed bootstrap return. The separate APP-003::CTA::009 still requires 1..3 distinct current own FINAL. No selector, grant-based admission, request or seat authority. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain. For EXISTING_OWNER_LIBRARY require current signed target ACK, exact profile and permitted own selection of 0..3 FINAL, including zero, after APP-004::CTA::002. No submitted or in-flight SUBMIT, unknown outcome or unsafe boundary. Purge the owner projection, issue the exact signed GM return in campaign B; only PLY-030::CTA::006 with RETURN_INITIATOR restores CMP-009. No new membership, continuation or application.",
         "kind": "normative",
         "to": "PLY-030",
         "trigger": "Вернуть устройство мастеру"
+      },
+      {
+        "guard": "EXISTING_OWNER_LIBRARY; explicit exact profile selection in signed NEUTRAL_PROFILE_SETUP after CMP-009::CTA::005; same current trusted installation/device; at least one current immutable FINAL owned by this profile through recorded creation or BIND, including zero unassigned FINAL; no pending continuation for this profile in this campaign. Single current GM of campaign B, verified release/completion of campaign A on a campaign change, safe boundary, current revisions, no unresolved operation or outstanding curtain. Sign a fresh HOST_LOCAL_CANDIDATE handoffId and return context for campaign B, erase prior private data and subscriptions before PLY-030. No BIND, membership change, continuation, admission, copy, tab or controller.",
+        "kind": "normative",
+        "to": "PLY-030",
+        "trigger": "Передать устройство владельцу сохранённой библиотеки"
       }
     ],
     "type": "screen"
@@ -6099,7 +6155,8 @@
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Библиотека локальных персонажей: создание, черновик, просмотр, импорт, вариант, экспорт и допустимое удаление. При localOwnerIdOrNull=null библиотека принадлежит устройству (deviceId), доступна игроку до кампании и проверка совпадения владельца не применяется. При localOwnerIdOrNull!=null библиотека принадлежит активному подтверждённому локальному владельцу и значение обязано совпадать с ним. На host-компьютере ветка localOwnerIdOrNull!=null сериализуется только после committed HOST_LOCAL_CANDIDATE handoffReceiptId как PLAYER-проекция без campaign authority; GM_IMPORT_CANDIDATE и GM shell сюда не маршрутизируются. В активном host при localOwnerIdOrNull=null отдельный DEVICE_LIBRARY_SELECTOR показывает лишь неназначенные immutable FINAL после текущего selector ACK. В обычной ветви localOwnerIdOrNull=null проверка deviceId сохраняет прежний путь для неназначенных FINAL. С момента binding назначенный sourceUuid отсутствует в обычных null/device list, open, export, draft selection и admission, в том числе после окончания кампании, disconnect и restart. Доступ проверяется до сериализации и при прямом запросе. Только подтверждённый владелец получает свой оригинал; прежние неназначенные листы остаются на обычном пути без автоматического назначения.",
-      "Для выбранного режима проверяются только его входные поля до соответствующего действия. Поля результата появляются после успешной команды. Обычные и fresh-пути валидируют собственные поля; неперечисленный OperationID недоступен."
+      "Для выбранного режима проверяются только его входные поля до соответствующего действия. Поля результата появляются после успешной команды. Обычные и fresh-пути валидируют собственные поля; неперечисленный OperationID недоступен.",
+      "Только адресованный текущий ACK EXISTING_OWNER_LIBRARY открывает принадлежащие профилю листы; выход без заявки доступен при 0..3 выбранных FINAL."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -6240,7 +6297,7 @@
             "consent/masterPredicate state",
             "game time/local context"
           ],
-          "guard": "projectionRole=PLAYER; active local owner confirmed; each subflow carries ownerContext=PLAYER_LOCAL plus signed origin/return and never serializes GM_IMPORT_CANDIDATE or GM_ARCHIVE_EXPORT data.",
+          "guard": "projectionRole=PLAYER; active local owner confirmed; each subflow carries ownerContext=PLAYER_LOCAL plus signed origin/return and never serializes GM_IMPORT_CANDIDATE or GM_ARCHIVE_EXPORT data. For an acknowledged EXISTING_OWNER_LIBRARY, return from the owner library with 0..3 selected own FINAL to APP-003. Only the separate admission CTA needs 1..3.",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -6737,14 +6794,14 @@
       "host provisional context grants no player campaign authority",
       "no conflicting uncommitted local operation",
       "После очистки GM-проекции человек за доверенным устройством явно подтверждает кооперативную роль DEVICE_LIBRARY_SELECTOR. Только этот контекст с localOwnerIdOrNull=null видит неназначенные неизменяемые FINAL этой установки. Чужие строки, UUID, имена, artwork, счётчики, поисковые результаты и команды отсутствуют в payload, DOM, accessibility tree, hotkeys и cache. Секрет, loopback/listener/origin и подпись удостоверяют устройство и контекст, личность человека не проверяется. Тот же человек вправе подтвердить обе разные завесы последовательно.",
-      "Получатель после адресного ACK видит лишь FINAL своего targetLocalOwnerId. Для fresh empty owner доступны прежние создание, финализация и обычный admission. Режим селектора разрешает только APP-004::CTA::009 и APP-004::CTA::010; прежние операции библиотеки отсутствуют во всех каналах этого режима.",
+      "Получатель после адресного ACK видит лишь FINAL своего targetLocalOwnerId. Для fresh empty owner доступны прежние создание, финализация и обычный admission. Режим селектора разрешает только APP-004::CTA::009 и APP-004::CTA::010; прежние операции библиотеки отсутствуют во всех каналах этого режима. При EXISTING_OWNER_LIBRARY после текущего адресного ACK выдаются только принадлежащие профилю FINAL; ::002 ведёт в APP-003 также при пустом выборе для безопасного возврата.",
       "Drafts, ordinary-library commands and unrelated rows are omitted in DEVICE_LIBRARY_SELECTOR. A HOST_LOCAL_CANDIDATE target must match the acknowledged non-null owner and never receives the selector projection."
     ],
     "id": "APP-004",
     "inputOwner": "local player shell user for the deviceId-owned library when localOwnerIdOrNull=null; active acknowledged local player owner matching localOwnerIdOrNull when localOwnerIdOrNull!=null, with committed HOST_LOCAL_CANDIDATE handoffReceiptId additionally required on the host computer",
     "origin": "v1.1-base-catalog",
     "projection": {
-      "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat. Получатель после адресного ACK видит лишь FINAL своего targetLocalOwnerId. Для fresh empty owner доступны прежние создание, финализация и обычный admission. Режим селектора разрешает только APP-004::CTA::009 и APP-004::CTA::010; прежние операции библиотеки отсутствуют во всех каналах этого режима. В обычной ветви localOwnerIdOrNull=null проверка deviceId сохраняет прежний путь для неназначенных FINAL. С момента binding назначенный sourceUuid отсутствует в обычных null/device list, open, export, draft selection и admission, в том числе после окончания кампании, disconnect и restart. Доступ проверяется до сериализации и при прямом запросе. Только подтверждённый владелец получает свой оригинал; прежние неназначенные листы остаются на обычном пути без автоматического назначения.",
+      "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat. Получатель после адресного ACK видит лишь FINAL своего targetLocalOwnerId. Для fresh empty owner доступны прежние создание, финализация и обычный admission. Режим селектора разрешает только APP-004::CTA::009 и APP-004::CTA::010; прежние операции библиотеки отсутствуют во всех каналах этого режима. При EXISTING_OWNER_LIBRARY после текущего адресного ACK выдаются только принадлежащие профилю FINAL; ::002 ведёт в APP-003 также при пустом выборе для безопасного возврата. В обычной ветви localOwnerIdOrNull=null проверка deviceId сохраняет прежний путь для неназначенных FINAL. С момента binding назначенный sourceUuid отсутствует в обычных null/device list, open, export, draft selection и admission, в том числе после окончания кампании, disconnect и restart. Доступ проверяется до сериализации и при прямом запросе. Только подтверждённый владелец получает свой оригинал; прежние неназначенные листы остаются на обычном пути без автоматического назначения.",
       "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
     },
     "purpose": "Библиотека локальных персонажей: создание, черновик, просмотр, импорт, вариант, экспорт и допустимое удаление. При localOwnerIdOrNull=null библиотека принадлежит устройству (deviceId), доступна игроку до кампании и проверка совпадения владельца не применяется. При localOwnerIdOrNull!=null библиотека принадлежит активному подтверждённому локальному владельцу и значение обязано совпадать с ним. На host-компьютере ветка localOwnerIdOrNull!=null сериализуется только после committed HOST_LOCAL_CANDIDATE handoffReceiptId как PLAYER-проекция без campaign authority; GM_IMPORT_CANDIDATE и GM shell сюда не маршрутизируются. В активном host при localOwnerIdOrNull=null отдельный DEVICE_LIBRARY_SELECTOR показывает лишь неназначенные immutable FINAL после текущего selector ACK. В обычной ветви localOwnerIdOrNull=null проверка deviceId сохраняет прежний путь для неназначенных FINAL. С момента binding назначенный sourceUuid отсутствует в обычных null/device list, open, export, draft selection и admission, в том числе после окончания кампании, disconnect и restart. Доступ проверяется до сериализации и при прямом запросе. Только подтверждённый владелец получает свой оригинал; прежние неназначенные листы остаются на обычном пути без автоматического назначения.",
@@ -6754,7 +6811,9 @@
       "QA-LOCAL-OWNER-PRIVACY",
       "QA-LOCAL-OWNER-ATOMICITY",
       "QA-LOCAL-OWNER-ADMISSION",
-      "QA-HOST-LOCAL-HANDOFF-PRE-SUBMIT"
+      "QA-HOST-LOCAL-HANDOFF-PRE-SUBMIT",
+      "QA-LOCAL-OWNER-REENTRY-LIFETIME",
+      "QA-LOCAL-OWNER-REENTRY-PRIVACY"
     ],
     "references": {
       "abilityIds": [],
@@ -6816,7 +6875,7 @@
     "route": "/player/characters",
     "states": {
       "DEVICE_LIBRARY_SELECTOR": "signed DEVICE_LIBRARY_SELECTOR receipt current; localOwnerIdOrNull=null; prior GM projection erased; only unassigned immutable FINAL visible",
-      "TARGET_OWNER_LIBRARY": "Получатель после адресного ACK видит лишь FINAL своего targetLocalOwnerId. Для fresh empty owner доступны прежние создание, финализация и обычный admission. Режим селектора разрешает только APP-004::CTA::009 и APP-004::CTA::010; прежние операции библиотеки отсутствуют во всех каналах этого режима.",
+      "TARGET_OWNER_LIBRARY": "Получатель после адресного ACK видит лишь FINAL своего targetLocalOwnerId. Для fresh empty owner доступны прежние создание, финализация и обычный admission. Режим селектора разрешает только APP-004::CTA::009 и APP-004::CTA::010; прежние операции библиотеки отсутствуют во всех каналах этого режима. При EXISTING_OWNER_LIBRARY после текущего адресного ACK выдаются только принадлежащие профилю FINAL; ::002 ведёт в APP-003 также при пустом выборе для безопасного возврата.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
       "connectionLost": "Новые mutation-команды блокированы; доступен безопасный просмотр последней подтверждённой проекции.",
       "empty": "Показывается объяснимое отсутствие данных и только разрешённый следующий шаг.",
@@ -6912,7 +6971,7 @@
       },
       {
         "from": "PLY-030",
-        "guard": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=ACTIVATE_TARGET; explicit addressed target ACK, only exact owner library or fresh empty library",
+        "guard": "Purge the prior private projection. At initial APP-003::CTA::013 entry the explicitly selected fresh profile must be empty. Its target ACK verifies the current signed bootstrap address and delivery; no selector, BIND grant or pendingContinuationId is required. CMP-009::CTA::004 may address the returned provisional owner only after its verified signed pre-SUBMIT return, for the same exact profile, campaign and entire original GM origin, without an unreleased scope, current submitted request or in-flight SUBMIT. Issue a new signed targeted handoff and require a new explicit ACK on the current delivery. Previously created own drafts and FINAL remain available; emptiness is not rechecked. For both the initial target curtain immediately after BIND and its deferred continuation, ACTIVATE_TARGET requires the erased selector, the exact durable grant target, the current signed pendingContinuationId and an independent explicit target ACK. For EXISTING_OWNER_LIBRARY require the new signed campaign/GM address, installation/device, exact selected profile, basis, current membership of a FINAL, state/projection revisions, addressed delivery and priorProjectionErased. Only a current explicit ACTIVATE_TARGET ACK opens that recipient’s APP-004. The separate signed APP-003::CTA::003 owner-safe batch retains its existing dispatch. No ACK creates membership or campaign authority.",
         "kind": "workflow-command",
         "trigger": "Подтвердить получение устройства указанным профилем"
       }
@@ -6925,7 +6984,7 @@
         "trigger": "J-CHAR-CREATE::DRAFT_IDENTITY::open"
       },
       {
-        "guard": "projectionRole=PLAYER; active local owner confirmed; each subflow carries ownerContext=PLAYER_LOCAL plus signed origin/return and never serializes GM_IMPORT_CANDIDATE or GM_ARCHIVE_EXPORT data.",
+        "guard": "projectionRole=PLAYER; active local owner confirmed; each subflow carries ownerContext=PLAYER_LOCAL plus signed origin/return and never serializes GM_IMPORT_CANDIDATE or GM_ARCHIVE_EXPORT data. For an acknowledged EXISTING_OWNER_LIBRARY, return from the owner library with 0..3 selected own FINAL to APP-003. Only the separate admission CTA needs 1..3.",
         "kind": "subflow",
         "to": "APP-003",
         "trigger": "J-LOCAL-LIBRARY::LIBRARY_OPERATIONS::open"
@@ -76314,7 +76373,8 @@
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
       "Назначение реализовано буквально: Несколько персонажей на устройстве в пределах мест кампании; макет показывает двух, отдельно видны Ready и controller.",
-      "Для выбранного режима проверяются только его входные поля до соответствующего действия. Поля результата появляются после успешной команды. Обычные и fresh-пути валидируют собственные поля; неперечисленный OperationID недоступен."
+      "Для выбранного режима проверяются только его входные поля до соответствующего действия. Поля результата появляются после успешной команды. Обычные и fresh-пути валидируют собственные поля; неперечисленный OperationID недоступен.",
+      "Перед повторным входом владельца мастер использует подтверждённую безопасную границу текущей кампании. При конфликте прежняя сессия сохраняет владельца и ожидающий результат."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -76557,7 +76617,7 @@
             "consent/masterPredicate state",
             "game time/local context"
           ],
-          "guard": "host provisional candidate selected; prior GM projection erased",
+          "guard": "host provisional candidate selected; prior GM projection erased For the pre-SUBMIT return of a previously acknowledged provisional owner: CMP-009::CTA::004 may address the returned provisional owner only after its verified signed pre-SUBMIT return, for the same exact profile, campaign and entire original GM origin, without an unreleased scope, current submitted request or in-flight SUBMIT. Issue a new signed targeted handoff and require a new explicit ACK on the current delivery. Previously created own drafts and FINAL remain available; emptiness is not rechecked. This action cannot reuse an old ACK or grant as a fresh delivery.",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -76727,7 +76787,9 @@
       "QA-LOCAL-OWNER-PRIVACY",
       "QA-LOCAL-OWNER-RESUME",
       "QA-LOCAL-OWNER-ADMISSION",
-      "QA-HOST-LOCAL-HANDOFF-PRE-SUBMIT"
+      "QA-HOST-LOCAL-HANDOFF-PRE-SUBMIT",
+      "QA-LOCAL-OWNER-REENTRY-LIFETIME",
+      "QA-LOCAL-OWNER-REENTRY-CONFLICT"
     ],
     "references": {
       "abilityIds": [],
@@ -76819,7 +76881,7 @@
       },
       {
         "from": "PLY-030",
-        "guard": "safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=RETURN_INITIATOR current signed GM receipt, then GM-only projection",
+        "guard": "safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=RETURN_INITIATOR current signed GM receipt, then GM-only projection For EXISTING_OWNER_LIBRARY cancellation or exit, independently acknowledge the current signed return to the originating sole GM and CMP-009 of campaign B; a former GM session or historical ACK cannot take delivery.",
         "kind": "workflow-command",
         "trigger": "Подтвердить возврат устройства мастеру"
       },
@@ -76850,7 +76912,7 @@
         "trigger": "J-LOCAL-SEATS::HOST_LOCAL_BOOTSTRAP::open"
       },
       {
-        "guard": "host provisional candidate selected; prior GM projection erased",
+        "guard": "host provisional candidate selected; prior GM projection erased For the pre-SUBMIT return of a previously acknowledged provisional owner: CMP-009::CTA::004 may address the returned provisional owner only after its verified signed pre-SUBMIT return, for the same exact profile, campaign and entire original GM origin, without an unreleased scope, current submitted request or in-flight SUBMIT. Issue a new signed targeted handoff and require a new explicit ACK on the current delivery. Previously created own drafts and FINAL remain available; emptiness is not rechecked. This action cannot reuse an old ACK or grant as a fresh delivery.",
         "kind": "normative",
         "to": "PLY-030",
         "trigger": "Передать устройство локальному кандидату"
@@ -162870,11 +162932,12 @@
       "Loading/empty/error/conflict/connection-lost/reconnect не приводят к частичному commit.",
       "Player projection не содержит скрытых GM-данных или недопустимых executable-команд.",
       "Идемпотентный повтор не создаёт второго результата, броска, XP или расхода.",
-      "Назначение реализовано буквально: Полноэкранная privacy curtain очищает предыдущую проекцию до player↔player, GM↔player, provisional HOST_LOCAL_CANDIDATE, IMPORTED_OWNER_CLAIM и forced handoff; следующая проекция выдаётся только после явного «Готов открыть» её локального владельца. Обычный target уже admitted/authorized, но host provisional candidate и imported owner claimant подтверждают только владение подписанным кандидатом и не получают campaign authority; вложенный prompt затем возвращает инициатора без раннего резерва. Для существующих FINAL раздельные текущие подписи и явные ACK адресуют сначала DEVICE_LIBRARY_SELECTOR, затем HOST_LOCAL_CANDIDATE. При адресной завесе до ACK видны только служебные метка и точный ID. HOST_LOCAL_HANDOFF допускает отдельно подтверждённые адреса локального заявителя без места, реального допущенного controller и единственного GM. До ACK доступны только допустимые нейтральные метаданные адресата.",
+      "Назначение реализовано буквально: Полноэкранная privacy curtain очищает предыдущую проекцию до player↔player, GM↔player, provisional HOST_LOCAL_CANDIDATE, IMPORTED_OWNER_CLAIM и forced handoff; следующая проекция выдаётся только после явного «Готов открыть» её локального владельца. Обычный target уже admitted/authorized, но host provisional candidate и imported owner claimant подтверждают только владение подписанным кандидатом и не получают campaign authority; вложенный prompt затем возвращает инициатора без раннего резерва. При первичной привязке неназначенных FINAL раздельные текущие подписи и явные ACK адресуют сначала DEVICE_LIBRARY_SELECTOR, затем HOST_LOCAL_CANDIDATE. Для повторного входа EXISTING_OWNER_LIBRARY хост сразу выдаёт новую адресованную шторку в текущей кампании. Только явный ACK выбранного профиля открывает его библиотеку; новый selector ACK для этого входа не требуется. При адресной завесе до ACK видны только служебные метка и точный ID. HOST_LOCAL_HANDOFF допускает отдельно подтверждённые адреса локального заявителя без места, реального допущенного controller и единственного GM. До ACK доступны только допустимые нейтральные метаданные адресата.",
       "Для выбранного режима проверяются только его входные поля до соответствующего действия. Поля результата появляются после успешной команды. Обычные и fresh-пути валидируют собственные поля; неперечисленный OperationID недоступен.",
       "For ACTIVATE_TARGET or RETURN_INITIATOR, persist exactly one active local context and publish only its projection while keeping pending-command ownership unchanged; HOST_LOCAL_CANDIDATE opens only the local candidate/library bootstrap projection and grants no campaign authority; no action, OE, item, dose, roll or unrelated authority mutates. IMPORTED_OWNER_CLAIM opens only the addressed NET-028 claim context; ACK itself never claims/admit the candidate, allocates a seat/reserve or grants campaign authority. No prior GM payload is published.",
       "Same handoffId/commandId returns the same receipt; only the currently authorized active context may be restored; reconnect restores the curtain or committed target/initiator projection without exposing the prior owner, admitting a provisional candidate or repeating a nested response. The same signed imported candidate/provisional-owner binding is restored; a remote claim is not a local privacy handoff.",
-      "Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain."
+      "Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+      "EXISTING_OWNER_LIBRARY требует нового адреса кампании и явного ACK. Отмена до ACK и выход после просмотра возвращают устройство через подписанную завесу к исходному мастеру текущей кампании."
     ],
     "accessibility": {
       "contrast": "Контраст не ниже WCAG AA; состояние не кодируется только цветом.",
@@ -163122,7 +163185,7 @@
             "targetLocalOwnerId",
             "projectionRevision"
           ],
-          "guard": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=ACTIVATE_TARGET; explicit addressed target ACK, only exact owner library or fresh empty library",
+          "guard": "Purge the prior private projection. At initial APP-003::CTA::013 entry the explicitly selected fresh profile must be empty. Its target ACK verifies the current signed bootstrap address and delivery; no selector, BIND grant or pendingContinuationId is required. CMP-009::CTA::004 may address the returned provisional owner only after its verified signed pre-SUBMIT return, for the same exact profile, campaign and entire original GM origin, without an unreleased scope, current submitted request or in-flight SUBMIT. Issue a new signed targeted handoff and require a new explicit ACK on the current delivery. Previously created own drafts and FINAL remain available; emptiness is not rechecked. For both the initial target curtain immediately after BIND and its deferred continuation, ACTIVATE_TARGET requires the erased selector, the exact durable grant target, the current signed pendingContinuationId and an independent explicit target ACK. For EXISTING_OWNER_LIBRARY require the new signed campaign/GM address, installation/device, exact selected profile, basis, current membership of a FINAL, state/projection revisions, addressed delivery and priorProjectionErased. Only a current explicit ACTIVATE_TARGET ACK opens that recipient’s APP-004. The separate signed APP-003::CTA::003 owner-safe batch retains its existing dispatch. No ACK creates membership or campaign authority.",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -163205,7 +163268,7 @@
             "priorProjectionErased",
             "projectionRevision"
           ],
-          "guard": "safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=RETURN_INITIATOR current signed GM receipt, then GM-only projection",
+          "guard": "safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=RETURN_INITIATOR current signed GM receipt, then GM-only projection For EXISTING_OWNER_LIBRARY cancellation or exit, independently acknowledge the current signed return to the originating sole GM and CMP-009 of campaign B; a former GM session or historical ACK cannot take delivery.",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -163286,7 +163349,7 @@
             "priorProjectionErased",
             "projectionRevision"
           ],
-          "guard": "Current signed SELECTOR_CURTAIN before selector ACK or fresh HOST_LOCAL_CANDIDATE TARGET_CURTAIN before target ACK; no committed binding; erase all private buffers and follow exact signed GM/neutral return without selector/target ACK. No binding or access grant.",
+          "guard": "For the selector or the fresh bootstrap lineage, including its verified same-campaign CMP-009::CTA::004 pre-SUBMIT return with retained own FINAL: Current signed SELECTOR_CURTAIN before selector ACK or fresh HOST_LOCAL_CANDIDATE TARGET_CURTAIN before target ACK; no committed binding; erase all private buffers and follow exact signed GM/neutral return without selector/target ACK. No binding or access grant. For EXISTING_OWNER_LIBRARY before target ACK use only the current signed campaign B handoff; purge private buffers and issue the separate signed GM return acknowledged via PLY-030::CTA::006. The existing membership survives. A post-BIND TARGET with a pendingContinuationId keeps its separate Later path.",
           "hiddenReasonDiagnostic": {
             "audience": "GM_QA_ONLY",
             "channel": "actionAvailabilityTrace",
@@ -163359,7 +163422,7 @@
             "game time/local context"
           ],
           "commandId": "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK",
-          "guard": "Target local owner explicitly acknowledged; prior projection is erased; state/projection revisions current; boundary is safe or handoff is the addressed forced nested prompt; returnContext and pending-command owner match the signed handoff envelope. For handoffType outside HOST_LOCAL_HANDOFF, DEVICE_LIBRARY_SELECTOR, HOST_LOCAL_CANDIDATE and IMPORTED_OWNER_CLAIM, target GM/seat is admitted and authorized. For HOST_LOCAL_CANDIDATE, isHostDevice=true, the selected provisional local owner matches the signed handoff target, remains not admitted, and has no player campaign authority. For IMPORTED_OWNER_CLAIM, isHostDevice=true, the selected provisional local owner matches the signed imported candidate owner-claim envelope, remains not admitted, and has no player campaign authority. For DEVICE_LIBRARY_SELECTOR, trusted host installation/device, safe signed boundary, erased prior projection, localOwnerIdOrNull=null, explicitly acknowledged cooperative selector and exact designated profile ID + label are required. HOST_LOCAL_CANDIDATE after binding also requires the erased selector, exact durable grant target, current signed pendingContinuationId and independent explicit target ACK. For HOST_LOCAL_HANDOFF, decision=ACTIVATE_TARGET only. Recheck the signed case against hostLocalHandoff.dispatch and address, the actual origin, current receiver, sessions, safe boundary, authorities and applicable revision/receipt witnesses immediately before commit. A provisional request owner has no campaign authority.",
+          "guard": "Target local owner explicitly acknowledged; prior projection is erased; state/projection revisions current; boundary is safe or handoff is the addressed forced nested prompt; returnContext and pending-command owner match the signed handoff envelope. For handoffType outside HOST_LOCAL_HANDOFF, DEVICE_LIBRARY_SELECTOR, HOST_LOCAL_CANDIDATE and IMPORTED_OWNER_CLAIM, target GM/seat is admitted and authorized. For these signed pre-admission HOST_LOCAL_CANDIDATE paths (initial bootstrap, its same-campaign pre-SUBMIT return, the separate selected owner-safe batch, primary BIND or its continuation), isHostDevice=true, the selected provisional local owner matches the signed handoff target, remains not admitted, and has no player campaign authority. For IMPORTED_OWNER_CLAIM, isHostDevice=true, the selected provisional local owner matches the signed imported candidate owner-claim envelope, remains not admitted, and has no player campaign authority. For DEVICE_LIBRARY_SELECTOR, trusted host installation/device, safe signed boundary, erased prior projection, localOwnerIdOrNull=null, explicitly acknowledged cooperative selector and exact designated profile ID + label are required. The only HOST_LOCAL_CANDIDATE target ACK paths are the initial signed APP-003::CTA::013 bootstrap, the verified same-campaign CMP-009::CTA::004 pre-SUBMIT return, the separate signed APP-003::CTA::003 owner-safe batch, the initial BIND target or its deferred continuation, and the current signed EXISTING_OWNER_LIBRARY. The handoff type, profile label, historical ACK or grant alone never authorizes delivery. At initial APP-003::CTA::013 entry the explicitly selected fresh profile must be empty. Its target ACK verifies the current signed bootstrap address and delivery; no selector, BIND grant or pendingContinuationId is required. CMP-009::CTA::004 may address the returned provisional owner only after its verified signed pre-SUBMIT return, for the same exact profile, campaign and entire original GM origin, without an unreleased scope, current submitted request or in-flight SUBMIT. Issue a new signed targeted handoff and require a new explicit ACK on the current delivery. Previously created own drafts and FINAL remain available; emptiness is not rechecked. The separate signed APP-003::CTA::003 path requires the current GM on this host, exact selected provisional profile and its already selected owner-safe batch of 1..3 distinct current FINAL. Recheck each exact sourceUuid against current membership for that profile, the signed source/return, revisions and addressed delivery; erase the GM projection and require the current explicit target ACK. Retain the original signed dispatch. For both the initial target curtain immediately after BIND and its deferred continuation, ACTIVATE_TARGET requires the erased selector, the exact durable grant target, the current signed pendingContinuationId and an independent explicit target ACK. For HOST_LOCAL_HANDOFF, decision=ACTIVATE_TARGET only. Recheck the signed case against hostLocalHandoff.dispatch and address, the actual origin, current receiver, sessions, safe boundary, authorities and applicable revision/receipt witnesses immediately before commit. A provisional request owner has no campaign authority. For HOST_LOCAL_CANDIDATE with basis EXISTING_OWNER_LIBRARY recheck the new signed address and current membership in existingOwnerLibraryReentry.target at ACTIVATE_TARGET. Only the fresh signed GM return after cancellation or exit accepts RETURN_INITIATOR for the originating GM of campaign B.",
           "hiddenReasonDiagnosticAudience": "GM_QA_ONLY",
           "recomputeTriggers": [
             "action budget",
@@ -163415,11 +163478,11 @@
     "entryConditions": [
       "Существует подписанный TAB_SWITCH, FORCED_INPUT, CONSENT, MASTER_PREDICATE, HOST_LOCAL_CANDIDATE, IMPORTED_OWNER_CLAIM, DEVICE_LIBRARY_SELECTOR, HOST_LOCAL_HANDOFF или CONTROL_LEASE handoff envelope. Восстановленная нейтральная точка на доверенном устройстве допускает PENDING_NEUTRAL_RESUME по непрозрачному идентификатору; переход создаёт текущую подписанную адресную завесу.",
       "Исходная проекция уже удалена из DOM, a11y tree и client cache.",
-      "Для HOST_LOCAL_CANDIDATE или IMPORTED_OWNER_CLAIM выбранный provisional local owner совпадает с envelope, остаётся not admitted и не имеет campaign authority."
+      "Для IMPORTED_OWNER_CLAIM и исходных ветвей HOST_LOCAL_CANDIDATE (fresh bootstrap, BIND и его продолжение) выбранный provisional local owner совпадает с envelope, остаётся not admitted и не имеет campaign authority. На основании EXISTING_OWNER_LIBRARY хост отдельно сверяет текущий адрес кампании и GM, точный профиль и принадлежность FINAL. Выдача библиотеки сама по себе не даёт прав кампании, заявки или controller."
     ],
     "guardStates": [
       "target owner explicitly acknowledges",
-      "ordinary target is admitted/authorized OR HOST_LOCAL_CANDIDATE|IMPORTED_OWNER_CLAIM matches signed provisional owner without campaign authority OR DEVICE_LIBRARY_SELECTOR matches a signed cooperative selection-only envelope with localOwnerIdOrNull=null and no campaign authority OR HOST_LOCAL_HANDOFF matches its host-local signed branch: pre-seat request owner/session, accepted local owner/controller, or sole current GM; the provisional owner receives only their own request and no campaign authority",
+      "Dispatch only by the signed handoffType: require an admitted/authorized target for an ordinary handoffType OR require the signed imported provisional owner without campaign authority for IMPORTED_OWNER_CLAIM OR DEVICE_LIBRARY_SELECTOR matches a signed cooperative selection-only envelope with localOwnerIdOrNull=null and no campaign authority OR HOST_LOCAL_HANDOFF matches its host-local signed branch: pre-seat request owner/session, accepted local owner/controller, or sole current GM; the provisional owner receives only their own request and no campaign authority. For HOST_LOCAL_CANDIDATE evaluate only the current signed path. At initial APP-003::CTA::013 entry the explicitly selected fresh profile must be empty. Its target ACK verifies the current signed bootstrap address and delivery; no selector, BIND grant or pendingContinuationId is required. CMP-009::CTA::004 may address the returned provisional owner only after its verified signed pre-SUBMIT return, for the same exact profile, campaign and entire original GM origin, without an unreleased scope, current submitted request or in-flight SUBMIT. Issue a new signed targeted handoff and require a new explicit ACK on the current delivery. Previously created own drafts and FINAL remain available; emptiness is not rechecked. The separate signed APP-003::CTA::003 path requires the current GM on this host, exact selected provisional profile and its already selected owner-safe batch of 1..3 distinct current FINAL. Recheck each exact sourceUuid against current membership for that profile, the signed source/return, revisions and addressed delivery; erase the GM projection and require the current explicit target ACK. Retain the original signed dispatch. For both the initial target curtain immediately after BIND and its deferred continuation, ACTIVATE_TARGET requires the erased selector, the exact durable grant target, the current signed pendingContinuationId and an independent explicit target ACK. EXISTING_OWNER_LIBRARY verifies the new signed installation/device, campaign, GM and profile address and current owned FINAL at the addressed ACK. The handoff gives no campaign authority.",
       "no unsafe mid-command manual switch",
       "nested prompt reserves no action/OE/item/dose",
       "returnContext and returnFormId are server-signed and preserved",
@@ -163435,7 +163498,7 @@
       "controller": "Показывает только данные и команды, разрешённые effectiveController и controllerSeat. В обеих адресных завесах доступны только targetProfileLabel и targetLocalOwnerId адресата; служебный pendingContinuationId используется для продолжения. Имена персонажей, их UUID, арты, GM и прежняя проекция исключены.",
       "observer": "Скрывает GM-only и actor-invisible данные до сериализации player projection."
     },
-    "purpose": "Полноэкранная privacy curtain очищает предыдущую проекцию до player↔player, GM↔player, provisional HOST_LOCAL_CANDIDATE, IMPORTED_OWNER_CLAIM и forced handoff; следующая проекция выдаётся только после явного «Готов открыть» её локального владельца. Обычный target уже admitted/authorized, но host provisional candidate и imported owner claimant подтверждают только владение подписанным кандидатом и не получают campaign authority; вложенный prompt затем возвращает инициатора без раннего резерва. Для существующих FINAL раздельные текущие подписи и явные ACK адресуют сначала DEVICE_LIBRARY_SELECTOR, затем HOST_LOCAL_CANDIDATE. При адресной завесе до ACK видны только служебные метка и точный ID. HOST_LOCAL_HANDOFF допускает отдельно подтверждённые адреса локального заявителя без места, реального допущенного controller и единственного GM. До ACK доступны только допустимые нейтральные метаданные адресата.",
+    "purpose": "Полноэкранная privacy curtain очищает предыдущую проекцию до player↔player, GM↔player, provisional HOST_LOCAL_CANDIDATE, IMPORTED_OWNER_CLAIM и forced handoff; следующая проекция выдаётся только после явного «Готов открыть» её локального владельца. Обычный target уже admitted/authorized, но host provisional candidate и imported owner claimant подтверждают только владение подписанным кандидатом и не получают campaign authority; вложенный prompt затем возвращает инициатора без раннего резерва. При первичной привязке неназначенных FINAL раздельные текущие подписи и явные ACK адресуют сначала DEVICE_LIBRARY_SELECTOR, затем HOST_LOCAL_CANDIDATE. Для повторного входа EXISTING_OWNER_LIBRARY хост сразу выдаёт новую адресованную шторку в текущей кампании. Только явный ACK выбранного профиля открывает его библиотеку; новый selector ACK для этого входа не требуется. При адресной завесе до ACK видны только служебные метка и точный ID. HOST_LOCAL_HANDOFF допускает отдельно подтверждённые адреса локального заявителя без места, реального допущенного controller и единственного GM. До ACK доступны только допустимые нейтральные метаданные адресата.",
     "qaScenarioIds": [
       "QA-FORM-PLY-030",
       "QA-CHANGE-PLY-030",
@@ -163448,7 +163511,10 @@
       "QA-HOST-LOCAL-HANDOFF-TERMINAL",
       "QA-HOST-LOCAL-HANDOFF-PRE-SUBMIT",
       "QA-HOST-LOCAL-HANDOFF-POST-START-BLOCKED",
-      "QA-HOST-LOCAL-HANDOFF-REPLAY-PRIVACY"
+      "QA-HOST-LOCAL-HANDOFF-REPLAY-PRIVACY",
+      "QA-LOCAL-OWNER-REENTRY-LIFETIME",
+      "QA-LOCAL-OWNER-REENTRY-CONFLICT",
+      "QA-LOCAL-OWNER-REENTRY-PRIVACY"
     ],
     "references": {
       "abilityIds": [],
@@ -163513,7 +163579,7 @@
       "commandId",
       "handoffReceiptId (committed ACK output; absent before first ACK)",
       "SELECTOR_CURTAIN input: current signedReturnContext, exact targetLocalOwnerId + targetProfileLabel, priorProjectionErased and localOwnerIdOrNull=null. selectorHandoffReceiptId is returned only by explicit selector ACK.",
-      "TARGET_CURTAIN input: current signed addressed profile after purge. Only a committed grant handoff has pendingContinuationId; fresh empty owner has none. Target ACK yields its own receipt; cancel before bind or Later before target ACK never yields a target receipt.",
+      "TARGET_CURTAIN input: current signed addressed profile after purge. Only a committed grant handoff has pendingContinuationId; fresh empty owner has none. Target ACK yields its own receipt; cancel before bind or Later before target ACK never yields a target receipt. Empty is checked only on initial ::013 entry. A resumed provisional profile needs a verified current CMP-009::CTA::004 same-campaign pre-SUBMIT return and can retain its own FINAL. A preselected 1..3 owner-safe batch follows its separate signed ::003 path. EXISTING_OWNER_LIBRARY has neither a selector receipt nor a pendingContinuationId; verify the new campaign/GM address and current membership before ACK.",
       "PENDING_NEUTRAL_RESUME input: retained pendingContinuationId plus target label/ID. SIGNED_GM_RETURN uses the current signed return only; ordinary tab switch, forced prompt and imported claim keep their original inputs.",
       "HOST_LOCAL_HANDOFF input before ACK: current signed case, safe source, erased private context, exact address and actual conditional witnesses from hostLocalHandoff.address. The command creates handoffReceiptId only on commit. The curtain shows targetProfileLabel and targetLocalOwnerId, or GM designation and opaque addressed confirmation only."
     ],
@@ -163530,7 +163596,7 @@
       "SELECTOR_CURTAIN": "neutral curtain; all private projections erased; address exact targetProfileLabel + targetLocalOwnerId; no FINAL/candidate metadata",
       "SIGNED_GM_RETURN": "safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved",
       "TARGET_CONTEXT_ACTIVE": "Только целевая проекция и вложенный prompt доступны для ввода.",
-      "TARGET_CURTAIN": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority",
+      "TARGET_CURTAIN": "Signed addressed HOST_LOCAL_CANDIDATE after prior private projection purge; exact targetProfileLabel and targetLocalOwnerId, no player campaign authority. The only HOST_LOCAL_CANDIDATE target ACK paths are the initial signed APP-003::CTA::013 bootstrap, the verified same-campaign CMP-009::CTA::004 pre-SUBMIT return, the separate signed APP-003::CTA::003 owner-safe batch, the initial BIND target or its deferred continuation, and the current signed EXISTING_OWNER_LIBRARY. The handoff type, profile label, historical ACK or grant alone never authorizes delivery. At initial APP-003::CTA::013 entry the explicitly selected fresh profile must be empty. Its target ACK verifies the current signed bootstrap address and delivery; no selector, BIND grant or pendingContinuationId is required. CMP-009::CTA::004 may address the returned provisional owner only after its verified signed pre-SUBMIT return, for the same exact profile, campaign and entire original GM origin, without an unreleased scope, current submitted request or in-flight SUBMIT. Issue a new signed targeted handoff and require a new explicit ACK on the current delivery. Previously created own drafts and FINAL remain available; emptiness is not rechecked. The separate signed APP-003::CTA::003 path requires the current GM on this host, exact selected provisional profile and its already selected owner-safe batch of 1..3 distinct current FINAL. Recheck each exact sourceUuid against current membership for that profile, the signed source/return, revisions and addressed delivery; erase the GM projection and require the current explicit target ACK. Retain the original signed dispatch. For both the initial target curtain immediately after BIND and its deferred continuation, ACTIVATE_TARGET requires the erased selector, the exact durable grant target, the current signed pendingContinuationId and an independent explicit target ACK. Only the initial post-BIND target and its deferred continuation have a current signed pendingContinuationId. EXISTING_OWNER_LIBRARY requires a currently owned FINAL and the verified new signed address of the originating GM and campaign.",
       "WAITING_FOR_LOCAL_OWNER": "Ожидается явное подтверждение целевого владельца; тайм-аут не считается согласием.",
       "active": "Компонент применён в допустимом контексте.",
       "conflict": "Конфликт revision либо повторное использование ID с другим payload отклонены до расхода.",
@@ -163581,13 +163647,13 @@
       },
       {
         "from": "APP-003",
-        "guard": "projectionRole=GM; activeRole=GM; isHostDevice=true; 1<=selectedCandidateIds count<=3; provisional local owner selected; GM projection erased before PLY-030; no player campaign authority",
+        "guard": "projectionRole=GM; activeRole=GM; isHostDevice=true; 1<=selectedCandidateIds count<=3; provisional local owner selected; GM projection erased before PLY-030; no player campaign authority The separate signed APP-003::CTA::003 path requires the current GM on this host, exact selected provisional profile and its already selected owner-safe batch of 1..3 distinct current FINAL. Recheck each exact sourceUuid against current membership for that profile, the signed source/return, revisions and addressed delivery; erase the GM projection and require the current explicit target ACK. Retain the original signed dispatch.",
         "kind": "normative",
         "trigger": "Передать host локальному кандидату через privacy curtain"
       },
       {
         "from": "CMP-009",
-        "guard": "host provisional candidate selected; prior GM projection erased",
+        "guard": "host provisional candidate selected; prior GM projection erased For the pre-SUBMIT return of a previously acknowledged provisional owner: CMP-009::CTA::004 may address the returned provisional owner only after its verified signed pre-SUBMIT return, for the same exact profile, campaign and entire original GM origin, without an unreleased scope, current submitted request or in-flight SUBMIT. Issue a new signed targeted handoff and require a new explicit ACK on the current delivery. Previously created own drafts and FINAL remain available; emptiness is not rechecked. This action cannot reuse an old ACK or grant as a fresh delivery.",
         "kind": "normative",
         "trigger": "Передать устройство локальному кандидату"
       },
@@ -163761,13 +163827,13 @@
       },
       {
         "from": "PLY-030",
-        "guard": "Current signed SELECTOR_CURTAIN before selector ACK or fresh HOST_LOCAL_CANDIDATE TARGET_CURTAIN before target ACK; no committed binding; erase all private buffers and follow exact signed GM/neutral return without selector/target ACK. No binding or access grant.",
+        "guard": "For the selector or the fresh bootstrap lineage, including its verified same-campaign CMP-009::CTA::004 pre-SUBMIT return with retained own FINAL: Current signed SELECTOR_CURTAIN before selector ACK or fresh HOST_LOCAL_CANDIDATE TARGET_CURTAIN before target ACK; no committed binding; erase all private buffers and follow exact signed GM/neutral return without selector/target ACK. No binding or access grant. For EXISTING_OWNER_LIBRARY before target ACK use only the current signed campaign B handoff; purge private buffers and issue the separate signed GM return acknowledged via PLY-030::CTA::006. The existing membership survives. A post-BIND TARGET with a pendingContinuationId keeps its separate Later path.",
         "kind": "normative",
         "trigger": "Отменить передачу до подтверждения"
       },
       {
         "from": "APP-003",
-        "guard": "PLAYER, fresh target ACK current and targetLocalOwnerId matches this profile; own APP-004 or pre-submit NET-003 signed return to APP-003; SUBMIT has not committed; no in-flight command; preserve profile, checkpoints and FINAL. TARGET_OWNER_ADMISSION fresh branch only: zero to three (0..3) currently selected own FINAL, including the empty library; exact acknowledged profile and its current signed bootstrap return. The separate APP-003::CTA::009 still requires 1..3 distinct current own FINAL. No selector, grant-based admission, request or seat authority. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+        "guard": "For the B19 fresh bootstrap return: PLAYER, fresh target ACK current and targetLocalOwnerId matches this profile; own APP-004 or pre-submit NET-003 signed return to APP-003; SUBMIT has not committed; no in-flight command; preserve profile, checkpoints and FINAL. TARGET_OWNER_ADMISSION fresh branch only: zero to three (0..3) currently selected own FINAL, including the empty library; exact acknowledged profile and its current signed bootstrap return. The separate APP-003::CTA::009 still requires 1..3 distinct current own FINAL. No selector, grant-based admission, request or seat authority. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain. For EXISTING_OWNER_LIBRARY require current signed target ACK, exact profile and permitted own selection of 0..3 FINAL, including zero, after APP-004::CTA::002. No submitted or in-flight SUBMIT, unknown outcome or unsafe boundary. Purge the owner projection, issue the exact signed GM return in campaign B; only PLY-030::CTA::006 with RETURN_INITIATOR restores CMP-009. No new membership, continuation or application.",
         "kind": "normative",
         "trigger": "Вернуть устройство мастеру"
       },
@@ -163806,6 +163872,12 @@
         "guard": "GM, sole current authority, explicitly selected original local HOST_LOCAL_CANDIDATE request and exact targetLocalOwnerId. Verify original ACK, tab, network scope, technicalSessionId, requestId, SUBMIT receipt and current requestRevision. Deliver only PENDING/IN_REVIEW/preliminary REJECTED to NET-005, published own proposal to NET-027 or confirmed GM_REJECTED/PLAYER_DECLINED to NET-007. Derive selectable recipients from durable local SUBMIT and verified outcomes, including final decisions already removed from the live PENDING queue; retain addressed delivery after restart. GM sees only permitted profile label/profile ID and request ID, never the candidate’s private diff. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
         "kind": "normative",
         "trigger": "Передать устройство владельцу заявки"
+      },
+      {
+        "from": "APP-003",
+        "guard": "EXISTING_OWNER_LIBRARY; explicit exact profile selection in signed NEUTRAL_PROFILE_SETUP after CMP-009::CTA::005; same current trusted installation/device; at least one current immutable FINAL owned by this profile through recorded creation or BIND, including zero unassigned FINAL; no pending continuation for this profile in this campaign. Single current GM of campaign B, verified release/completion of campaign A on a campaign change, safe boundary, current revisions, no unresolved operation or outstanding curtain. Sign a fresh HOST_LOCAL_CANDIDATE handoffId and return context for campaign B, erase prior private data and subscriptions before PLY-030. No BIND, membership change, continuation, admission, copy, tab or controller.",
+        "kind": "normative",
+        "trigger": "Передать устройство владельцу сохранённой библиотеки"
       }
     ],
     "transitionsOut": [
@@ -163828,7 +163900,7 @@
         "trigger": "Подтвердить получение устройства для выбора листов"
       },
       {
-        "guard": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=ACTIVATE_TARGET; explicit addressed target ACK, only exact owner library or fresh empty library",
+        "guard": "Purge the prior private projection. At initial APP-003::CTA::013 entry the explicitly selected fresh profile must be empty. Its target ACK verifies the current signed bootstrap address and delivery; no selector, BIND grant or pendingContinuationId is required. CMP-009::CTA::004 may address the returned provisional owner only after its verified signed pre-SUBMIT return, for the same exact profile, campaign and entire original GM origin, without an unreleased scope, current submitted request or in-flight SUBMIT. Issue a new signed targeted handoff and require a new explicit ACK on the current delivery. Previously created own drafts and FINAL remain available; emptiness is not rechecked. For both the initial target curtain immediately after BIND and its deferred continuation, ACTIVATE_TARGET requires the erased selector, the exact durable grant target, the current signed pendingContinuationId and an independent explicit target ACK. For EXISTING_OWNER_LIBRARY require the new signed campaign/GM address, installation/device, exact selected profile, basis, current membership of a FINAL, state/projection revisions, addressed delivery and priorProjectionErased. Only a current explicit ACTIVATE_TARGET ACK opens that recipient’s APP-004. The separate signed APP-003::CTA::003 owner-safe batch retains its existing dispatch. No ACK creates membership or campaign authority.",
         "kind": "workflow-command",
         "to": "APP-004",
         "trigger": "Подтвердить получение устройства указанным профилем"
@@ -163840,7 +163912,7 @@
         "trigger": "Позже"
       },
       {
-        "guard": "safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=RETURN_INITIATOR current signed GM receipt, then GM-only projection",
+        "guard": "safe current server-signed return to original GM context; selector and player payload purged before GM ACK; pending-command ownership preserved; UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK decision=RETURN_INITIATOR current signed GM receipt, then GM-only projection For EXISTING_OWNER_LIBRARY cancellation or exit, independently acknowledge the current signed return to the originating sole GM and CMP-009 of campaign B; a former GM session or historical ACK cannot take delivery.",
         "kind": "workflow-command",
         "to": "CMP-009",
         "trigger": "Подтвердить возврат устройства мастеру"
@@ -163852,7 +163924,7 @@
         "trigger": "Продолжить передачу: [метка + идентификатор]"
       },
       {
-        "guard": "Current signed SELECTOR_CURTAIN before selector ACK or fresh HOST_LOCAL_CANDIDATE TARGET_CURTAIN before target ACK; no committed binding; erase all private buffers and follow exact signed GM/neutral return without selector/target ACK. No binding or access grant.",
+        "guard": "For the selector or the fresh bootstrap lineage, including its verified same-campaign CMP-009::CTA::004 pre-SUBMIT return with retained own FINAL: Current signed SELECTOR_CURTAIN before selector ACK or fresh HOST_LOCAL_CANDIDATE TARGET_CURTAIN before target ACK; no committed binding; erase all private buffers and follow exact signed GM/neutral return without selector/target ACK. No binding or access grant. For EXISTING_OWNER_LIBRARY before target ACK use only the current signed campaign B handoff; purge private buffers and issue the separate signed GM return acknowledged via PLY-030::CTA::006. The existing membership survives. A post-BIND TARGET with a pendingContinuationId keeps its separate Later path.",
         "kind": "normative",
         "to": "PLY-030",
         "trigger": "Отменить передачу до подтверждения"

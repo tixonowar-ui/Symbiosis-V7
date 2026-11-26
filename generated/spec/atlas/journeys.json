@@ -854,7 +854,7 @@
       "Четвёртый персонаж запрещён с человеческим объяснением.",
       "Manual switching blocked во время команды/реакции/серии, кроме предусмотренной безопасной отмены.",
       "Отмена до привязки возвращает через подписанную GM-завесу с нулём grant. «Позже» после привязки сохраняет grant и адресное продолжение.",
-      "Пустой профиль открывает обычную APP-004 через адресный HOST_LOCAL_CANDIDATE ACK; известный owner-safe batch и импортированный claim сохраняют отдельные signed пути.",
+      "Пустой профиль открывает обычную APP-004 через адресный HOST_LOCAL_CANDIDATE ACK; известный owner-safe batch и импортированный claim сохраняют отдельные signed пути. Пустота обязательна только при первом входе ::013. После проверенного подписанного pre-SUBMIT возврата CMP-009::CTA::004 в той же кампании выдаёт новую адресованную передачу тому же профилю с тем же полным исходным GM-контекстом; собственные созданные FINAL сохраняются. Для отдельного APP-003::CTA::003 мастер выбирает подтверждённый owner-safe batch из 1–3 текущих FINAL точного профиля. Старый ACK или один вид HOST_LOCAL_CANDIDATE не открывает ни один из этих путей.",
       "До commit из NEUTRAL_PROFILE_SETUP, SELECTOR_BIND_CONFIRM, непринятой SELECTOR_CURTAIN или свежей TARGET_CURTAIN можно отменить без выбора/создания профиля, ACK селектора/адресата или открытия библиотеки. Стереть private buffers и вернуться к точной signedReturnContext через нейтральную завесу. GM-проекция выдаётся только после своего адресного ACK. Отмена не пишет профиль, membership, grant, binding/selector/target receipt, character/copy, seat или reserve; ранее явно созданный пустой профиль сохраняется."
     ],
     "coverageStatus": "COVERED",
@@ -1037,7 +1037,7 @@
           "CMP-009",
           "APP-003"
         ],
-        "guards": "isHostDevice=true; active master at safe signed boundary, including GM_ONLY with zero PCs; erase all GM payload, DOM, a11y, hotkeys, cache before neutral profile metadata; no FINAL rows",
+        "guards": "isHostDevice=true; active master at safe signed boundary, including GM_ONLY with zero PCs; erase all GM payload, DOM, a11y, hotkeys, cache before neutral profile metadata; no FINAL rows В нейтральной APP-003 видны метка и ID профиля. Доступность действия сообщает единственный дополнительный факт: у выбранного профиля есть подходящий FINAL. Число, имена, UUID и листы остаются закрыты до ACK.",
         "result": "Профиль с явно введённой непустой меткой получает постоянный локальный идентификатор. Профиль, привязка и точная пара метки с идентификатором сохраняются на этой установке и устройстве после закрытия сессии, перезапуска и смены кампании. Одноимённые профили различаются по targetLocalOwnerId. Метку вводит человек; имя персонажа и сама метка не удостоверяют владельца. Сброс installation/device identity не передаёт прежние права.",
         "state": "NEUTRAL_PROFILE_SETUP"
       },
@@ -1066,7 +1066,7 @@
           "PLY-030",
           "APP-004"
         ],
-        "guards": "signed addressed HOST_LOCAL_CANDIDATE after selector purge; exact targetProfileLabel + targetLocalOwnerId; current pendingContinuationId and grant or signed fresh empty-owner bootstrap; no player campaign authority",
+        "guards": "Signed addressed HOST_LOCAL_CANDIDATE after prior private projection purge; exact targetProfileLabel and targetLocalOwnerId, no player campaign authority. The only HOST_LOCAL_CANDIDATE target ACK paths are the initial signed APP-003::CTA::013 bootstrap, the verified same-campaign CMP-009::CTA::004 pre-SUBMIT return, the separate signed APP-003::CTA::003 owner-safe batch, the initial BIND target or its deferred continuation, and the current signed EXISTING_OWNER_LIBRARY. The handoff type, profile label, historical ACK or grant alone never authorizes delivery. At initial APP-003::CTA::013 entry the explicitly selected fresh profile must be empty. Its target ACK verifies the current signed bootstrap address and delivery; no selector, BIND grant or pendingContinuationId is required. CMP-009::CTA::004 may address the returned provisional owner only after its verified signed pre-SUBMIT return, for the same exact profile, campaign and entire original GM origin, without an unreleased scope, current submitted request or in-flight SUBMIT. Issue a new signed targeted handoff and require a new explicit ACK on the current delivery. Previously created own drafts and FINAL remain available; emptiness is not rechecked. The separate signed APP-003::CTA::003 path requires the current GM on this host, exact selected provisional profile and its already selected owner-safe batch of 1..3 distinct current FINAL. Recheck each exact sourceUuid against current membership for that profile, the signed source/return, revisions and addressed delivery; erase the GM projection and require the current explicit target ACK. Retain the original signed dispatch. For both the initial target curtain immediately after BIND and its deferred continuation, ACTIVATE_TARGET requires the erased selector, the exact durable grant target, the current signed pendingContinuationId and an independent explicit target ACK. Only the initial post-BIND target and its deferred continuation have a current signed pendingContinuationId. EXISTING_OWNER_LIBRARY requires a currently owned FINAL and the verified new signed address of the originating GM and campaign.",
         "result": "Владелец устройства выбирает точный профиль либо вводит метку и явно создаёт профиль. Обе адресные завесы показывают targetProfileLabel вместе с targetLocalOwnerId. На подтверждении рядом с этой парой перечислены выбранные листы; передача меняет будущий доступ к библиотеке. Экран GM и нейтральное продолжение показывают только служебные данные назначения.",
         "state": "TARGET_CURTAIN"
       },
@@ -1087,7 +1087,7 @@
           "NET-004",
           "NET-017"
         ],
-        "guards": "isHostDevice=true; current HOST_LOCAL_CANDIDATE ACK identifies exact target owner. APP-003::CTA::009 requires 1..3 distinct permitted own FINAL at the current revisions for ordinary #171/#172 admission. Only a fresh acknowledged profile with its current signed bootstrap GM return before SUBMIT may enter with 0..3 selected own FINAL to use APP-003::CTA::014. No in-flight command, pre-submit grant or seat. Selector and grant-based admission have no such return. HOST_LOCAL_CANDIDATE: listing, direct open, NET-003 reselection and NET-004 submit each recheck the current acknowledged targetLocalOwnerId and durable membership for every exact sourceUuid before reading or writing. A foreign UUID or stale grant is rejected.",
+        "guards": "isHostDevice=true; exact current HOST_LOCAL_CANDIDATE target ACK; APP-003::CTA::009 requires 1..3 distinct permitted own FINAL at current revisions. Before SUBMIT, APP-003::CTA::014 accepts 0..3 own FINAL only for the fresh signed bootstrap return or for an acknowledged EXISTING_OWNER_LIBRARY with its current signed return to the sole GM of this campaign. Neither the DEVICE_LIBRARY_SELECTOR nor the primary BIND/continuation admission obtains this return. No committed or in-flight SUBMIT, unknown outcome or unresolved operation. HOST_LOCAL_CANDIDATE: listing, direct open, NET-003 reselection and NET-004 submit each recheck the current acknowledged targetLocalOwnerId and durable membership for every exact sourceUuid before reading or writing. A foreign UUID or stale grant is rejected.",
         "result": "После ACK адресат видит только собственную библиотеку, в том числе точный предоставленный набор. В APP-003 выбирает свои конкретные листы и через NET-003/NET-004 проходит обычный #171/#172 с рассмотрением GM. Реальный ACCEPT receiptId связан с proposalChecksum и proposalRevision. В fullCampaignCopyDiffs запись sourceUuid → campaignCharacterIdOrNull связывает membership владельца с принятой copies[].campaignCharacterId, затем с controllerBindingOrNull.{deviceId,localControllerSeatId,inputLaneId}. Без квитанции, подтверждённой копии или привязки контроллера вкладка не создаётся; membership оригинала сохраняется. Общий максимум три допущенные PC-вкладки и один активный контекст GM или PC. Для другого профиля требуется отдельная передача. Пустой профиль сохраняет создание CHR-001 через обычную APP-004; GM_ONLY с нулём PC, обычный ПК и известный owner-safe batch сохраняют свои ветки.",
         "state": "TARGET_OWNER_ADMISSION"
       },
@@ -1144,6 +1144,17 @@
         "guards": "hostLocalHandoff.dispatch: POST_START_BLOCKED_GM, POST_START_BLOCKED_PLAYER. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
         "result": "После Start заблокированный владелец получает только собственное лобби, мастер — подтверждённую мирную сцену.",
         "state": "HOST_LOCAL_BLOCKED"
+      },
+      {
+        "formIds": [
+          "CMP-009",
+          "APP-003",
+          "PLY-030",
+          "APP-004"
+        ],
+        "guards": "EXISTING_OWNER_LIBRARY; explicit exact profile selection in signed NEUTRAL_PROFILE_SETUP after CMP-009::CTA::005; same current trusted installation/device; at least one current immutable FINAL owned by this profile through recorded creation or BIND, including zero unassigned FINAL; no pending continuation for this profile in this campaign. Single current GM of campaign B, verified release/completion of campaign A on a campaign change, safe boundary, current revisions, no unresolved operation or outstanding curtain. Sign a fresh HOST_LOCAL_CANDIDATE handoffId and return context for campaign B, erase prior private data and subscriptions before PLY-030. No BIND, membership change, continuation, admission, copy, tab or controller.",
+        "result": "До ACK только нейтральный адрес. ACTIVATE_TARGET открывает APP-004 точного владельца. При отмене до ACK или после просмотра с 0..3 выбранными листами подписанный RETURN_INITIATOR возвращает CMP-009 мастеру кампании Б.",
+        "state": "EXISTING_OWNER_LIBRARY"
       }
     ],
     "title": "0–3 локальных игрока и игрок на компьютере мастера",

@@ -36,7 +36,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'PLY-030',
-    sha256: '521b14cc875348b5d886def33b38333acb99f7e5bde72fed4982e202fa48d5fe',
+    sha256: '72ff40fd26fae74f1c9ff7110e7ece5cea42109657a45ee7437b1413e97b8fb8',
   },
   {
     target: 'forms',
@@ -162,7 +162,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-FORM-PLY-030',
-    sha256: '759bd9cfa1a57bf5f945efa63cbc7ff95079cc31f926e62528365d10c54267dc',
+    sha256: '5c569036430f93fd2706b69731b47de03a239da47d7da15089ec7f4f55337594',
   },
   {
     target: 'qaScenarios',
@@ -282,7 +282,7 @@ const OBJECT_SEALS = [
     target: 'qaScenarios',
     key: 'qaId',
     id: 'QA-WORKFLOW-UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK',
-    sha256: 'a57485b83de4de24f1f5ba3d1e07db22d3bb3ed04a04b36421a40e6b26324536',
+    sha256: 'ba782379715cfa6a7859e9c9182b013810245736f7ad116cafc914b38de66645',
   },
   {
     target: 'qaScenarios',
@@ -312,7 +312,7 @@ const OBJECT_SEALS = [
     target: 'workflowCommands',
     key: 'commandId',
     id: 'UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK',
-    sha256: 'a269aa6c75a06344390a3389462b8d1ec0080390e249b95d17f85781d75d83d6',
+    sha256: '7ae6a5c721df736ade1f317723f83669d5fffb96c7ed4959f6e1ca43dd476015',
   },
   {
     target: 'workflowCommands',
@@ -324,17 +324,17 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '36bac9871f785c8366caea799d813ed92b168e3617618b8548623a737512b7c0',
+    sha256: 'bf748a085136c77d7af91433c6bea36f4b2484fbc1df41b06fa2f9c83e062819',
   },
   {
     key: 'transitions',
-    sha256: '1260e113940a92e550c40315b81501d010a1f97ca4332e052d58f07df01891a4',
+    sha256: '21de208d98d9b353f1e7bf3a4cf62afa4222e503768adf4e9082c7b3c2d41563',
   },
   {
     // ADR 0092 / #284 changes only the intersecting SENTIENT PATCH witness.
     // ADR0094 / #288 changes only intersecting ENM017 PATCH/NEW-VERSION witnesses.
     key: 'registryCoverage',
-    sha256: 'ddc491e28d813ce488312307410bf863318ac92148d0ce027a4daf6ec01471da',
+    sha256: '2e2415528c3b661ea6a83fb3275d375b41d42f95a43230c7152e3b7e556ed534',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -352,7 +352,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### PLY-030 —',
-    sha256: '45a98eb07c7cbefc46d624e9b3e49ad2d19d7341604e30272ade38d11502d844',
+    sha256: 'a8e39750f947dda636d11149d4c5c4010ba3f563bc97ebc24f6640096326a9f9',
   },
   {
     prefix: '### NPC-003 —',
@@ -438,7 +438,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-FORM-PLY-030 |',
-    sha256: '1aa88cc9471cc22db34a1a1bb9020250b9963bee7a898069928abda34b5f6ea2',
+    sha256: '9c6084dcad2fa4c7df14129ba1eb69f38ce1a0174206c628bf0d9c056ddfbfc4',
   },
   {
     prefix: '| QA-CHANGE-PLY-030 |',
@@ -518,7 +518,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK |',
-    sha256: '0a59abb2aa106831d28b1cbe523bba6bb41ebda6eaeca0d76aa202af86f24992',
+    sha256: '05f1c5553ce127a4e19d884d80011eadcb6b69d89d3473ed77e3a04d7aff21c3',
   },
   {
     prefix: '| QA-WORKFLOW-UI-CMD-CAMPAIGN-INITIAL-TIME-SET |',
@@ -539,7 +539,7 @@ const MARKDOWN_LINES = [
   {
     prefix:
       '| UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK | Подтвердить локальную privacy-передачу активного контекста |',
-    sha256: '71bfdc9455eea1ee02c7bf12599eab85552d933b65bb7d03db438a3fccfa79f8',
+    sha256: 'daf7fb3cc01dfcd946b63667acdcfcf4f283421938c9b01a25185d6834bb1d5f',
   },
   {
     prefix: '| UI-CMD-CAMPAIGN-INITIAL-TIME-SET | Сохранить начальное виртуальное время кампании |',

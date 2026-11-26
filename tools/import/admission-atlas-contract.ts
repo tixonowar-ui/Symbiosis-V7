@@ -96,7 +96,7 @@ const OBJECT_SEALS = [
     target: 'forms',
     key: 'id',
     id: 'PLY-030',
-    sha256: '521b14cc875348b5d886def33b38333acb99f7e5bde72fed4982e202fa48d5fe',
+    sha256: '72ff40fd26fae74f1c9ff7110e7ece5cea42109657a45ee7437b1413e97b8fb8',
   },
   {
     target: 'forms',
@@ -138,7 +138,7 @@ const OBJECT_SEALS = [
     target: 'coverageRequirements',
     key: 'requirementId',
     id: 'REQ-010',
-    sha256: '8f653b72cb6b04f1e887ba46a027d458392854270e223583edf756047de81abb',
+    sha256: '40de3b8c4467ba5626a4752d4dae7983da16b420da00e3a716275d47a7d8e7d9',
   },
   {
     target: 'coverageRequirements',
@@ -258,11 +258,11 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'counts',
-    sha256: '36bac9871f785c8366caea799d813ed92b168e3617618b8548623a737512b7c0',
+    sha256: 'bf748a085136c77d7af91433c6bea36f4b2484fbc1df41b06fa2f9c83e062819',
   },
   {
     key: 'transitions',
-    sha256: '1260e113940a92e550c40315b81501d010a1f97ca4332e052d58f07df01891a4',
+    sha256: '21de208d98d9b353f1e7bf3a4cf62afa4222e503768adf4e9082c7b3c2d41563',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
@@ -320,7 +320,7 @@ const MARKDOWN_SECTIONS = [
   },
   {
     prefix: '### PLY-030 —',
-    sha256: '45a98eb07c7cbefc46d624e9b3e49ad2d19d7341604e30272ade38d11502d844',
+    sha256: 'a8e39750f947dda636d11149d4c5c4010ba3f563bc97ebc24f6640096326a9f9',
   },
   {
     prefix: '### GM-019 —',
@@ -350,7 +350,7 @@ const MARKDOWN_LINES = [
   },
   {
     prefix: '| REQ-010 | Первоначальное заявление local player на host до player tab |',
-    sha256: '11d0e03142cb940a018ecb8bba2e22990c3337c0b6313d7d23546334ba6100d5',
+    sha256: '9257e711ae14fa3f632e1dfc6abd388c210e87cfe2d4a0dd34bcd4a3ff3325f2',
   },
   {
     prefix: '| REQ-021 | GM inventory give/remove/edit/weapon/story/repair/consumables |',

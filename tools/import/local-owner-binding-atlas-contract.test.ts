@@ -300,6 +300,7 @@ describe('ADR 0095 generated source contracts', () => {
     const read = (file: string): JsonValue =>
       JSON.parse(readFileSync(join(SPEC_DIR, 'atlas', file + '.json'), 'utf8')) as JsonValue;
     const generated: JsonObject = {
+      atlasVersion: (read('meta') as JsonObject)['atlasVersion'],
       counts: (read('meta') as JsonObject)['counts'],
       forms: Object.values(read('forms-by-id') as Record<string, JsonObject>),
       transitions: read('transitions'),

@@ -31,6 +31,11 @@ import { validateQuestionRefs } from './question-refs.js';
 import { validateNpcInitialStateContracts } from './npc-initial-contract.js';
 import { generatedAtlasContractSnapshot } from './atlas-contract-snapshot.js';
 import {
+  assertAdr0097ExistingOwnerLibrary,
+  assertAdr0097ExistingOwnerLibraryMarkdown,
+  assertExistingOwnerLibraryRenderer,
+} from '../import/existing-owner-library-atlas-contract.js';
+import {
   assertAdr0096HostLocalHandoff,
   assertAdr0096HostLocalMarkdown,
   assertHostLocalHandoffRenderer,
@@ -358,6 +363,7 @@ try {
   );
 }
 const generatedAtlas = {
+  atlasVersion: atlasMeta?.['atlasVersion'],
   counts: atlasMeta?.['counts'],
   forms: formRows,
   transitions: transitionRows,
@@ -412,6 +418,29 @@ try {
   report(
     'atlas host-local handoff',
     'ADR 0096',
+    cause instanceof Error ? cause.message : 'invalid source or generated output',
+  );
+}
+try {
+  if (suppliedAtlas === undefined) throw new Error('Atlas source could not be loaded');
+  assertAdr0097ExistingOwnerLibrary(suppliedAtlas);
+  const emitted = generatedAtlasContractSnapshot(suppliedAtlas, generatedAtlas);
+  assertAdr0097ExistingOwnerLibrary(emitted);
+  assertAdr0097ExistingOwnerLibraryMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'), suppliedAtlas);
+  const primary = object('atlas/renderer/primary-actions-by-form-id.json');
+  const routes = object('atlas/renderer/transitions-by-form-and-trigger.json');
+  if (rendererFormsById === null || primary === null || routes === null)
+    throw new Error('Missing owner-library renderer catalogue, primary actions or indexed routes');
+  assertExistingOwnerLibraryRenderer(
+    emitted,
+    rendererFormsById as ImportJsonObject,
+    primary as ImportJsonObject,
+    routes as ImportJsonObject,
+  );
+} catch (cause) {
+  report(
+    'atlas existing owner library',
+    'ADR 0097',
     cause instanceof Error ? cause.message : 'invalid source or generated output',
   );
 }

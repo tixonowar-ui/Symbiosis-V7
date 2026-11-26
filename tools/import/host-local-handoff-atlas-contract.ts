@@ -6,6 +6,7 @@ import {
   asString,
   asStringArray,
   jsonSha256,
+  ownerAtlasSeal,
   type JsonObject,
   type JsonValue,
 } from './lib/json.js';
@@ -36,20 +37,28 @@ const CASE_ORDER = [
 ] as const;
 const SECTION_SHA256 = {
   source: '0dcf26ac5d862afe350c5a8de9de99d615c9cde2d4ad949e0834a27e33b3e84d',
-  actionGuards: '99654720a434f33ab7cf1c305afe593353a9dfdf3564571ca2c49f5b7534e765',
+  actionGuards: {
+    b19: '99654720a434f33ab7cf1c305afe593353a9dfdf3564571ca2c49f5b7534e765',
+    b20: 'f4c9f1761a95611a65b9c9cbef27a96decf350b9ce94c87cec79f625fe47cf2a',
+  },
   dispatch: '92929189b204962f0d2ebbc33a2b7c77c0b203341b442e1701a0f3aac19b38d2',
   address: 'f039c7dd6663a5a59dcd48ac37cc760aa79c42a251e8a66cab039e0c99cf95a5',
   safety: 'c88994f28bc7f07b4665b284e68cb54fbdf6f6a04c98336cdb512eb61edee12a',
   replay: '0e5cd85c21381819e0c178cf43ca186f867541905c3876e2ceb434ed526ae3e8',
 } as const;
 
-export function assertHostLocalHandoffDeclaration(value: JsonValue | undefined): JsonObject {
+export function assertHostLocalHandoffDeclaration(
+  value: JsonValue | undefined,
+  version: JsonValue | undefined = '1.25',
+): JsonObject {
+  if (version !== '1.24' && version !== '1.25')
+    fail(WHERE, 'host-local handoff is absent from this release');
   const declaration = asObject(value, WHERE, GLOBAL);
   if (!isDeepStrictEqual(Object.keys(declaration).sort(), Object.keys(SECTION_SHA256).sort()))
     fail(WHERE, GLOBAL + ' has missing or unknown sections');
   for (const [name, digest] of Object.entries(SECTION_SHA256)) {
     const section = declaration[name];
-    if (section === undefined || jsonSha256(section) !== digest)
+    if (section === undefined || jsonSha256(section) !== ownerAtlasSeal(version, digest))
       fail(WHERE, GLOBAL + '.' + name + ' differs from the approved host-local handoff');
   }
   return declaration;
@@ -94,7 +103,10 @@ function requireRoute(
 
 export function assertAdr0096HostLocalHandoff(root: JsonObject): void {
   const global = asObject(root['globalContracts'], WHERE, 'globalContracts');
-  const declaration = assertHostLocalHandoffDeclaration(global['hostLocalHandoff']);
+  const declaration = assertHostLocalHandoffDeclaration(
+    global['hostLocalHandoff'],
+    root['atlasVersion'],
+  );
   const forms = rows(root['forms'], 'forms');
   const transitions = rows(root['transitions'], 'transitions');
   const controls = asObject(declaration['actionGuards'], WHERE, 'actionGuards');
@@ -183,7 +195,11 @@ export function assertAdr0096HostLocalHandoff(root: JsonObject): void {
   );
   if (
     qa.length !== 7 ||
-    jsonSha256(qa) !== '3f48ed6ded277e43581f89c38a436be28f48ff59f7baed410d5246646c0848af'
+    jsonSha256(qa) !==
+      ownerAtlasSeal(root['atlasVersion'], {
+        b19: '3f48ed6ded277e43581f89c38a436be28f48ff59f7baed410d5246646c0848af',
+        b20: '5f41ed2317260434d36a0c903b0d14b4b35b140ef7ff2758db418a1eef2e0394',
+      })
   )
     fail(WHERE, 'host-local handoff QA differs from the approved seven scenarios');
 }
@@ -246,7 +262,7 @@ export function assertAdr0096HostLocalMarkdown(markdown: string, root: JsonObjec
       }
     }
   }
-  assertHostLocalHandoffDeclaration(declaration);
+  assertHostLocalHandoffDeclaration(declaration, root['atlasVersion']);
   const controls = asObject(declaration['actionGuards'], WHERE, 'actionGuards');
   const formQaLines = lines.filter((line) => line.startsWith('| QA-FORM-'));
   const qaRows = rows(root['qaScenarios'], 'qaScenarios');
@@ -283,7 +299,11 @@ export function assertAdr0096HostLocalMarkdown(markdown: string, root: JsonObjec
     .sort();
   if (
     mirrors.length !== 34 ||
-    jsonSha256(mirrors) !== 'bd80a1bec032f22471716ee9ec60b7d22efefb1d43b374358e6f95731d412d1d'
+    jsonSha256(mirrors) !==
+      ownerAtlasSeal(root['atlasVersion'], {
+        b19: 'bd80a1bec032f22471716ee9ec60b7d22efefb1d43b374358e6f95731d412d1d',
+        b20: 'fcd9a708cf9dc47007682e0c01699e8f223e993b35db9ea0c63409844a09eacb',
+      })
   )
     fail(
       WHERE,
@@ -298,7 +318,10 @@ export function assertHostLocalHandoffRenderer(
   actionsByTrigger: JsonObject,
 ): void {
   const global = asObject(root['globalContracts'], WHERE, 'globalContracts');
-  const declaration = assertHostLocalHandoffDeclaration(global['hostLocalHandoff']);
+  const declaration = assertHostLocalHandoffDeclaration(
+    global['hostLocalHandoff'],
+    root['atlasVersion'],
+  );
   const controls = asObject(declaration['actionGuards'], WHERE, 'actionGuards');
   const transitions = rows(root['transitions'], 'transitions');
   for (const [key, guard] of Object.entries(controls)) {

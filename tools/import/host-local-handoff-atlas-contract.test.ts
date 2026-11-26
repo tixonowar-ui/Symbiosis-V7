@@ -164,8 +164,12 @@ describe('ADR 0096 host-local handoff source', () => {
     const form = forms.find((row) => row['id'] === 'APP-003')!;
     const state = (form['states'] as JsonObject)['TARGET_OWNER_ADMISSION'];
     expect(state).toContain('1..3 distinct permitted own FINAL');
-    expect(state).toContain('0..3 selected own FINAL');
-    expect(state).toContain('current signed bootstrap GM return before SUBMIT');
+    expect(state).toContain(
+      'Before SUBMIT, APP-003::CTA::014 accepts 0..3 own FINAL only for the fresh signed bootstrap return or for an acknowledged EXISTING_OWNER_LIBRARY',
+    );
+    expect(state).toContain(
+      'Neither the DEVICE_LIBRARY_SELECTOR nor the primary BIND/continuation admission obtains this return',
+    );
     const actions = (form['actions'] as JsonObject)['ctaAvailabilityByAction'] as JsonObject[];
     expect(actions.find((a) => a['actionKey'] === 'APP-003::CTA::009')?.['guard']).toContain(
       'subset, 1..3, current revisions',

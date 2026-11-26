@@ -519,19 +519,19 @@ const OBJECT_SEALS = [
 const ROOT_SEALS = [
   {
     key: 'atlasVersion',
-    sha256: 'bf030c84a07ff2092b9120bc783bf5c706e898920c5f8ed8f185009a90e41df1',
+    sha256: '81f93ffa78c1d07ab2dc6a157f60979d7aafa6c63837bfb2863545d21405f481',
   },
   {
     key: 'releaseDate',
-    sha256: '0974e9ca5d11e5ffc2478070456a4335d0899cf7f33cb7239a701e58659caf91',
+    sha256: '3499899299887758c821185c1130b43595cf63c729475469168ddbce5ec709a7',
   },
   {
     key: 'counts',
-    sha256: '36bac9871f785c8366caea799d813ed92b168e3617618b8548623a737512b7c0',
+    sha256: 'bf748a085136c77d7af91433c6bea36f4b2484fbc1df41b06fa2f9c83e062819',
   },
   {
     key: 'transitions',
-    sha256: '1260e113940a92e550c40315b81501d010a1f97ca4332e052d58f07df01891a4',
+    sha256: '21de208d98d9b353f1e7bf3a4cf62afa4222e503768adf4e9082c7b3c2d41563',
   },
   {
     key: 'entityLifecycles',
@@ -539,7 +539,7 @@ const ROOT_SEALS = [
   },
   {
     key: 'registryCoverage',
-    sha256: 'ddc491e28d813ce488312307410bf863318ac92148d0ce027a4daf6ec01471da',
+    sha256: '2e2415528c3b661ea6a83fb3275d375b41d42f95a43230c7152e3b7e556ed534',
   },
 ] as const;
 const MARKDOWN_SECTIONS = [
