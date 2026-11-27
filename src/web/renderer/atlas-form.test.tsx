@@ -452,9 +452,16 @@ describe('atlas implemented-form renderer', () => {
     const actions = models.flatMap((model) => model.actions.items);
 
     // Atlas primary actions from requirements.json join transitions on (from, trigger).
-    expect(actions).toHaveLength(52);
-    expect(actions.filter((action) => action.transition !== null)).toHaveLength(42);
+    expect(actions).toHaveLength(53);
+    expect(actions.filter((action) => action.transition !== null)).toHaveLength(43);
     expect(actions.filter((action) => action.transition === null)).toHaveLength(10);
+    const reentry = getAtlasFormModel('APP-003').actions.items.filter(
+      (action) => action.label === 'Передать устройство владельцу сохранённой библиотеки',
+    );
+    expect(reentry).toHaveLength(1);
+    expect(reentry[0]?.transition).toMatchObject({ from: 'APP-003', to: 'PLY-030' });
+    const { container } = renderAtlas('APP-003', []);
+    expect(container.querySelector('[data-atlas-action-key="APP-003::CTA::015"]')).toBeNull();
   });
 
   it('fails closed for a form absent from the atlas', () => {

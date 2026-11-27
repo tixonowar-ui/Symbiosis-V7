@@ -42,7 +42,7 @@ function rows(db: Database.Database) {
     };
   });
 }
-it('physically opens genuine B15 schema21 empty V1 and open attempt under B19 and replays the original receipt without rewriting any old row', async () => {
+it('physically opens genuine B15 schema21 empty V1 and open attempt under B20 and replays the original receipt without rewriting any old row', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'symbiosis-b15-b17-empty-v1-'));
   let db: ReturnType<typeof openPersistenceDatabase> | undefined;
   try {
@@ -124,7 +124,7 @@ it('physically opens genuine B15 schema21 empty V1 and open attempt under B19 an
       return db;
     };
     const baseline = await loadLocalCharacterExportBaseline(process.cwd());
-    expect(baseline.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B19);
+    expect(baseline.baselineVersion).toBe(BASELINE_FIXTURE_IDS.B20);
     const common = await loadNpcAuthoringSourceCatalog(process.cwd());
     const catalog = loadEnemyAuthoringSourceCatalog(process.cwd(), common),
       library = loadEnemySourceCatalog(process.cwd(), baseline);

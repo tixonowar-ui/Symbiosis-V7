@@ -13,6 +13,23 @@ export interface JsonObject {
   [key: string]: JsonValue | undefined;
 }
 
+export type OwnerAtlasWitness =
+  | string
+  | {
+      readonly b18?: string;
+      readonly b19: string;
+      readonly b20?: string;
+    };
+
+/** Each release selects its exact witness. Only sections changed by an amendment need an override. */
+export function ownerAtlasSeal(version: JsonValue | undefined, witness: OwnerAtlasWitness): string {
+  if (version !== '1.23' && version !== '1.24' && version !== '1.25')
+    fail('Atlas owner contract', 'unrecognized Atlas version ' + JSON.stringify(version));
+  if (typeof witness === 'string') return witness;
+  if (version === '1.23') return witness.b18 ?? witness.b19;
+  return version === '1.25' ? (witness.b20 ?? witness.b19) : witness.b19;
+}
+
 /** Object key order is immaterial, but source array order is part of the contract. */
 export function jsonSha256(value: JsonValue): string {
   const serialized = JSON.stringify(value, (_key, member: unknown): unknown => {

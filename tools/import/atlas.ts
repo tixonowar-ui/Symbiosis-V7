@@ -1,8 +1,8 @@
 /**
  * Web UI Screen Atlas v1.2 → generated/spec/atlas + generated/types/atlas.ts.
  *
- * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1753
- * transitions, 66 journeys, 91 requirements, 2467 QA scenarios. Nothing is
+ * The atlas is the UI contract (ADR 0003): 376 forms across 16 domains, 1754
+ * transitions, 66 journeys, 91 requirements, 2470 QA scenarios. Nothing is
  * inferred here — the importer reads what the artifact declares and refuses to
  * continue when the artifact disagrees with itself.
  */
@@ -11,6 +11,11 @@ import { readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { banner, tsUnion, writeJson, writeText } from './lib/emit.js';
 import { expectCount, fail } from './lib/fail.js';
+import {
+  assertAdr0097ExistingOwnerLibrary,
+  assertAdr0097ExistingOwnerLibraryMarkdown,
+  assertExistingOwnerLibraryDeclaration,
+} from './existing-owner-library-atlas-contract.js';
 import {
   assertAdr0096HostLocalHandoff,
   assertAdr0096HostLocalMarkdown,
@@ -95,11 +100,11 @@ import {
 const WHERE = 'atlas';
 const SCHEMA_URI = 'urn:symbiosis:v7:web-ui-screen-atlas:1.2';
 const SCHEMA_VERSION = '1.2.0';
-const ATLAS_VERSION = '1.24';
+const ATLAS_VERSION = '1.25';
 /** `counts.byOrigin` preserves the release that introduced each form. */
 const CURRENT_ATLAS_FORM_ORIGIN = 'v1.2-web';
-/** Atlas v1.24 has 1,307 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
-const EXPECTED_ACTION_KEY_COUNT = 1_307;
+/** Atlas v1.25 has 1,308 `forms[*].actions.ctaAvailabilityByAction` rows and keys. */
+const EXPECTED_ACTION_KEY_COUNT = 1_308;
 
 type SectionVerdict = { readonly output: string } | { readonly reason: string };
 
@@ -161,6 +166,7 @@ const GLOBAL_CONTRACT_VERDICTS = {
   soundtrackSourceContract: output('generated/spec/atlas/global-contracts.json'),
   localOwnerBinding: output('generated/spec/atlas/global-contracts.json'),
   hostLocalHandoff: output('generated/spec/atlas/global-contracts.json'),
+  existingOwnerLibraryReentry: output('generated/spec/atlas/global-contracts.json'),
 } as const satisfies Readonly<Record<string, SectionVerdict>>;
 
 /**
@@ -620,7 +626,9 @@ export function extractGlobalContracts(globalContracts: JsonObject): JsonObject[
     },
   );
   // The selector's cooperative ACK deliberately carries no personal owner identity.
-  const { localOwnerBinding, hostLocalHandoff, ...otherContracts } = globalContracts;
+  const { localOwnerBinding, hostLocalHandoff, existingOwnerLibraryReentry, ...otherContracts } =
+    globalContracts;
+  assertExistingOwnerLibraryDeclaration(existingOwnerLibraryReentry);
   assertHostLocalHandoffDeclaration(hostLocalHandoff);
   assertLocalOwnerBindingDeclaration(localOwnerBinding);
   assertContractValue(otherContracts, 'globalContracts');
@@ -1683,18 +1691,18 @@ function adr0049CheckQnaChannels(
 
 /** ADR 0049 pins every new channel and every independent JSON mirror. */
 export function assertAdr0049MissingChannels(root: JsonObject): void {
-  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-22');
+  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-26');
   const forms = adr0049Rows(root['forms'], 'forms');
   const transitions = adr0049Rows(root['transitions'], 'transitions');
   const requirements = adr0049Rows(root['coverageRequirements'], 'coverageRequirements');
   const qaScenarios = adr0049Rows(root['qaScenarios'], 'qaScenarios');
   const counts = asObject(root['counts'], WHERE, 'counts');
-  expectCount(WHERE, 'ADR 0049 transitions', transitions.length, 1_753);
+  expectCount(WHERE, 'ADR 0049 transitions', transitions.length, 1_754);
   expectCount(
     WHERE,
     'ADR 0049 declared transitions',
     asNumber(counts['transitions'], WHERE, 'counts.transitions'),
-    1_753,
+    1_754,
   );
 
   for (const expected of ADR0049_ROUTES) {
@@ -1896,19 +1904,19 @@ export function assertAdr0049MissingChannels(root: JsonObject): void {
 
 /** ADR 0052 adds the separate future-minimum B-roll and every independent mirror. */
 export function assertAdr0052AdvisorIntelligenceFloor(root: JsonObject): void {
-  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.24');
-  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-22');
+  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.25');
+  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-26');
   const forms = adr0049Rows(root['forms'], 'forms');
   const transitions = adr0049Rows(root['transitions'], 'transitions');
   const requirements = adr0049Rows(root['coverageRequirements'], 'coverageRequirements');
   const qaScenarios = adr0049Rows(root['qaScenarios'], 'qaScenarios');
   const counts = asObject(root['counts'], WHERE, 'counts');
-  expectCount(WHERE, 'ADR 0052 transitions', transitions.length, 1_753);
+  expectCount(WHERE, 'ADR 0052 transitions', transitions.length, 1_754);
   expectCount(
     WHERE,
     'ADR 0052 declared transitions',
     asNumber(counts['transitions'], WHERE, 'counts.transitions'),
-    1_753,
+    1_754,
   );
 
   const advisor = adr0049Form(forms, 'CHR-041');
@@ -3019,7 +3027,8 @@ const ADR0069_CONTRACTS = [
     id: 'REQ-010',
     path: ['happyPath'],
     value:
-      'Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017, APP-003; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT, UI-CMD-LOCAL-OWNER-PROFILE-CREATE, UI-CMD-LOCAL-OWNER-BIND-FINALS; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Владелец устройства выбирает точный профиль либо вводит метку и явно создаёт профиль. Обе адресные завесы показывают targetProfileLabel вместе с targetLocalOwnerId. На подтверждении рядом с этой парой перечислены выбранные листы; передача меняет будущий доступ к библиотеке. Экран GM и нейтральное продолжение показывают только служебные данные назначения. После ACK адресат видит только собственную библиотеку, в том числе точный предоставленный набор. В APP-003 выбирает свои конкретные листы и через NET-003/NET-004 проходит обычный #171/#172 с рассмотрением GM. Реальный ACCEPT receiptId связан с proposalChecksum и proposalRevision. В fullCampaignCopyDiffs запись sourceUuid → campaignCharacterIdOrNull связывает membership владельца с принятой copies[].campaignCharacterId, затем с controllerBindingOrNull.{deviceId,localControllerSeatId,inputLaneId}. Без квитанции, подтверждённой копии или привязки контроллера вкладка не создаётся; membership оригинала сохраняется. Общий максимум три допущенные PC-вкладки и один активный контекст GM или PC. Для другого профиля требуется отдельная передача. Пустой профиль сохраняет создание CHR-001 через обычную APP-004; GM_ONLY с нулём PC, обычный ПК и известный owner-safe batch сохраняют свои ветки. После fresh ACK пройти возврат до SUBMIT, возврат pending владельцу, адресную публикацию NET-027 и каждый разрешённый terminal path.',
+      'Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017, APP-003; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT, UI-CMD-LOCAL-OWNER-PROFILE-CREATE, UI-CMD-LOCAL-OWNER-BIND-FINALS; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Владелец устройства выбирает точный профиль либо вводит метку и явно создаёт профиль. Обе адресные завесы показывают targetProfileLabel вместе с targetLocalOwnerId. На подтверждении рядом с этой парой перечислены выбранные листы; передача меняет будущий доступ к библиотеке. Экран GM и нейтральное продолжение показывают только служебные данные назначения. После ACK адресат видит только собственную библиотеку, в том числе точный предоставленный набор. В APP-003 выбирает свои конкретные листы и через NET-003/NET-004 проходит обычный #171/#172 с рассмотрением GM. Реальный ACCEPT receiptId связан с proposalChecksum и proposalRevision. В fullCampaignCopyDiffs запись sourceUuid → campaignCharacterIdOrNull связывает membership владельца с принятой copies[].campaignCharacterId, затем с controllerBindingOrNull.{deviceId,localControllerSeatId,inputLaneId}. Без квитанции, подтверждённой копии или привязки контроллера вкладка не создаётся; membership оригинала сохраняется. Общий максимум три допущенные PC-вкладки и один активный контекст GM или PC. Для другого профиля требуется отдельная передача. Пустой профиль сохраняет создание CHR-001 через обычную APP-004; GM_ONLY с нулём PC, обычный ПК и известный owner-safe batch сохраняют свои ветки. После fresh ACK пройти возврат до SUBMIT, возврат pending владельцу, адресную публикацию NET-027 и каждый разрешённый terminal path.' +
+      ' В тот же установленный профиль войти после смены кампании и restart с новым подписанным EXISTING_OWNER_LIBRARY при нуле неназначенных FINAL; отменить до ACK, повторить вход, открыть собственный лист и вернуться с нулём выбранных без SUBMIT.',
   },
   {
     target: 'coverageRequirements',
@@ -3138,6 +3147,7 @@ const ADR0069_CONTRACTS = [
           'Выбрать существующий профиль по идентификатору',
           'Передать устройство для создания нового персонажа',
           'Вернуть устройство мастеру',
+          'Передать устройство владельцу сохранённой библиотеки',
         ],
         executableOperationIds: [],
         workflowCommandIds: ['UI-CMD-LOCAL-OWNER-PROFILE-CREATE', 'UI-CMD-LOCAL-OWNER-BIND-FINALS'],
@@ -3600,7 +3610,8 @@ const ADR0069_CONTRACTS = [
       qaId: 'QA-REQ-010',
       scope: 'REQ-010',
       scenario:
-        'Требование «Первоначальное заявление local player на host до player tab». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. Владелец устройства выбирает точный профиль либо вводит метку и явно создаёт профиль. Обе адресные завесы показывают targetProfileLabel вместе с targetLocalOwnerId. На подтверждении рядом с этой парой перечислены выбранные листы; передача меняет будущий доступ к библиотеке. Экран GM и нейтральное продолжение показывают только служебные данные назначения. После очистки GM-проекции человек за доверенным устройством явно подтверждает кооперативную роль DEVICE_LIBRARY_SELECTOR. Только этот контекст с localOwnerIdOrNull=null видит неназначенные неизменяемые FINAL этой установки. Чужие строки, UUID, имена, artwork, счётчики, поисковые результаты и команды отсутствуют в payload, DOM, accessibility tree, hotkeys и cache. Секрет, loopback/listener/origin и подпись удостоверяют устройство и контекст, личность человека не проверяется. Тот же человек вправе подтвердить обе разные завесы последовательно. После fresh ACK пройти возврат до SUBMIT, возврат pending владельцу, адресную публикацию NET-027 и каждый разрешённый terminal path. Проверить точную requestRevision, гонку PENDING/CANCEL и подтверждённую принадлежность исходной вкладке, неизвестный результат и reconnect.',
+        'Требование «Первоначальное заявление local player на host до player tab». Preconditions: Роль и authority соответствуют player/gm.; Загружены current server/local stateRevision, projectionRevision и все guards перечисленных форм.; Player/effective-controller projection содержит только CTA, для которых per-action guard=true. Happy: Выполнить J-LOCAL-SEATS через формы CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017; использовать только primaryActions каждой actionSteps-записи и команды UI-CMD-DEVICE-REQUEST-SUBMIT, UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK, UI-CMD-DEVICE-REQUEST-ACCEPT-TO-REVIEW, UI-CMD-DEVICE-REQUEST-REJECT; проверить перечисленные terminalStatesByForm и ровно один audit/receipt на mutation boundary. Error/offline: Для CMP-009, PLY-030, APP-004, NET-003, NET-004, NET-017 проверить invalid field/failed guard, stale revision, disconnect before commit, disconnect after commit-before-ack и idempotent replay: до commit — zero write, после commit — прежний receipt без повторного эффекта. Владелец устройства выбирает точный профиль либо вводит метку и явно создаёт профиль. Обе адресные завесы показывают targetProfileLabel вместе с targetLocalOwnerId. На подтверждении рядом с этой парой перечислены выбранные листы; передача меняет будущий доступ к библиотеке. Экран GM и нейтральное продолжение показывают только служебные данные назначения. После очистки GM-проекции человек за доверенным устройством явно подтверждает кооперативную роль DEVICE_LIBRARY_SELECTOR. Только этот контекст с localOwnerIdOrNull=null видит неназначенные неизменяемые FINAL этой установки. Чужие строки, UUID, имена, artwork, счётчики, поисковые результаты и команды отсутствуют в payload, DOM, accessibility tree, hotkeys и cache. Секрет, loopback/listener/origin и подпись удостоверяют устройство и контекст, личность человека не проверяется. Тот же человек вправе подтвердить обе разные завесы последовательно. После fresh ACK пройти возврат до SUBMIT, возврат pending владельцу, адресную публикацию NET-027 и каждый разрешённый terminal path. Проверить точную requestRevision, гонку PENDING/CANCEL и подтверждённую принадлежность исходной вкладке, неизвестный результат и reconnect.' +
+        ' В тот же установленный профиль войти после смены кампании и restart с новым подписанным EXISTING_OWNER_LIBRARY при нуле неназначенных FINAL; отменить до ACK, повторить вход, открыть собственный лист и вернуться с нулём выбранных без SUBMIT. При занятом контексте А сохранить исходное состояние; проверить чужой профиль с той же меткой, reset установки, чужой или исторический ACK, израсходованный continuation и запрет обычного null/device-доступа.',
       expected:
         'Terminal states/deltas: {"terminalStatesByForm":{"PLY-030":["inactive","PRIVACY_HANDOFF","WAITING_FOR_LOCAL_OWNER","TARGET_CONTEXT_ACTIVE","RETURN_TO_INITIATOR","RECONNECT_RESTORED"],"NET-004":["DRAFT_REQUEST","SUBMITTED"],"NET-017":["QUEUE_EMPTY","REQUEST_PENDING","IN_REVIEW","REQUEST_REJECTED","STALE_REQUEST"]},"mutationBoundary":"Only listed executableOperationIds/workflowCommandIds may write; all other routes are navigation/read-only.","audit":"Every committed mutation records author/target/timestamp/before/after/reason/source and resulting revision."} Reconnect assertions: Uncommitted local input may restore as draft but never as confirmed state.; Committed command restores by commandId with the same receipt/random result and no duplicate side effect.; Fresh server projection recomputes allowed CTA/targets and omits stale or forbidden actions from payload/DOM/a11y/hotkeys/cache.; Preliminary accept/reject and owner cancel serialize by requestRevision; exact replay keeps the original receipt while the current view may be newer; no duplicate request, campaign copy, seat or capacity reservation. CANCELLED requests and their immutable receipts remain in durable history but are excluded from the current requests[] queue. If a selected request becomes CANCELLED, the next authoritative queue snapshot clears selectedRequestIdOrNull to null; replay/reconnect does not restore the removed selection. REJECTED rows remain displayable under the closed row enum. This projection update does not delete or reset any request. Одна транзакция повторно проверяет текущий подписанный контекст селектора, прежнюю квитанцию ACK, installationId/deviceId, точный профиль и метку, ревизии и весь набор из 1–3 разных неназначенных immutable FINAL по sourceUuid, finalSnapshotVersion, metadataRevision и candidateSnapshotChecksum (исходный descriptor.sourceChecksum). При успехе для всего набора сохраняются membership, grantId, bindingReceiptId и pendingContinuationId. UUID, байты FINAL и создания, исходные ревизии, device provenance и игровой журнал сохраняются. Конфликт любой строки, иной адресат, другая установка, устаревший контекст, четвертая или повторная строка дают zero write для всего набора. Undo/reassign отсутствуют. После commit селектор и его буферы стираются до адресной завесы HOST_LOCAL_CANDIDATE. «Позже» сохраняет тот же grant и pendingContinuationId и ведёт через подписанный возврат к GM. В CMP-009 и нейтральной завесе доступны только метка, идентификатор адресата и непрозрачный pendingContinuationId. После restart продолжение требует нового текущего подписанного контекста и отдельного ACK адресата. Replay возвращает прежнюю квитанцию без повторной записи и активации исторического контекста. После ACK адресат видит только собственную библиотеку, в том числе точный предоставленный набор. В APP-003 выбирает свои конкретные листы и через NET-003/NET-004 проходит обычный #171/#172 с рассмотрением GM. Реальный ACCEPT receiptId связан с proposalChecksum и proposalRevision. В fullCampaignCopyDiffs запись sourceUuid → campaignCharacterIdOrNull связывает membership владельца с принятой copies[].campaignCharacterId, затем с controllerBindingOrNull.{deviceId,localControllerSeatId,inputLaneId}. Без квитанции, подтверждённой копии или привязки контроллера вкладка не создаётся; membership оригинала сохраняется. Общий максимум три допущенные PC-вкладки и один активный контекст GM или PC. Для другого профиля требуется отдельная передача. Пустой профиль сохраняет создание CHR-001 через обычную APP-004; GM_ONLY с нулём PC, обычный ПК и известный owner-safe batch сохраняют свои ветки. Одна действующая проекция по подписанному назначению. QA-HOST-LOCAL-HANDOFF-PENDING-CANCEL',
     },
@@ -4359,8 +4370,8 @@ function adr0069Row(root: JsonObject, target: string, id: string): JsonObject {
   );
 }
 export function assertAdr0069RequestReview(root: JsonObject): void {
-  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.24');
-  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-22');
+  expectString(root['atlasVersion'], WHERE, 'atlasVersion', '1.25');
+  expectString(root['releaseDate'], WHERE, 'releaseDate', '2026-11-26');
   for (const expected of ADR0069_AUTHORITY_CONTRACTS) {
     const form = adr0069Row(root, 'forms', expected.id);
     for (const [key, value] of Object.entries(expected.fields))
@@ -4374,9 +4385,9 @@ export function assertAdr0069RequestReview(root: JsonObject): void {
   const counts = asObject(root['counts'], WHERE, 'counts');
   for (const [key, count] of Object.entries({
     forms: 376,
-    transitions: 1753,
+    transitions: 1754,
     workflowCommands: 117,
-    qaScenarios: 2467,
+    qaScenarios: 2470,
   })) {
     adr0069Expect(counts[key], count, 'counts.' + key);
   }
@@ -4514,6 +4525,8 @@ export async function importAtlas(): Promise<AtlasImport> {
     asNumber(counts['workflowCommands'], WHERE, 'counts.workflowCommands'),
   );
   assertAdr0096HostLocalHandoff(root);
+  assertAdr0097ExistingOwnerLibrary(root);
+  assertAdr0097ExistingOwnerLibraryMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'), root);
   assertAdr0096HostLocalMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'), root);
   assertAdr0095LocalOwnerBinding(root);
   assertAdr0095LocalOwnerMarkdown(readFileSync(ARTIFACT.atlasMd, 'utf8'));

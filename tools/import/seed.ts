@@ -52,8 +52,8 @@ export const SKIPPED_INDEX_PATHS = [
 const EXPECTED = {
   files: 131,
   arrayFiles: 115,
-  // ADR 0096 adds 15 transitions, seven QA rows and one global contract.
-  rows: 20_408,
+  // ADR 0097 adds one transition, three QA rows and one global contract.
+  rows: 20_413,
   metadataFiles: 10,
   skippedIndexes: 6,
 } as const;

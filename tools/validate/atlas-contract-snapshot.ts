@@ -23,6 +23,7 @@ export function generatedAtlasContractSnapshot(
   // source was sealed above; every emitted contract component replaces source
   // data explicitly, so missing/stale generated files cannot fall back to it.
   return {
+    atlasVersion: generated['atlasVersion'],
     counts: generated['counts'],
     forms: generated['forms'],
     transitions: generated['transitions'],

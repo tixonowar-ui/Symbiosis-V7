@@ -1524,7 +1524,8 @@
           "APP-003::CTA::011",
           "APP-003::CTA::012",
           "APP-003::CTA::013",
-          "APP-003::CTA::010"
+          "APP-003::CTA::010",
+          "APP-003::CTA::015"
         ],
         "PENDING_NEUTRAL_RESUME": [
           "PLY-030::CTA::007"
@@ -1579,7 +1580,7 @@
     "contractId": "hostLocalHandoff",
     "value": {
       "actionGuards": {
-        "APP-003::CTA::014": "PLAYER, fresh target ACK current and targetLocalOwnerId matches this profile; own APP-004 or pre-submit NET-003 signed return to APP-003; SUBMIT has not committed; no in-flight command; preserve profile, checkpoints and FINAL. TARGET_OWNER_ADMISSION fresh branch only: zero to three (0..3) currently selected own FINAL, including the empty library; exact acknowledged profile and its current signed bootstrap return. The separate APP-003::CTA::009 still requires 1..3 distinct current own FINAL. No selector, grant-based admission, request or seat authority. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
+        "APP-003::CTA::014": "For the B19 fresh bootstrap return: PLAYER, fresh target ACK current and targetLocalOwnerId matches this profile; own APP-004 or pre-submit NET-003 signed return to APP-003; SUBMIT has not committed; no in-flight command; preserve profile, checkpoints and FINAL. TARGET_OWNER_ADMISSION fresh branch only: zero to three (0..3) currently selected own FINAL, including the empty library; exact acknowledged profile and its current signed bootstrap return. The separate APP-003::CTA::009 still requires 1..3 distinct current own FINAL. No selector, grant-based admission, request or seat authority. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain. For EXISTING_OWNER_LIBRARY require current signed target ACK, exact profile and permitted own selection of 0..3 FINAL, including zero, after APP-004::CTA::002. No submitted or in-flight SUBMIT, unknown outcome or unsafe boundary. Purge the owner projection, issue the exact signed GM return in campaign B; only PLY-030::CTA::006 with RETURN_INITIATOR restores CMP-009. No new membership, continuation or application.",
         "NET-003::CTA::005": "PLAYER, own HOST_LOCAL_CANDIDATE request CANCELLED; original technicalSessionId, requestId, SUBMIT receipt and committed owner CANCEL receipt match; return to initiating GM only, including HOSTING; no selection/admission/seat. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
         "NET-005::CTA::004": "PLAYER, acknowledged original request owner, own PENDING or IN_REVIEW request or confirmed preliminary REJECTED by NET-017::CTA::008. Keep pending/review status unchanged; terminal return requires original SUBMIT and actual decision receipt/status. No unconfirmed owner command. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
         "NET-006::CTA::005": "PLAYER, actual ACCEPT receipt matches this campaign copy and controller. PRE_START: PAUSED, no Start receipt, Ready or Not ready → same campaign GM NET-016. POST_START: current confirmed PEACE, committed Start, this admitted blocked PROPOSED copy excluded from included ACTIVE IDs → current GM-001. Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
@@ -1711,6 +1712,69 @@
       "replay": "One durable handoff journal. Before ACK restore only the addressed neutral curtain. After fresh explicit target ACK commit one active context and one receipt, then PLY-029 dispatches only its current signed destination. Exact duplicate returns the identical receipt; historical ACK never reactivates an old tab. Stale/foreign/changed requests or revoked authority refuse without partial writes. Unknown delivery preserves pending-command ownership until the verified outcome; CANCEL competes with accept-to-review/reject by requestRevision. Raw WS, DOM, accessibility tree, hotkeys, local caches and background subscriptions never expose another owner’s private data. Unrelated installations keep their authorized publications. The host rechecks verified events first. A concurrent publication cannot readdress an active or pending session. Inspect new raw WS frames starting at the purge boundary; previously delivered bytes are historical.",
       "safety": "Trusted host installation and device for the same campaign, current signed source/return and revisions, safe boundary with no pending command, target, reaction, series or roll. Erase prior private data and revoke source-context subscriptions on every affected connection before the neutral PLY-030 curtain.",
       "source": "ADR 0096 / #297 / B19"
+    }
+  },
+  {
+    "contractId": "existingOwnerLibraryReentry",
+    "value": {
+      "basis": "EXISTING_OWNER_LIBRARY",
+      "cancel": {
+        "actionKey": "PLY-030::CTA::008",
+        "guard": "До ACK получателя отмена очищает приватные поверхности и выдаёт новую завесу возврата в исходный GM-контекст кампании Б. Для выдачи мастерской проекции требуется отдельный текущий подписанный RETURN_INITIATOR ACK.",
+        "returnActionKey": "PLY-030::CTA::006"
+      },
+      "continuation": {
+        "currentCampaign": "При действующем ожидающем продолжении выбранного профиля в кампании Б используется CMP-009::CTA::006 или PLY-030::CTA::007 с его точным pendingContinuationId. APP-003::CTA::015 для такого входа отсутствует.",
+        "historical": "Израсходованный pendingContinuationId не выдаётся повторно. Вход EXISTING_OWNER_LIBRARY не создаёт BIND, grant, нового назначения или продолжения и не расходует прежнюю квитанцию. Для этого основания действие «Позже» отсутствует.",
+        "otherProfiles": "Ожидающие передачи других профилей сохраняются. Непогашенная шторка или неизвестный исход операции блокирует смену кампании. Незавершённая команда и продолжение кампании А сохраняют исходного владельца и кампанию."
+      },
+      "entry": {
+        "actionKey": "APP-003::CTA::015",
+        "guard": "Единственный действующий мастер кампании Б явно выбрал точный ID профиля на безопасной границе CMP-009. Хост сверяет текущие installationId и deviceId и находит хотя бы один неизменяемый FINAL, принадлежащий этому targetLocalOwnerId по сохранённому созданию или прежней привязке BIND. Допустим ноль неназначенных FINAL. Для пустого профиля действует отдельное APP-003::CTA::013.",
+        "neutralDisclosure": "В нейтральной APP-003 видны метка и ID профиля. Доступность действия сообщает единственный дополнительный факт: у выбранного профиля есть подходящий FINAL. Число, имена, UUID и листы остаются закрыты до ACK.",
+        "originActionKey": "CMP-009::CTA::005",
+        "selectActionKey": "APP-003::CTA::012"
+      },
+      "handoffType": "HOST_LOCAL_CANDIDATE",
+      "privacy": "До каждой адресованной передачи клиент очищает предыдущие WS-подписки, DOM, дерево доступности, горячие клавиши и кэш; хост прекращает приватную рассылку на затронутых соединениях. Шторка показывает только метку, точный ID адресата и непрозрачные подтверждения. Только соединение с текущей подтверждённой доставкой получает свои originals и разрешённые действия. Маршрут, совпадающая метка и физическое подтверждение сами по себе не удостоверяют личность и не дают полномочий.",
+      "qa": [
+        "QA-LOCAL-OWNER-REENTRY-LIFETIME",
+        "QA-LOCAL-OWNER-REENTRY-CONFLICT",
+        "QA-LOCAL-OWNER-REENTRY-PRIVACY"
+      ],
+      "replay": "После перезапуска до ACK видна только текущая шторка. После ACK хост сверяет актуальную доставку перед выдачей библиотеки. Идентичный повтор возвращает исходную квитанцию без повторного эффекта. Устаревшие ACK, delivery proof и подписки, другой профиль с той же меткой, иное устройство или сброшенная идентичность установки не восстанавливают прежнюю проекцию.",
+      "return": {
+        "ackActionKey": "PLY-030::CTA::006",
+        "actionKey": "APP-003::CTA::014",
+        "destinationFormId": "CMP-009",
+        "guard": "После адресованного ACK разрешён просмотр собственных листов. Из APP-004::CTA::002 можно вернуться в APP-003 с 0..3 выбранными собственными FINAL. При отсутствии отправленного или выполняемого SUBMIT и иной незавершённой операции ::014 очищает проекцию владельца и возвращает устройство мастеру Б через завесу и отдельный RETURN_INITIATOR ACK. Для отдельного допуска APP-003::CTA::009 требует 1..3 актуальных собственных FINAL.",
+        "selectionMaximum": 3,
+        "selectionMinimum": 0,
+        "sourceActionKey": "APP-004::CTA::002"
+      },
+      "safety": "Для перехода А → Б хост проверяет подтверждённое завершение или разрешённое освобождение контекста А, единственного действующего мастера Б, текущие ревизии и безопасную границу. При занятой или непогашенной передаче, конфликте старого действия, выполняемой команде либо неизвестном исходе сохраняется исходное состояние. Старые доставка и подписки утрачивают полномочия при разрешённой смене кампании. Выбор, просмотр и возврат не создают заявку, допуск, копию, игровую вкладку, контроллер или место.",
+      "source": "ADR 0097 / #300 / B20",
+      "target": {
+        "actionKey": "PLY-030::CTA::004",
+        "commandId": "UI-CMD-LOCAL-CONTEXT-HANDOFF-ACK",
+        "decision": "ACTIVATE_TARGET",
+        "destinationFormId": "APP-004",
+        "guard": "Хост выпускает новый handoffId и новый signedReturnContext для действующего мастера Б и точного адресата. Перед ACK хост повторно сверяет подписанный адрес, основание, действующую установку, устройство, кампанию и GM-контекст, ревизии, адресованную доставку и актуальный принадлежащий профилю FINAL. Явное кооперативное подтверждение после очистки открывает только текущую библиотеку адресата; каждый прямой запрос листа заново проверяет полномочие и принадлежность.",
+        "signedFields": [
+          "handoffType",
+          "basis",
+          "handoffId",
+          "signedReturnContext",
+          "installationId",
+          "deviceId",
+          "campaignId",
+          "gmLocalContextId",
+          "targetLocalOwnerId",
+          "targetProfileLabel",
+          "stateRevision",
+          "projectionRevision"
+        ]
+      }
     }
   }
 ]

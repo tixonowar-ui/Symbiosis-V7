@@ -171,6 +171,15 @@ export const BASELINE_LINEAGE_SEALS = {
     'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
       '3ba9e49a2e42e2b9ba2106ff89ef7acdfc6117e1bce2b06486c9e06b7fd37251',
   },
+  // ADR 0097 / #300: addressed reentry into the selected local owner's existing library.
+  ownerLibraryReentryBaselineVersion:
+    'sha256:93c6b35caa27c77a84e1be12b0b4578a341acea2d0f41320ac493cc7343df822',
+  ownerLibraryReentryAtlas: {
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.json':
+      '38b148147b4998cf991a2bc2c75504f835aff9c1178939fbb1aad8e251e417d2',
+    'atlas/Symbiosis_V7_Web_UI_Screen_Atlas_v1.2.md':
+      '387da4d27c0776f3135fed2f1b0d971feca1646b49db5bfaa801ca49fbad4565',
+  },
   gmSourceAddedArtifacts: {
     'gm-entity-portraits/manifest.json':
       '30b4df3f3bc7ffeff017fc28538dcf09f98c1e032ff94cd1e9cfc141c4714554',
